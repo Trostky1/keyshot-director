@@ -10,19 +10,32 @@ const cli = require('./cli');
 const CONFIG = path.join(__dirname, '..', 'config.local.json');
 const getConfig = () => { try { return JSON.parse(fs.readFileSync(CONFIG, 'utf8')); } catch { return {}; } };
 const setConfig = patch => { const c = { ...getConfig(), ...patch }; fs.writeFileSync(CONFIG, JSON.stringify(c, null, 2)); return c; };
-const publicConfig = () => { const c = getConfig(); return { hasKey: !!(c.apiKey || process.env.ANTHROPIC_API_KEY), model: c.model || 'claude-sonnet-5-5', engine: c.engine || 'auto', cliPath: c.cliPath || '' }; };
-// Which engine answers: an API key wins (unless the user picked the CLI); otherwise a signed-in Claude CLI; otherwise offline.
+const publicConfig = () => { const c = getConfig(); return { hasKey: !!(c.apiKey || process.env.ANTHROPIC_API_KEY), model: c.model || 'claude-sonnet-5-5', engine: c.engine || 'auto', cliPath: c.cliPath || '', codexPath: c.codexPath || '' }; };
+// Which engine answers (engine setting: auto | cli (Claude) | codex (ChatGPT) | api | offline). Automatic tries, in order:
+// a signed-in Claude CLI, a signed-in Codex (ChatGPT) CLI, an API key, then offline.
 async function pickEngine(cfg = getConfig()) {
   const key = !!(cfg.apiKey || process.env.ANTHROPIC_API_KEY), want = cfg.engine || 'auto';
   if (want === 'offline') return { engine: 'offline' };
-  if (want === 'api' && key) return { engine: 'api' };
-  if (want !== 'api') { const st = await cli.status(cfg.cliPath); if (st.found && st.loggedIn) return { engine: 'cli', bin: st.path }; if (want === 'cli') return { engine: 'offline', why: st.found ? 'The Claude CLI is not signed in. Run  "' + st.path + '" auth login  once in a terminal.' : 'The Claude CLI was not found on this computer.' }; }
+  if (want === 'api') return key ? { engine: 'api' } : { engine: 'offline', why: 'No API key is set.' };
+  if (want === 'auto' || want === 'cli') {
+    const st = await cli.status(cfg.cliPath);
+    if (st.found && st.loggedIn) return { engine: 'cli', provider: 'claude', bin: st.path };
+    if (want === 'cli') return { engine: 'offline', why: st.found ? 'The Claude CLI is not signed in. Run  "' + st.path + '" auth login  once in a terminal.' : 'The Claude CLI was not found on this computer.' };
+  }
+  if (want === 'auto' || want === 'codex') {
+    const cx = await cli.codexStatus(cfg.codexPath);
+    if (cx.found && cx.loggedIn) return { engine: 'cli', provider: 'codex', bin: cx.path };
+    if (want === 'codex') return { engine: 'offline', why: cx.found ? 'The Codex CLI is not signed in. Run  "' + cx.path + '" login  once in a terminal.' : 'The Codex (ChatGPT) CLI was not found on this computer.' };
+  }
   return key ? { engine: 'api' } : { engine: 'offline' };
 }
 async function engineStatus() {
-  const cfg = getConfig(), st = await cli.status(cfg.cliPath), e = await pickEngine(cfg);
-  return { engine: e.engine, cli: { found: st.found, loggedIn: st.loggedIn, path: st.path, searched: st.searched || [], error: st.error || null }, hasKey: !!(cfg.apiKey || process.env.ANTHROPIC_API_KEY), want: cfg.engine || 'auto', why: e.why || null };
+  const cfg = getConfig(), st = await cli.status(cfg.cliPath), cx = await cli.codexStatus(cfg.codexPath), e = await pickEngine(cfg);
+  return { engine: e.engine, provider: e.provider || null, why: e.why || null, hasKey: !!(cfg.apiKey || process.env.ANTHROPIC_API_KEY), want: cfg.engine || 'auto',
+    cli: { found: st.found, loggedIn: st.loggedIn, path: st.path, searched: st.searched || [], error: st.error || null },
+    codex: { found: cx.found, loggedIn: cx.loggedIn, path: cx.path, method: cx.method || null, searched: cx.searched || [], error: cx.error || null } };
 }
+
 
 const SYSTEM = `You are the director inside "KeyShot Director", a companion app that drives the user's OPEN KeyShot scene live. You light and move the camera around the user's own product, so a non-expert can get studio-grade results in plain language.
 
@@ -74,7 +87,7 @@ HOW TO ANSWER (important): you cannot call tools directly here. Reply with ONE J
 {"say": "text for the user, or empty", "calls": [{"name": "<tool name>", "input": { ... }}]}
 - "calls" run in order. Leave it empty ([]) when you are finished and only want to talk to the user.
 - After your calls run you will see their results and can answer again; keep going until the job is done.
-- Images are saved as files: use the Read tool on a path shown as [image: <path>] to look at it.
+- Images are saved as files and shown as [image: <path>]: look at them (read the file, or they are already attached).
 Tools you may call:
 ` + TOOLS.map(t => '- ' + t.name + ' ' + JSON.stringify(t.input_schema.properties || {}) + ' : ' + t.description).join('\n');
 
@@ -94,11 +107,12 @@ function renderForCli(messages, dir) {
   }
   return lines.join('\n\n');
 }
-async function callCli(cfg, bin, messages, signal) {
+async function callCli(cfg, eng, messages, signal) {
   const dir = cli.tmpDir('chat');
   try {
     const prompt = renderForCli(messages, dir) + '\n\nYOUR TURN. Reply with the JSON object only.';
-    const text = await cli.ask({ bin, system: SYSTEM + CLI_PROTOCOL, prompt, dir, model: cfg.cliModel, signal });
+    const images = fs.readdirSync(dir).filter(f => /^img_[0-9]+[.](png|jpg)$/.test(f)).map(f => path.join(dir, f));
+    const text = await cli.ask({ provider: eng.provider, bin: eng.bin, system: SYSTEM + CLI_PROTOCOL, prompt, dir, images, model: eng.provider === 'codex' ? cfg.codexModel : cfg.cliModel, signal });
     let o; try { o = cli.extractJson(text); } catch { o = { say: text.trim(), calls: [] }; }      // plain prose = just talking
     const calls = (Array.isArray(o.calls) ? o.calls : []).filter(c => c && TOOLS.some(t => t.name === c.name));
     const content = [...(o.say && String(o.say).trim() ? [{ type: 'text', text: String(o.say).trim() }] : []), ...calls.map((c, i) => ({ type: 'tool_use', id: 'cli' + Date.now() + '_' + i, name: c.name, input: c.input || {} }))];
@@ -140,7 +154,7 @@ async function run(job, { text, images = [] }, actions) {
   const cfg = getConfig();
   try {
     const eng = await pickEngine(cfg); const useClaude = eng.engine !== 'offline';
-    ev('mode', { mode: eng.engine === 'cli' ? 'claude (signed-in CLI)' : eng.engine === 'api' ? 'claude' : 'offline', model: eng.engine === 'api' ? (cfg.model || 'claude-sonnet-5-5') : null });
+    ev('mode', { mode: eng.engine === 'cli' ? (eng.provider === 'codex' ? 'ChatGPT (Codex CLI)' : 'claude (signed-in CLI)') : eng.engine === 'api' ? 'claude' : 'offline', model: eng.engine === 'api' ? (cfg.model || 'claude-sonnet-5-5') : null });
     if (eng.why) ev('text', { text: eng.why + ' Using offline mode for now.' });
     actions.setAttachments(images);
     const content = [...images.map(d => { const m = /^data:(image\/[a-z+.-]+);base64,(.+)$/i.exec(d); return m ? { type: 'image', source: { type: 'base64', media_type: m[1], data: m[2] } } : null; }).filter(Boolean), { type: 'text', text: text || '' }];
@@ -148,7 +162,7 @@ async function run(job, { text, images = [] }, actions) {
     const ctl = new AbortController(); job.abort = () => ctl.abort();
     for (let turn = 0; turn < 14; turn++) {
       let resp;
-      if (eng.engine === 'cli') resp = await callCli(cfg, eng.bin, history, ctl.signal);
+      if (eng.engine === 'cli') resp = await callCli(cfg, eng, history, ctl.signal);
       else if (useClaude) resp = await callClaude(cfg, history, ctl.signal);
       else {
         if (turn > 0) break;                                    // offline: one pass of calls, then stop

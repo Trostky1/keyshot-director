@@ -72,8 +72,9 @@ async function askClaude(frames, ms, duration, signal) {
         const p = path.join(dir, 'frame_' + String(i + 1).padStart(2, '0') + '.png'); fs.writeFileSync(p, f.png);
         return 'frame ' + (i + 1) + ' at t=' + f.t.toFixed(2) + 's: ' + p + (ms[i].ok ? ' (auto: fills ' + ms[i].fillH + ' of height, ' + ms[i].fillW + ' of width, centre offset ' + ms[i].cx + ',' + ms[i].cy + ')' : ' (auto measurement unavailable)');
       });
-      const prompt = 'Use the Read tool to look at EVERY one of these frame images, then answer.\n\n' + lines.join('\n') + '\n\nThe clip is ' + duration.toFixed(2) + ' seconds long, aspect ratio ' + ms[0].aspect + '. Return the JSON object only.';
-      return cli.extractJson(await cli.ask({ bin: eng.bin, system: PLAN_SYSTEM, prompt, dir, model: cfg.cliModel, signal }));
+      const prompt = 'Look at EVERY one of these frame images (read each file, or use the attached images), then answer.\n\n' + lines.join('\n') + '\n\nThe clip is ' + duration.toFixed(2) + ' seconds long, aspect ratio ' + ms[0].aspect + '. Return the JSON object only.';
+      const imgs = fs.readdirSync(dir).filter(f => /[.]png$/.test(f)).map(f => path.join(dir, f));
+      return cli.extractJson(await cli.ask({ provider: eng.provider, bin: eng.bin, system: PLAN_SYSTEM, prompt, dir, images: imgs, model: eng.provider === 'codex' ? cfg.codexModel : cfg.cliModel, signal }));
     } finally { cli.rmDir(dir); }
   }
   const key = cfg.apiKey || process.env.ANTHROPIC_API_KEY; if (eng.engine !== 'api' || !key) return null;

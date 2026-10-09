@@ -230,6 +230,7 @@ async function applyPose(p) {
 // added a camera to the user's scene every time). Turn Live on in the page for a refresh every few seconds; one-off
 // refreshes happen after actions. A session budget stops runaway captures.
 const preview = { live: false, budget: 300, used: 0, minGapMs: 3000, last: 0, wanted: false };
+let previewTimer = null;
 async function grabPreview() {
   if (!heartbeat().alive || shotBusy || renderJob.running || preview.used >= preview.budget) return false;
   shotBusy = true; preview.used++;
@@ -444,10 +445,17 @@ const json = (res, code, obj) => { res.writeHead(code, { 'Content-Type': 'applic
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');
   if (req.method === 'POST' && url.pathname !== '/api/preview') janitor.touch();
+  // anything that can change the picture schedules ONE refresh shortly after the last change (debounced), so the page's
+  // preview follows your edits without constant rendering
+  if (req.method === 'POST' && !/^\/api\/(preview|quit|tidy|config|bridge|video\/stop|render\/stop|stop|prompt\/stop|prompt\/reset|styles)/.test(url.pathname)) {
+    clearTimeout(previewTimer); previewTimer = setTimeout(() => { preview.wanted = true; }, 1500);
+  }
   try {
     if (url.pathname === '/api/status') {
       lastClient = Date.now();
       if (!synced && heartbeat().alive) syncFromKeyShot();
+      if (!latestShot && heartbeat().alive && !preview.firstTried) { preview.firstTried = true; preview.wanted = true; }     // first picture on connect
+      if (!heartbeat().alive) preview.firstTried = false;
       return json(res, 200, { bridge: heartbeat(), ips: lanIPs(), port: PORT, playing: !!playing, base });
     }
     if (url.pathname === '/api/preview.jpg' || url.pathname === '/api/preview.png') {
@@ -494,7 +502,7 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/style/score' && req.method === 'POST') { const { name, settle } = await body(req); return json(res, 200, await scoreLive(name, settle ?? 2500)); }
     // ---- prompt box ----
     if (url.pathname === '/api/config' && req.method === 'GET') return json(res, 200, { ...agent.publicConfig(), ...(await agent.engineStatus()) });
-    if (url.pathname === '/api/config' && req.method === 'POST') { const b = await body(req); const patch = {}; if (typeof b.apiKey === 'string') patch.apiKey = b.apiKey.trim(); if (typeof b.model === 'string' && b.model.trim()) patch.model = b.model.trim(); if (['auto', 'cli', 'api', 'offline'].includes(b.engine)) patch.engine = b.engine; if (typeof b.cliPath === 'string') patch.cliPath = b.cliPath.trim(); agent.setConfig(patch); await require('./cli').status(patch.cliPath ?? agent.getConfig().cliPath, true); return json(res, 200, { ...agent.publicConfig(), ...(await agent.engineStatus()) }); }
+    if (url.pathname === '/api/config' && req.method === 'POST') { const b = await body(req); const patch = {}; if (typeof b.apiKey === 'string') patch.apiKey = b.apiKey.trim(); if (typeof b.model === 'string' && b.model.trim()) patch.model = b.model.trim(); if (['auto', 'cli', 'codex', 'api', 'offline'].includes(b.engine)) patch.engine = b.engine; if (typeof b.cliPath === 'string') patch.cliPath = b.cliPath.trim(); if (typeof b.codexPath === 'string') patch.codexPath = b.codexPath.trim(); agent.setConfig(patch); await require('./cli').status(patch.cliPath ?? agent.getConfig().cliPath, true); await require('./cli').codexStatus(patch.codexPath ?? agent.getConfig().codexPath, true); return json(res, 200, { ...agent.publicConfig(), ...(await agent.engineStatus()) }); }
     if (url.pathname === '/api/prompt' && req.method === 'POST') {
       if (promptJob && !promptJob.done) return json(res, 409, { error: 'still working on the last request' });
       const b = await body(req); const job = promptJob = { id: Date.now(), events: [], done: false };

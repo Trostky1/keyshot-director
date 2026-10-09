@@ -174,11 +174,13 @@
 
 <dialog id="settings">
   <h2>Settings</h2>
-  <div class="dim" style="text-transform:none;letter-spacing:0;font-size:12px;margin-bottom:10px">Two ways to use Claude, no API key needed for the first: <b>your signed-in Claude CLI</b> (uses your Claude subscription), or <b>your own Anthropic API key</b> (stored only on this computer, sent only to Anthropic). With neither, the prompt box runs in offline mode for basic commands.</div>
-  <div id="cliState" class="mono" style="white-space:pre-wrap;margin-bottom:10px"></div>
+  <div class="dim" style="text-transform:none;letter-spacing:0;font-size:12px;margin-bottom:10px">Pick what answers your prompts. No API key needed for the first two: <b>your signed-in Claude CLI</b> (Claude subscription), <b>your signed-in Codex CLI</b> (ChatGPT account), or <b>your own Anthropic API key</b> (stored only on this computer). With none, the prompt box runs in offline mode for basic commands.</div>
+  <label>Engine</label><select id="engine" style="width:100%"><option value="auto">Automatic (Claude CLI, then ChatGPT Codex CLI, then API key, then offline)</option><option value="cli">Claude CLI only</option><option value="codex">ChatGPT (Codex CLI) only</option><option value="api">API key only</option><option value="offline">Offline</option></select>
+  <div id="cliState" class="mono" style="white-space:pre-wrap;margin:10px 0 6px"></div>
   <label>Claude CLI path (only if it was not found)</label><input type="text" id="cliPath" style="width:100%" placeholder="C:\...\claude.exe">
+  <div id="codexState" class="mono" style="white-space:pre-wrap;margin:10px 0 6px"></div>
+  <label>Codex (ChatGPT) CLI path (only if it was not found)</label><input type="text" id="codexPath" style="width:100%" placeholder="C:\...\codex.exe">
   <div class="row" style="margin-top:6px"><button class="sm" id="cliRecheck">Check again</button></div>
-  <label>Engine</label><select id="engine" style="width:100%"><option value="auto">Automatic (CLI if signed in, else API key, else offline)</option><option value="cli">Claude CLI only</option><option value="api">API key only</option><option value="offline">Offline</option></select>
   <label>API key</label><input type="password" id="apikey" style="width:100%" placeholder="sk-ant-..." autocomplete="off">
   <label>Model</label><input type="text" id="model" style="width:100%">
   <div class="row" style="margin-top:14px"><button class="solid" id="saveSettings">Save</button><button id="closeSettings">Close</button></div>
@@ -444,21 +446,26 @@ loadConnect();
 /* ---------- settings ---------- */
 async function loadConfig() {
   CFG = await api('/api/config');
-  $('mode').textContent = CFG.engine === 'cli' ? 'Claude · signed-in CLI' : CFG.engine === 'api' ? 'Claude · API key · ' + CFG.model : 'Offline mode · open Settings to connect Claude';
-  $('model').value = CFG.model; $('engine').value = CFG.want || 'auto'; if (CFG.cliPath && !$('cliPath').value) $('cliPath').value = CFG.cliPath;
+  $('mode').textContent = CFG.engine === 'cli' ? (CFG.provider === 'codex' ? 'ChatGPT · signed-in Codex CLI' : 'Claude · signed-in CLI') : CFG.engine === 'api' ? 'Claude · API key · ' + CFG.model : 'Offline mode · open Settings to connect Claude or ChatGPT';
+  $('model').value = CFG.model; $('engine').value = CFG.want || 'auto';
+  if (CFG.cliPath && !$('cliPath').value) $('cliPath').value = CFG.cliPath; if (CFG.codexPath && !$('codexPath').value) $('codexPath').value = CFG.codexPath;
+  const x = CFG.codex || {};
+  $('codexState').textContent = !x.found ? 'ChatGPT Codex CLI: not found. Where I looked:\n' + ((x.searched || []).join('\n') || '(nothing recorded)')
+    : x.loggedIn ? 'ChatGPT Codex CLI: signed in' + (x.method ? ' (' + x.method + ')' : '') + '\n' + x.path
+    : 'ChatGPT Codex CLI found but not signed in. Run this once in a terminal, then press Check again:\n"' + x.path + '" login' + (x.error ? '\n(' + x.error + ')' : '');
   const c = CFG.cli || {};
   const why = (c.searched || []).join('\n');
   $('cliState').textContent = !c.found ? 'Claude CLI: not found. Where I looked:\n' + (why || '(nothing recorded)') + '\n\nIf you know where claude.exe is, paste its full path below and press Save.'
     : c.loggedIn ? 'Claude CLI: signed in (' + c.path + ')'
     : 'Claude CLI found but not signed in. Run this once in a terminal, then press Check again:\n"' + c.path + '" auth login' + (c.error ? '\n(' + c.error + ')' : '');
 }
-$('cliRecheck').onclick = e => busy(e.target, async () => { await api('/api/config', { engine: $('engine').value, cliPath: $('cliPath').value.trim(), recheck: true }); await loadConfig(); });
+$('cliRecheck').onclick = e => busy(e.target, async () => { await api('/api/config', { engine: $('engine').value, cliPath: $('cliPath').value.trim(), codexPath: $('codexPath').value.trim(), recheck: true }); await loadConfig(); });
 $('settingsBtn').onclick = () => { $('apikey').value = ''; $('settings').showModal(); };
 $('closeSettings').onclick = () => $('settings').close();
 $('disconnectBtn').onclick = e => busy(e.target, async () => { await api('/api/bridge/stop', {}); toast('Bridge stopped. In KeyShot, run the launcher again to reconnect.'); });
 $('restartBtn').onclick = async () => { try { await api('/api/quit', { restart: true }); } catch { /* server already going down */ } toast('Restarting... this page reconnects by itself'); $('settings').close(); };
 $('quitBtn').onclick = async () => { if (!confirm('Quit KeyShot Director? Start it again with the Start .bat.')) return; try { await api('/api/quit', {}); } catch { /* going down */ } document.body.innerHTML = '<div style="padding:40px;font:14px Helvetica">KeyShot Director has quit. Close this tab. Start it again with <b>Start KeyShot Director.bat</b>.</div>'; };
-$('saveSettings').onclick = async () => { const b = { model: $('model').value, engine: $('engine').value, cliPath: $('cliPath').value.trim() }; if ($('apikey').value.trim()) b.apiKey = $('apikey').value; await api('/api/config', b); await loadConfig(); $('settings').close(); toast(CFG.engine === 'offline' ? 'Saved. Still in offline mode.' : 'Saved. Prompts will use Claude.'); };
+$('saveSettings').onclick = async () => { const b = { model: $('model').value, engine: $('engine').value, cliPath: $('cliPath').value.trim(), codexPath: $('codexPath').value.trim() }; if ($('apikey').value.trim()) b.apiKey = $('apikey').value; await api('/api/config', b); await loadConfig(); $('settings').close(); toast(CFG.engine === 'offline' ? 'Saved. Still in offline mode.' : 'Saved. Prompts will use ' + (CFG.provider === 'codex' ? 'ChatGPT (Codex).' : 'Claude.')); };
 
 /* ---------- connection, preview loop ---------- */
 let booted = false;
