@@ -468,8 +468,8 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/styles/analyze' && req.method === 'POST') { const { name } = await body(req); const r = await style.analyzeFolder(name); return json(res, 200, { style: r.style, analyzed: r.analyzed, failed: r.failed, looks: r.looks.map(l => ({ id: l.id, images: l.images.length, profile: l.profile })) }); }
     if (url.pathname === '/api/style/score' && req.method === 'POST') { const { name, settle } = await body(req); return json(res, 200, await scoreLive(name, settle ?? 2500)); }
     // ---- prompt box ----
-    if (url.pathname === '/api/config' && req.method === 'GET') return json(res, 200, agent.publicConfig());
-    if (url.pathname === '/api/config' && req.method === 'POST') { const b = await body(req); const patch = {}; if (typeof b.apiKey === 'string') patch.apiKey = b.apiKey.trim(); if (typeof b.model === 'string' && b.model.trim()) patch.model = b.model.trim(); agent.setConfig(patch); return json(res, 200, agent.publicConfig()); }
+    if (url.pathname === '/api/config' && req.method === 'GET') return json(res, 200, { ...agent.publicConfig(), ...(await agent.engineStatus()) });
+    if (url.pathname === '/api/config' && req.method === 'POST') { const b = await body(req); const patch = {}; if (typeof b.apiKey === 'string') patch.apiKey = b.apiKey.trim(); if (typeof b.model === 'string' && b.model.trim()) patch.model = b.model.trim(); if (['auto', 'cli', 'api', 'offline'].includes(b.engine)) patch.engine = b.engine; agent.setConfig(patch); return json(res, 200, { ...agent.publicConfig(), ...(await agent.engineStatus()) }); }
     if (url.pathname === '/api/prompt' && req.method === 'POST') {
       if (promptJob && !promptJob.done) return json(res, 409, { error: 'still working on the last request' });
       const b = await body(req); const job = promptJob = { id: Date.now(), events: [], done: false };

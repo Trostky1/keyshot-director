@@ -9,7 +9,7 @@ It does not replace KeyShot: materials, environments, cameras, the timeline and 
 ## What you need
 - Windows, **KeyShot 2026.x** with Python scripting (the scripting console must exist in your license; *headless* scripting is **not** needed)
 - **Node.js 20+** (https://nodejs.org, LTS)
-- A browser. An Anthropic API key is **optional** (see *Prompting*).
+- A browser. For the AI features, **either** a signed-in Claude Code CLI (uses your Claude subscription) **or** an Anthropic API key. Both are optional (see *Prompting*).
 
 ## Install (2 minutes)
 1. On GitHub: **Code -> Download ZIP** (or `git clone`), then unzip anywhere (for example `C:\KeyShotDirector`).
@@ -47,9 +47,10 @@ Type what you want. Examples:
 
 **How it works:** your prompt (plus any attached images) goes to Claude together with a list of things the app can do: build a rig, adjust a light, set exposure, set the camera, play a move, analyze a style folder, match a style, look at the live viewport. Claude chooses the actions, the app runs them in KeyShot, **looks at the result** through the viewport, corrects obvious problems, and tells you what it changed.
 
-**Which engine:**
-- **Claude** (recommended): Settings -> paste *your own* Anthropic API key. It is stored only on your computer (`config.local.json`) and sent only to Anthropic. Usage is billed to your key. Do not share `config.local.json`.
-- **Offline mode** (no key): understands basic commands only: a rig name (*hero, moody, glass, white/blank, warm*), *studio off*, *brighter / darker*, *auto expose*, *orbit / push in / reveal / crane / whip*, *match <style folder>*, *look*.
+**Which engine** (Settings -> Engine; *Automatic* tries them in this order):
+- **Claude CLI, no API key**: if the `claude` command is installed and signed in, the app uses it, billed to your Claude subscription. The Claude desktop app bundles one and the app finds it by itself; sign it in once with `"<path shown in Settings>" auth login` in a terminal. Slower per step than the API (each step starts the CLI), but nothing to paste anywhere.
+- **Claude API key**: Settings -> paste *your own* Anthropic API key. It is stored only on your computer (`config.local.json`) and sent only to Anthropic. Usage is billed to your key. Do not share `config.local.json`.
+- **Offline mode** (neither): understands basic commands only: a rig name (*hero, moody, glass, white/blank, warm*), *studio off*, *brighter / darker*, *auto expose*, *orbit / push in / reveal / crane / whip*, *match <style folder>*, *look*.
 
 Claude does **not** need to be "hooked up" in any other way; the app works without anyone else's tools.
 
@@ -63,7 +64,7 @@ Claude does **not** need to be "hooked up" in any other way; the app works witho
    - **framing**: one tiny test render measures *your* product's silhouette, so every key lands at the reference's framing even though your product is a different size and shape.
 4. **Play move** previews it live. **Render video** renders every frame with KeyShot's own renderer and encodes an mp4 into `renders/<date>/` (frames are kept next to it). Pick size, fps and time per frame first; total time is roughly frames x seconds per frame.
 
-**With a Claude API key** the camera work is read by eye: orbits, elevation changes, cuts and easing. **Without a key** only what can be measured is copied: how large the product is in frame and where it sits, so push-ins and drifts work but orbits do not.
+**With Claude (CLI or API key)** the camera work is read by eye: orbits, elevation changes, cuts and easing. **Without** only what can be measured is copied: how large the product is in frame and where it sits, so push-ins and drifts work but orbits do not.
 
 The move also appears as JSON under *Camera motion*, so you can edit keys by hand; anything recorded there can be rendered the same way.
 

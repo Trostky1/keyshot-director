@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>KeyShot Director</title>
 <style>
-  :root { --bg:#000; --fg:#fff; --dim:#8c8c8c; --line:#3a3a3a; }
+  :root { --bg:#fff; --fg:#000; --dim:#6e6e6e; --line:#d4d4d4; }
   * { box-sizing:border-box; border-radius:0 !important; }
   html, body { margin:0; background:var(--bg); color:var(--fg); }
   body { font:13px/1.45 "Helvetica Neue", Helvetica, Arial, sans-serif; letter-spacing:.01em; }
@@ -36,15 +36,15 @@
   input[type=range] { -webkit-appearance:none; appearance:none; width:100%; padding:0; border:0; background:transparent; height:16px; margin:2px 0; }
   input[type=range]::-webkit-slider-runnable-track { height:1px; background:var(--fg); }
   input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:9px; height:15px; background:var(--fg); border:0; margin-top:-7px; }
-  input[type=checkbox] { accent-color:#fff; padding:0; width:13px; height:13px; }
+  input[type=checkbox] { accent-color:#000; padding:0; width:13px; height:13px; }
   textarea { width:100%; resize:vertical; }
   .mono { font-family:Consolas, "SF Mono", Menlo, monospace; font-size:11px; }
   /* stage / preview */
-  .stage { position:relative; border:1px solid var(--fg); background:#000; aspect-ratio:16/9; display:flex; align-items:center; justify-content:center; overflow:hidden; touch-action:none; cursor:grab; }
+  .stage { position:relative; border:1px solid var(--fg); background:var(--bg); aspect-ratio:16/9; display:flex; align-items:center; justify-content:center; overflow:hidden; touch-action:none; cursor:grab; }
   .stage.drag { cursor:grabbing; }
   .stage img { width:100%; height:100%; object-fit:contain; user-select:none; -webkit-user-drag:none; }
   .stage .empty { color:var(--dim); padding:24px; text-align:center; font-size:11px; letter-spacing:.08em; text-transform:uppercase; }
-  .hint { position:absolute; left:0; bottom:0; font-size:9.5px; color:#fff; background:#000; padding:3px 8px; letter-spacing:.08em; text-transform:uppercase; pointer-events:none; }
+  .hint { position:absolute; left:0; bottom:0; font-size:9.5px; color:var(--bg); background:var(--fg); padding:3px 8px; letter-spacing:.08em; text-transform:uppercase; pointer-events:none; }
   /* prompt */
   #log { border:1px solid var(--fg); border-top:0; height:170px; overflow:auto; padding:10px 12px; }
   .msg { margin:0 0 10px; white-space:pre-wrap; word-wrap:break-word; }
@@ -60,7 +60,7 @@
   .thumbs button { position:absolute; top:0; right:0; padding:0 4px; font-size:10px; }
   .ex { margin:4px 6px 0 0; }
   /* studio */
-  #stagecv { width:100%; max-width:300px; border:1px solid var(--fg); background:#000; margin-top:10px; touch-action:none; display:block; }
+  #stagecv { width:100%; max-width:300px; border:1px solid var(--fg); background:var(--bg); margin-top:10px; touch-action:none; display:block; }
   .lrow { border:1px solid var(--line); margin-top:6px; }
   .lrow > summary { cursor:pointer; padding:6px 9px; display:flex; align-items:center; gap:8px; list-style:none; font-size:11px; }
   .lrow > summary::-webkit-details-marker { display:none; }
@@ -79,8 +79,8 @@
   .chk2 { display:flex; gap:14px; margin-top:8px; } .chk2 label { margin:0; justify-content:flex-start; gap:5px; align-items:center; }
   .toast { position:fixed; bottom:14px; left:50%; transform:translateX(-50%); background:var(--fg); color:var(--bg); padding:8px 14px; display:none; max-width:90vw; font-size:12px; z-index:9; }
   dialog { background:var(--bg); color:var(--fg); border:1px solid var(--fg); padding:18px; width:min(440px, 92vw); }
-  dialog::backdrop { background:#000c; }
-  #qr { background:#fff; padding:6px; display:inline-block; margin-top:8px; }
+  dialog::backdrop { background:#fffc; }
+  #qr { background:#fff; border:1px solid var(--fg); padding:6px; display:inline-block; margin-top:8px; }
 </style>
 </head>
 <body>
@@ -161,7 +161,9 @@
 
 <dialog id="settings">
   <h2>Settings</h2>
-  <div class="dim" style="text-transform:none;letter-spacing:0;font-size:12px;margin-bottom:10px">Prompts use Claude through <b>your own Anthropic API key</b>. It is stored only on this computer (config.local.json) and sent only to Anthropic. With no key the prompt box still works in offline mode for basic commands.</div>
+  <div class="dim" style="text-transform:none;letter-spacing:0;font-size:12px;margin-bottom:10px">Two ways to use Claude, no API key needed for the first: <b>your signed-in Claude CLI</b> (uses your Claude subscription), or <b>your own Anthropic API key</b> (stored only on this computer, sent only to Anthropic). With neither, the prompt box runs in offline mode for basic commands.</div>
+  <div id="cliState" class="mono" style="white-space:pre-wrap;margin-bottom:10px"></div>
+  <label>Engine</label><select id="engine" style="width:100%"><option value="auto">Automatic (CLI if signed in, else API key, else offline)</option><option value="cli">Claude CLI only</option><option value="api">API key only</option><option value="offline">Offline</option></select>
   <label>API key</label><input type="password" id="apikey" style="width:100%" placeholder="sk-ant-..." autocomplete="off">
   <label>Model</label><input type="text" id="model" style="width:100%">
   <div class="row" style="margin-top:14px"><button class="solid" id="saveSettings">Save</button><button id="closeSettings">Close</button></div>
@@ -276,16 +278,18 @@ $('addlight').onclick = e => busy(e.target, async () => { const n = 'light' + (O
 const cv = $('stagecv'), cx = cv.getContext('2d');
 const stageXY = l => { const r = l.d * Math.cos(l.el * D2R); return { x: Math.sin(l.az * D2R) * r, y: Math.cos(l.az * D2R) * r }; };
 const px = p => { const s = (Math.min(cv.width, cv.height) / 2 - 16) / SPAN; return { x: cv.width / 2 + p.x * s, y: cv.height / 2 + p.y * s, s }; };
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 function drawStage() {
+  const FG = css('--fg'), LINE = css('--line');
   cx.clearRect(0, 0, cv.width, cv.height); const c = { x: cv.width / 2, y: cv.height / 2 }, s = px({ x: 1, y: 0 }).s;
-  cx.strokeStyle = '#3a3a3a'; cx.lineWidth = 1; for (const r of [2, 4, 6]) { cx.beginPath(); cx.arc(c.x, c.y, r * s, 0, 7); cx.stroke(); }
-  cx.strokeStyle = '#fff'; cx.strokeRect(c.x - s * .35, c.y - s * .25, s * .7, s * .5);
-  cx.fillStyle = '#fff'; cx.beginPath(); cx.moveTo(c.x, cv.height - 6); cx.lineTo(c.x - 8, cv.height - 18); cx.lineTo(c.x + 8, cv.height - 18); cx.fill();
+  cx.strokeStyle = LINE; cx.lineWidth = 1; for (const r of [2, 4, 6]) { cx.beginPath(); cx.arc(c.x, c.y, r * s, 0, 7); cx.stroke(); }
+  cx.strokeStyle = FG; cx.strokeRect(c.x - s * .35, c.y - s * .25, s * .7, s * .5);
+  cx.fillStyle = FG; cx.beginPath(); cx.moveTo(c.x, cv.height - 6); cx.lineTo(c.x - 8, cv.height - 18); cx.lineTo(c.x + 8, cv.height - 18); cx.fill();
   if (!ST) return;
   for (const l of Object.values(ST.studio.lights)) {
     const p = px(stageXY(l)), ang = Math.atan2(c.y - p.y, c.x - p.x);
-    cx.save(); cx.translate(p.x, p.y); cx.rotate(ang + Math.PI / 2); cx.strokeStyle = '#fff'; cx.lineWidth = 4; const hw = Math.max(4, l.w * s * .5); cx.beginPath(); cx.moveTo(-hw, 0); cx.lineTo(hw, 0); cx.stroke(); cx.restore();
-    cx.fillStyle = '#fff'; cx.font = '10px Helvetica, Arial'; cx.fillText(l.id, p.x + 6, p.y - 6);
+    cx.save(); cx.translate(p.x, p.y); cx.rotate(ang + Math.PI / 2); cx.strokeStyle = FG; cx.lineWidth = 4; const hw = Math.max(4, l.w * s * .5); cx.beginPath(); cx.moveTo(-hw, 0); cx.lineTo(hw, 0); cx.stroke(); cx.restore();
+    cx.fillStyle = FG; cx.font = '10px Helvetica, Arial'; cx.fillText(l.id, p.x + 6, p.y - 6);
   }
 }
 let dragLight = null;
@@ -403,10 +407,17 @@ $('vrender').onclick = () => busy($('vrender'), async () => {
 $('vstop').onclick = () => { api('/api/video/stop', {}); api('/api/render/stop', {}); api('/api/stop', {}); };
 
 /* ---------- settings ---------- */
-async function loadConfig() { CFG = await api('/api/config'); $('mode').textContent = CFG.hasKey ? 'Claude · ' + CFG.model : 'Offline mode · add an API key in Settings'; $('model').value = CFG.model; }
+async function loadConfig() {
+  CFG = await api('/api/config');
+  $('mode').textContent = CFG.engine === 'cli' ? 'Claude · signed-in CLI' : CFG.engine === 'api' ? 'Claude · API key · ' + CFG.model : 'Offline mode · open Settings to connect Claude';
+  $('model').value = CFG.model; $('engine').value = CFG.want || 'auto';
+  const c = CFG.cli || {};
+  $('cliState').textContent = !c.found ? 'Claude CLI: not found on this computer.' : c.loggedIn ? 'Claude CLI: signed in (' + c.path + ')' : 'Claude CLI found but not signed in. Run this once in a terminal, then reopen Settings:
+"' + c.path + '" auth login';
+}
 $('settingsBtn').onclick = () => { $('apikey').value = ''; $('settings').showModal(); };
 $('closeSettings').onclick = () => $('settings').close();
-$('saveSettings').onclick = async () => { const b = { model: $('model').value }; if ($('apikey').value.trim()) b.apiKey = $('apikey').value; await api('/api/config', b); await loadConfig(); $('settings').close(); toast(CFG.hasKey ? 'Saved. Prompts will use Claude.' : 'Saved.'); };
+$('saveSettings').onclick = async () => { const b = { model: $('model').value, engine: $('engine').value }; if ($('apikey').value.trim()) b.apiKey = $('apikey').value; await api('/api/config', b); await loadConfig(); $('settings').close(); toast(CFG.engine === 'offline' ? 'Saved. Still in offline mode.' : 'Saved. Prompts will use Claude.'); };
 
 /* ---------- connection, preview loop ---------- */
 let booted = false;

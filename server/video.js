@@ -11,6 +11,7 @@ const path = require('path');
 const { decode } = require('./png');
 const style = require('./style');
 const agent = require('./agent');
+const cli = require('./cli');
 
 const RIGS = ['hero_soft', 'dark_moody', 'glass_edge', 'blank_studio', 'warm_luxe'];
 const med = a => { const s = [...a].sort((x, y) => x - y); return s.length ? s[Math.floor(s.length / 2)] : 0; };
@@ -63,7 +64,19 @@ Rules for "keys" (the camera, described relative to the product):
 - rig: dark_moody = one big soft side key on near-black; glass_edge = rim/edge strips with a back glow, for glass and liquids on dark; hero_soft = classic soft 3-point on grey; blank_studio = bright seamless white; warm_luxe = warm key on deep brown-black. mirror = true if the key light comes from camera-right instead of camera-left.`;
 
 async function askClaude(frames, ms, duration, signal) {
-  const cfg = agent.getConfig(), key = cfg.apiKey || process.env.ANTHROPIC_API_KEY; if (!key) return null;
+  const cfg = agent.getConfig(), eng = await agent.pickEngine(cfg);
+  if (eng.engine === 'cli') {                                  // the user's signed-in Claude Code: frames as files it can Read
+    const dir = cli.tmpDir('video');
+    try {
+      const lines = frames.map((f, i) => {
+        const p = path.join(dir, 'frame_' + String(i + 1).padStart(2, '0') + '.png'); fs.writeFileSync(p, f.png);
+        return 'frame ' + (i + 1) + ' at t=' + f.t.toFixed(2) + 's: ' + p + (ms[i].ok ? ' (auto: fills ' + ms[i].fillH + ' of height, ' + ms[i].fillW + ' of width, centre offset ' + ms[i].cx + ',' + ms[i].cy + ')' : ' (auto measurement unavailable)');
+      });
+      const prompt = 'Use the Read tool to look at EVERY one of these frame images, then answer.\n\n' + lines.join('\n') + '\n\nThe clip is ' + duration.toFixed(2) + ' seconds long, aspect ratio ' + ms[0].aspect + '. Return the JSON object only.';
+      return cli.extractJson(await cli.ask({ bin: eng.bin, system: PLAN_SYSTEM, prompt, dir, model: cfg.cliModel, signal }));
+    } finally { cli.rmDir(dir); }
+  }
+  const key = cfg.apiKey || process.env.ANTHROPIC_API_KEY; if (eng.engine !== 'api' || !key) return null;
   const base = (cfg.baseUrl || process.env.ANTHROPIC_BASE_URL || 'https://api.anthropic.com').replace(/\/+$/, '');
   const content = [];
   frames.forEach((f, i) => {

@@ -5,11 +5,24 @@
 //   * Offline mode (no key): a small keyword router for the basic commands, so the app is usable and testable without AI.
 const fs = require('fs');
 const path = require('path');
+const cli = require('./cli');
 
 const CONFIG = path.join(__dirname, '..', 'config.local.json');
 const getConfig = () => { try { return JSON.parse(fs.readFileSync(CONFIG, 'utf8')); } catch { return {}; } };
 const setConfig = patch => { const c = { ...getConfig(), ...patch }; fs.writeFileSync(CONFIG, JSON.stringify(c, null, 2)); return c; };
-const publicConfig = () => { const c = getConfig(); return { hasKey: !!(c.apiKey || process.env.ANTHROPIC_API_KEY), model: c.model || 'claude-sonnet-5-5' }; };
+const publicConfig = () => { const c = getConfig(); return { hasKey: !!(c.apiKey || process.env.ANTHROPIC_API_KEY), model: c.model || 'claude-sonnet-5-5', engine: c.engine || 'auto' }; };
+// Which engine answers: an API key wins (unless the user picked the CLI); otherwise a signed-in Claude CLI; otherwise offline.
+async function pickEngine(cfg = getConfig()) {
+  const key = !!(cfg.apiKey || process.env.ANTHROPIC_API_KEY), want = cfg.engine || 'auto';
+  if (want === 'offline') return { engine: 'offline' };
+  if (want === 'api' && key) return { engine: 'api' };
+  if (want !== 'api') { const st = await cli.status(cfg.cliPath); if (st.found && st.loggedIn) return { engine: 'cli', bin: st.path }; if (want === 'cli') return { engine: 'offline', why: st.found ? 'The Claude CLI is not signed in. Run  "' + st.path + '" auth login  once in a terminal.' : 'The Claude CLI was not found on this computer.' }; }
+  return key ? { engine: 'api' } : { engine: 'offline' };
+}
+async function engineStatus() {
+  const cfg = getConfig(), st = await cli.status(cfg.cliPath), e = await pickEngine(cfg);
+  return { engine: e.engine, cli: { found: st.found, loggedIn: st.loggedIn, path: st.path }, hasKey: !!(cfg.apiKey || process.env.ANTHROPIC_API_KEY), want: cfg.engine || 'auto', why: e.why || null };
+}
 
 const SYSTEM = `You are the director inside "KeyShot Director", a companion app that drives the user's OPEN KeyShot scene live. You light and move the camera around the user's own product, so a non-expert can get studio-grade results in plain language.
 
@@ -54,6 +67,45 @@ async function callClaude(cfg, messages, signal) {
   return j;
 }
 
+// ---- CLI engine (the user's signed-in Claude Code): no API key. The model answers with a JSON object of tool calls. ----
+const CLI_PROTOCOL = `
+
+HOW TO ANSWER (important): you cannot call tools directly here. Reply with ONE JSON object and nothing else:
+{"say": "text for the user, or empty", "calls": [{"name": "<tool name>", "input": { ... }}]}
+- "calls" run in order. Leave it empty ([]) when you are finished and only want to talk to the user.
+- After your calls run you will see their results and can answer again; keep going until the job is done.
+- Images are saved as files: use the Read tool on a path shown as [image: <path>] to look at it.
+Tools you may call:
+` + TOOLS.map(t => '- ' + t.name + ' ' + JSON.stringify(t.input_schema.properties || {}) + ' : ' + t.description).join('\n');
+
+function renderForCli(messages, dir) {
+  let n = 0; const lines = [];
+  const img = b64 => { const f = path.join(dir, 'img_' + (++n) + '.' + (b64.mt.includes('png') ? 'png' : 'jpg')); fs.writeFileSync(f, Buffer.from(b64.data, 'base64')); return '[image: ' + f + ']'; };
+  for (const m of messages) {
+    if (typeof m.content === 'string') { lines.push((m.role === 'user' ? 'USER: ' : 'YOU: ') + m.content); continue; }
+    const parts = [];
+    for (const b of m.content) {
+      if (b.type === 'text') parts.push(b.text);
+      else if (b.type === 'image') parts.push(img({ mt: b.source.media_type, data: b.source.data }));
+      else if (b.type === 'tool_use') parts.push('(called ' + b.name + ' ' + JSON.stringify(b.input) + ')');
+      else if (b.type === 'tool_result') parts.push('RESULT of call ' + b.tool_use_id + (b.is_error ? ' (ERROR)' : '') + ': ' + (Array.isArray(b.content) ? b.content.map(c => c.type === 'image' ? img({ mt: c.source.media_type, data: c.source.data }) : c.text).join(' ') : String(b.content)));
+    }
+    lines.push((m.role === 'user' ? 'USER/TOOLS: ' : 'YOU: ') + parts.join('\n'));
+  }
+  return lines.join('\n\n');
+}
+async function callCli(cfg, bin, messages, signal) {
+  const dir = cli.tmpDir('chat');
+  try {
+    const prompt = renderForCli(messages, dir) + '\n\nYOUR TURN. Reply with the JSON object only.';
+    const text = await cli.ask({ bin, system: SYSTEM + CLI_PROTOCOL, prompt, dir, model: cfg.cliModel, signal });
+    let o; try { o = cli.extractJson(text); } catch { o = { say: text.trim(), calls: [] }; }      // plain prose = just talking
+    const calls = (Array.isArray(o.calls) ? o.calls : []).filter(c => c && TOOLS.some(t => t.name === c.name));
+    const content = [...(o.say && String(o.say).trim() ? [{ type: 'text', text: String(o.say).trim() }] : []), ...calls.map((c, i) => ({ type: 'tool_use', id: 'cli' + Date.now() + '_' + i, name: c.name, input: c.input || {} }))];
+    return { stop_reason: calls.length ? 'tool_use' : 'end_turn', content };
+  } finally { cli.rmDir(dir); }
+}
+
 // Offline engine: maps simple phrases to the same tool calls. Not AI - it only knows the basics.
 function offlineModel(text) {
   const t = (text || '').toLowerCase(); const calls = []; let say = '';
@@ -85,16 +137,19 @@ function trimHistory() {
 
 async function run(job, { text, images = [] }, actions) {
   const ev = (type, data) => job.events.push({ type, ...data, t: Date.now() });
-  const cfg = getConfig(); const useClaude = !!(cfg.apiKey || process.env.ANTHROPIC_API_KEY);
+  const cfg = getConfig();
   try {
-    ev('mode', { mode: useClaude ? 'claude' : 'offline', model: useClaude ? (cfg.model || 'claude-sonnet-5-5') : null });
+    const eng = await pickEngine(cfg); const useClaude = eng.engine !== 'offline';
+    ev('mode', { mode: eng.engine === 'cli' ? 'claude (signed-in CLI)' : eng.engine === 'api' ? 'claude' : 'offline', model: eng.engine === 'api' ? (cfg.model || 'claude-sonnet-5-5') : null });
+    if (eng.why) ev('text', { text: eng.why + ' Using offline mode for now.' });
     actions.setAttachments(images);
     const content = [...images.map(d => { const m = /^data:(image\/[a-z+.-]+);base64,(.+)$/i.exec(d); return m ? { type: 'image', source: { type: 'base64', media_type: m[1], data: m[2] } } : null; }).filter(Boolean), { type: 'text', text: text || '' }];
     history.push({ role: 'user', content: useClaude ? content : text });
     const ctl = new AbortController(); job.abort = () => ctl.abort();
     for (let turn = 0; turn < 14; turn++) {
       let resp;
-      if (useClaude) resp = await callClaude(cfg, history, ctl.signal);
+      if (eng.engine === 'cli') resp = await callCli(cfg, eng.bin, history, ctl.signal);
+      else if (useClaude) resp = await callClaude(cfg, history, ctl.signal);
       else {
         if (turn > 0) break;                                    // offline: one pass of calls, then stop
         const o = offlineModel(text); resp = { stop_reason: o.calls.length ? 'tool_use' : 'end_turn', content: [...(o.text ? [{ type: 'text', text: o.text }] : []), ...o.calls.map((c, i) => ({ type: 'tool_use', id: 'off' + i, name: c.name, input: c.input }))] };
@@ -124,4 +179,4 @@ async function run(job, { text, images = [] }, actions) {
   finally { trimHistory(); job.done = true; ev('done', {}); }
 }
 
-module.exports = { run, getConfig, setConfig, publicConfig, TOOLS, SYSTEM, history };
+module.exports = { run, getConfig, setConfig, publicConfig, engineStatus, pickEngine, TOOLS, SYSTEM, history };
