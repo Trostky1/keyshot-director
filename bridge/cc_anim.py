@@ -251,15 +251,48 @@ def op_anim_unswap(c):
 # ---- frame output: the camera cannot be animated on KeyShot's timeline by script or glTF import (camera imports static),
 # so a camera move is rendered frame by frame: the server sets each pose, then asks for one frame.
 def op_grab(c):
-    """Copy the live viewport to c['path'] (PNG). Removes the file KeyShot drops in Renderings (see op_screenshot)."""
-    src = lux.screenshot()
-    shutil.copyfile(src, c['path'])
-    try:
-        if time.time() - os.path.getmtime(src) < 15 and 'renderings' in src.replace(chr(92), '/').lower():
-            os.remove(src)
-    except Exception:
-        pass
+    """Render the current view to c['path'] (PNG). Never lux.screenshot() - it adds a camera to the scene each call."""
+    opts = lux.getRenderOptions()
+    opts.setOutputAlphaChannel(False)
+    opts.setMaxTimeRendering(float(c.get('secs', 1.2)))
+    lux.renderImage(path=c['path'], width=int(c.get('width', 640)), height=int(c.get('height', 360)), opts=opts)
     return {'path': c['path']}
+
+
+def _auto_cam(name):
+    import re
+    m = re.match(r'^.+[.] ([0-9]+)$', name)
+    return int(m.group(1)) if m else None
+
+
+def op_cameras_info(c):
+    """Count saved cameras and how many look like the auto-numbered ones lux.screenshot() used to create."""
+    names = list(lux.getCameras())
+    nums = sorted(n for n in (_auto_cam(x) for x in names) if n is not None)
+    return {'total': len(names), 'auto_numbered': len(nums), 'other': len(names) - len(nums),
+            'min': nums[0] if nums else None, 'max': nums[-1] if nums else None, 'active': lux.getCamera(),
+            'others_sample': [x for x in names if _auto_cam(x) is None][:40]}
+
+
+def op_cameras_cleanup(c):
+    """Remove auto-numbered cameras ('<scene>-KS20xx. N') with N > keep_first, in time-boxed batches. Never removes the
+    active camera, 'last_active', or any camera whose name does not match. Without apply=True it only reports."""
+    keep_first = int(c.get('keep_first', 30))
+    active = lux.getCamera()
+    names = list(lux.getCameras())
+    doomed = [x for x in names if x != active and x != 'last_active' and (_auto_cam(x) or 0) > keep_first]
+    if not c.get('apply'):
+        return {'would_remove': len(doomed), 'total': len(names), 'keeping': len(names) - len(doomed)}
+    t0 = time.time(); gone = 0; err = None
+    for x in doomed[:int(c.get('limit', 5000))]:
+        try:
+            lux.removeCamera(x); gone += 1
+        except Exception as e:
+            err = '%s: %r' % (x, e); break
+        if time.time() - t0 > float(c.get('max_secs', 20)):
+            break
+    lux.sync()
+    return {'removed': gone, 'remaining_to_remove': len(doomed) - gone, 'total_now': len(lux.getCameras()), 'secs': round(time.time() - t0, 1), 'error': err}
 
 
 def op_render_view(c):
@@ -287,5 +320,5 @@ def op_encode_video(c):
     return {'video': out, 'exists': os.path.exists(out), 'size': os.path.getsize(out) if os.path.exists(out) else 0}
 
 
-ANIM_OPS = {'grab': op_grab, 'render_view': op_render_view, 'encode_video': op_encode_video, 'anim_swap': op_anim_swap, 'anim_unswap': op_anim_unswap, "anim_probe": op_anim_probe, "anim_info": op_anim_info, "anim_import": op_anim_import, "anim_tree": op_anim_tree,
+ANIM_OPS = {'cameras_info': op_cameras_info, 'cameras_cleanup': op_cameras_cleanup, 'grab': op_grab, 'render_view': op_render_view, 'encode_video': op_encode_video, 'anim_swap': op_anim_swap, 'anim_unswap': op_anim_unswap, "anim_probe": op_anim_probe, "anim_info": op_anim_info, "anim_import": op_anim_import, "anim_tree": op_anim_tree,
             "anim_nodes": op_anim_nodes, "anim_time": op_anim_time, "anim_group": op_anim_group, "anim_delete": op_anim_delete}

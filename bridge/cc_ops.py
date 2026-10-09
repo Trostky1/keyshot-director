@@ -48,20 +48,17 @@ def op_exec(c):
 
 
 def op_screenshot(c):
+    """Picture of the current view. NOT lux.screenshot(): that call adds a new saved camera to the scene on every use
+    (it had piled up thousands) and drops a 5 MB PNG into Renderings. A tiny renderImage does neither."""
     t0 = time.time()
-    src = lux.screenshot()
-    ext = os.path.splitext(src)[1] or ".png"
-    dst = os.path.join(SHOTS, c.get("name", "shot") + ext)
-    shutil.copyfile(src, dst)
-    # lux.screenshot() saves a ~5MB PNG into the user's Renderings folder on EVERY call. We have our copy, and the file
-    # was created by this very call, so remove it (guarded: only if brand new) or thousands pile up.
-    removed = False
-    try:
-        if time.time() - os.path.getmtime(src) < 15 and "renderings" in src.replace("\\", "/").lower():
-            os.remove(src); removed = True
-    except Exception:
-        pass
-    return {"path": dst, "secs": round(time.time() - t0, 3), "src_removed": removed}
+    dst = os.path.join(SHOTS, c.get("name", "shot") + ".png")
+    w = int(c.get("width", 640))
+    h = int(c.get("height", round(w * 9 / 16 / 2) * 2))
+    opts = lux.getRenderOptions()
+    opts.setOutputAlphaChannel(False)
+    opts.setMaxTimeRendering(float(c.get("secs", 1.2)))
+    lux.renderImage(path=dst, width=w - (w % 2), height=h - (h % 2), opts=opts)
+    return {"path": dst, "secs": round(time.time() - t0, 3)}
 
 
 def op_stop(c):
@@ -210,4 +207,4 @@ try:
 except Exception:
     import traceback as _tb2
     OPS["anim_error"] = (lambda c, _e=_tb2.format_exc(): {"error": _e})
-# edit stamp for cc_lights.py / cc_anim.py (bump to force a hot reload after editing them): 12
+# edit stamp for cc_lights.py / cc_anim.py (bump to force a hot reload after editing them): 16

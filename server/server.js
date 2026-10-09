@@ -19,14 +19,14 @@ const studio = { rig: null, exposure: 1, frameAz: 0, mirror: false, subject: nul
 
 // Measure the product's own brightness in the live viewport (see png.js productStats).
 async function measure(settleMs = 2500) {
-  await sleep(settleMs);                                       // let the real-time render accumulate samples
-  const r = await send('screenshot', { name: 'measure' }, 15000);
+  await sleep(Math.min(settleMs, 400));                       // (the capture is a render now; it converges on its own)
+  const r = await send('screenshot', { name: 'measure', width: 640, secs: 1.5 }, 30000);
   return productStats(decode(fs.readFileSync(r.path)));
 }
 // Score the live viewport against a style folder's looks; returns the closest look, its distance, and per-feature deltas.
 async function scoreLive(name, settleMs = 2500) {
   await sleep(settleMs);
-  const r = await send('screenshot', { name: 'style_score' }, 15000);
+  const r = await send('screenshot', { name: 'style_score', width: 640, secs: 1.5 }, 30000);
   const f = style.features(decode(fs.readFileSync(r.path)));
   const prof = style.loadProfile(name);
   const scored = prof.looks.map(l => ({ look: l.id, images: l.images.length, ...style.score(f, l.profile) })).sort((a, b) => a.distance - b.distance);
@@ -44,7 +44,7 @@ async function matchStyle(name, { look, rounds = 3, settle = 2200 } = {}) {
     if (!studio.rig || !studio.subject) throw new Error('build a rig first (e.g. Blank studio), then match it');
     const prof = style.loadProfile(name); let target = look && prof.looks.find(l => l.id === look);
     const evalNow = async () => {
-      await sleep(settle); const r = await send('screenshot', { name: 'match' }, 15000);
+      await sleep(150); const r = await send('screenshot', { name: 'match', width: 640, secs: 1.5 }, 30000);
       const f = style.features(decode(fs.readFileSync(r.path)));
       if (!target) target = prof.looks.map(l => ({ l, s: style.score(f, l.profile).distance })).sort((a, b) => a.s - b.s)[0].l;
       return style.score(f, target.profile);
@@ -225,20 +225,21 @@ async function applyPose(p) {
   return send('set_view', { pivot: p.pivot, pos: eye, up: [0, 1, 0], fov: p.fov, noread: true });
 }
 
-// preview capture loop: only runs while a client is polling
+// Preview: OFF by default and capped. Each capture is a small KeyShot render (the screenshot call that used to do this
+// added a camera to the user's scene every time). Turn Live on in the page for a refresh every few seconds; one-off
+// refreshes happen after actions. A session budget stops runaway captures.
+const preview = { live: false, budget: 300, used: 0, minGapMs: 3000, last: 0, wanted: false };
+async function grabPreview() {
+  if (!heartbeat().alive || shotBusy || renderJob.running || preview.used >= preview.budget) return false;
+  shotBusy = true; preview.used++;
+  try { const r = await send('screenshot', { name: 'live', width: 960, secs: 1.0 }, 30000); latestShot = fs.readFileSync(r.path); preview.last = Date.now(); return true; }
+  catch { return false; } finally { shotBusy = false; }
+}
 async function captureLoop() {
   while (true) {
-    // while a shot is playing, screenshots compete with camera moves for the bridge: capture rarely
-    const gap = playing ? 700 : 120;
-    if (Date.now() - lastClient < 4000 && heartbeat().alive && !shotBusy && !renderJob.running) {
-      shotBusy = true;
-      try {
-        const r = await send('screenshot', { name: 'live' }, 4000);
-        latestShot = fs.readFileSync(r.path);
-      } catch { /* bridge busy or down */ }
-      shotBusy = false;
-    }
-    await new Promise(r => setTimeout(r, gap));
+    const due = Date.now() - preview.last >= preview.minGapMs;
+    if (due && !playing && (preview.wanted || (preview.live && Date.now() - lastClient < 6000))) { preview.wanted = false; await grabPreview(); }
+    await new Promise(r => setTimeout(r, 400));
   }
 }
 
@@ -374,7 +375,7 @@ const actions = {
   },
   async look() {
     await sleep(1800);
-    const r = await send('screenshot', { name: 'look' }, 15000);
+    const r = await send('screenshot', { name: 'look', width: 960, secs: 3 }, 30000);
     const jpg = path.join(BASE, 'shots', 'look_small.jpg');
     await run('powershell', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', path.join(__dirname, '..', 'tools', 'resize.ps1'), '-In', r.path, '-Out', jpg, '-MaxDim', '900']);
     const m = productStats(decode(fs.readFileSync(r.path))), b64 = fs.readFileSync(jpg).toString('base64');
@@ -451,6 +452,8 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'no-store' });
       return res.end(latestShot);
     }
+    if (url.pathname === '/api/preview' && req.method === 'POST') { const b = await body(req); if (typeof b.live === 'boolean') { preview.live = b.live; if (b.live) preview.used = 0; } if (b.now) preview.wanted = true; return json(res, 200, { live: preview.live, used: preview.used, budget: preview.budget }); }
+    if (url.pathname === '/api/preview' && req.method === 'GET') return json(res, 200, { live: preview.live, used: preview.used, budget: preview.budget });
     if (url.pathname === '/api/pose' && req.method === 'GET') { base = base || (await readPose()); return json(res, 200, cur || base); }
     if (url.pathname === '/api/rebase' && req.method === 'POST') { base = cur = await readPose(); return json(res, 200, base); }
     if (url.pathname === '/api/pose' && req.method === 'POST') {
