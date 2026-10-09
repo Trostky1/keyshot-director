@@ -463,6 +463,17 @@ const server = http.createServer(async (req, res) => {
       const line = `exec("KD_HOME = '${root.replace(/'/g, "\\'")}'; exec(open(KD_HOME + '/bridge/cc_bridge.py', encoding='utf-8-sig').read())")`;
       return json(res, 200, { line });
     }
+    // ---- lifecycle: restart / quit this app, or tell the bridge inside KeyShot to stop ----
+    if (url.pathname === '/api/quit' && req.method === 'POST') {
+      const b = await body(req); json(res, 200, { ok: true, restart: !!b.restart });
+      setTimeout(() => process.exit(b.restart ? 3 : 0), 250);       // exit code 3 makes the .bat start it again
+      return;
+    }
+    if (url.pathname === '/api/bridge/stop' && req.method === 'POST') {
+      if (!heartbeat().alive) return json(res, 200, { ok: true, note: 'the bridge was not running' });
+      try { await send('stop', {}, 15000); } catch { /* it exits right after answering */ }
+      return json(res, 200, { ok: true });
+    }
     if (url.pathname === '/api/tidy' && req.method === 'POST') return json(res, 200, await janitor.run(tidyOpts, 'manual'));
     if (url.pathname === '/api/preview' && req.method === 'GET') return json(res, 200, { live: preview.live, used: preview.used, budget: preview.budget });
     if (url.pathname === '/api/pose' && req.method === 'GET') { base = base || (await readPose()); return json(res, 200, cur || base); }

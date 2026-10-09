@@ -180,6 +180,9 @@
   <label>API key</label><input type="password" id="apikey" style="width:100%" placeholder="sk-ant-..." autocomplete="off">
   <label>Model</label><input type="text" id="model" style="width:100%">
   <div class="row" style="margin-top:14px"><button class="solid" id="saveSettings">Save</button><button id="closeSettings">Close</button></div>
+  <div class="dim" style="margin:16px 0 6px;text-transform:uppercase">Stop / restart</div>
+  <div class="row"><button id="disconnectBtn" title="Tells the bridge running inside KeyShot to stop, so you can run the launcher again">Disconnect KeyShot</button><button id="restartBtn">Restart app</button><button id="quitBtn">Quit app</button></div>
+  <div class="dim" style="text-transform:none;letter-spacing:0;font-size:11.5px;margin-top:6px">Disconnect ends the bridge in KeyShot (run the launcher again to reconnect). Restart / Quit act on this app's server window.</div>
 </dialog>
 <div class="toast" id="toast"></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
@@ -446,6 +449,9 @@ async function loadConfig() {
 }
 $('settingsBtn').onclick = () => { $('apikey').value = ''; $('settings').showModal(); };
 $('closeSettings').onclick = () => $('settings').close();
+$('disconnectBtn').onclick = e => busy(e.target, async () => { await api('/api/bridge/stop', {}); toast('Bridge stopped. In KeyShot, run the launcher again to reconnect.'); });
+$('restartBtn').onclick = async () => { try { await api('/api/quit', { restart: true }); } catch { /* server already going down */ } toast('Restarting... this page reconnects by itself'); $('settings').close(); };
+$('quitBtn').onclick = async () => { if (!confirm('Quit KeyShot Director? Start it again with the Start .bat.')) return; try { await api('/api/quit', {}); } catch { /* going down */ } document.body.innerHTML = '<div style="padding:40px;font:14px Helvetica">KeyShot Director has quit. Close this tab. Start it again with <b>Start KeyShot Director.bat</b>.</div>'; };
 $('saveSettings').onclick = async () => { const b = { model: $('model').value, engine: $('engine').value }; if ($('apikey').value.trim()) b.apiKey = $('apikey').value; await api('/api/config', b); await loadConfig(); $('settings').close(); toast(CFG.engine === 'offline' ? 'Saved. Still in offline mode.' : 'Saved. Prompts will use Claude.'); };
 
 /* ---------- connection, preview loop ---------- */

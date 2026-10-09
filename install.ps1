@@ -48,19 +48,17 @@ $batLines = @(
   'cd /d "%~dp0"',
   'where node >nul 2>nul',
   'if errorlevel 1 goto nonode',
-  'netstat -ano | find ":8787" | find "LISTENING" >nul',
-  'if not errorlevel 1 goto running',
+  'rem Any older copy of this app still holding the port is stopped first, so this always gives a fresh start.',
+  'powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0tools\stop.ps1"',
   'echo Starting KeyShot Director ...',
   'set KD_OPEN=1',
+  ':run',
   'node server\server.js',
+  'rem exit code 3 = "Restart" was pressed in the page',
+  'if %errorlevel%==3 goto run',
   'echo.',
   'echo The server stopped. If that was not on purpose, the message above says why.',
   'pause',
-  'exit /b',
-  ':running',
-  'echo KeyShot Director is already running - opening the page.',
-  'start "" http://localhost:8787',
-  'ping -n 4 127.0.0.1 >nul',
   'exit /b',
   ':nonode',
   'echo Node.js is not installed or not on PATH.',
@@ -68,6 +66,9 @@ $batLines = @(
   'pause'
 )
 [IO.File]::WriteAllText((Join-Path $home_ 'Start KeyShot Director.bat'), (($batLines -join "`r`n") + "`r`n"), (New-Object System.Text.ASCIIEncoding))
+
+$stopBat = "@echo off`r`ntitle Stop KeyShot Director`r`ncd /d `"%~dp0`"`r`npowershell -NoProfile -ExecutionPolicy Bypass -File `"%~dp0tools\stop.ps1`"`r`nping -n 3 127.0.0.1 >nul`r`n"
+[IO.File]::WriteAllText((Join-Path $home_ 'Stop KeyShot Director.bat'), $stopBat, (New-Object System.Text.ASCIIEncoding))
 
 Write-Host "`nDone. To use it:" -ForegroundColor White
 Write-Host "  1. Double-click  'Start KeyShot Director.bat'   (leave its window open; the page opens in your browser)"
