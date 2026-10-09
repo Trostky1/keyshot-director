@@ -181,20 +181,34 @@ def adopt_orphans():
 
 
 # ---- ops -------------------------------------------------------------------------------------
+SET_WORDS = ("backdrop", "background", "backplate", "ground", "floor", "cyc", "sweep", "ramp", "plinth", "podium", "pedestal")
+
+
 def op_subject(c):
-    """Bounding box of the product (model nodes only; never our lights)."""
-    lo = [1e9] * 3; hi = [-1e9] * 3; names = []
+    """Bounding box of the product: model nodes only; never our lights; set pieces (backdrop / floor / ramp ...) are
+    left out when there is anything else in the scene, so a big backdrop does not become 'the product'."""
+    cands = []
     for m in lux.getSceneTree().find(types=lux.NODE_TYPE_MODEL):
         nm = m.getName() or ""
         if nm.startswith(PREFIX) or nm.lower().startswith("cc_light_panel"):
             continue                                   # never count our own lights as part of the product
+        try:
+            if m.isDeleted() or m.isHidden():
+                continue
+        except Exception:
+            pass
+        cands.append((nm, m))
+    product = [(n, m) for n, m in cands if not any(w in n.lower() for w in SET_WORDS)]
+    use = product or cands                             # if everything looks like a set piece, use it all
+    lo = [1e9] * 3; hi = [-1e9] * 3; names = []
+    for nm, m in use:
         bb = m.getBoundingBox(world=True)
         mn, mx = bb[0].val(), bb[1].val()
-        names.append(m.getName())
+        names.append(nm)
         for i in range(3):
             lo[i] = min(lo[i], mn[i]); hi[i] = max(hi[i], mx[i])
     size = [hi[i] - lo[i] for i in range(3)]
-    return {"models": names, "min": lo, "max": hi, "size": size,
+    return {"models": names, "skipped_set_pieces": [n for n, _ in cands if (n, _) not in use][:10], "min": lo, "max": hi, "size": size,
             "center": [(hi[i] + lo[i]) / 2 for i in range(3)], "span": max(size)}
 
 

@@ -207,4 +207,4 @@ try:
 except Exception:
     import traceback as _tb2
     OPS["anim_error"] = (lambda c, _e=_tb2.format_exc(): {"error": _e})
-# edit stamp for cc_lights.py / cc_anim.py (bump to force a hot reload after editing them): 17
+# edit stamp for cc_lights.py / cc_anim.py (bump to force a hot reload after editing them): 18
