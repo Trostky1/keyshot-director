@@ -45,7 +45,18 @@ for d in (CMD, RESP, SHOTS):
 def heartbeat(state, extra=None):
     with open(os.path.join(BASE, "heartbeat.json"), "w") as f:
         json.dump({"t": time.time(), "state": state, "ops_loaded": _STATE["ops_mtime"],
-                   "err": _STATE["err"]}, f)
+                   "err": _STATE["err"], "pid": os.getpid()}, f)
+
+
+def another_bridge_alive():
+    """True when a bridge in a DIFFERENT KeyShot window is already running on this folder (two bridges would answer
+    commands at random, possibly lighting the wrong scene)."""
+    try:
+        with open(os.path.join(BASE, "heartbeat.json"), "r") as f:
+            h = json.load(f)
+        return h.get("state") == "running" and time.time() - h.get("t", 0) < 6 and h.get("pid") not in (None, os.getpid())
+    except Exception:
+        return False
 
 
 _STATE = {"ops_mtime": 0, "ops": {}, "err": None}
@@ -95,6 +106,10 @@ def handle(path):
 
 def main():
     global INITIAL
+    if another_bridge_alive():
+        print("KeyShot Director: another KeyShot window already has the bridge running. Use that one, or close it first. "
+              "This window was NOT connected.")
+        return
     load_ops()
     try:
         INITIAL = _STATE["ns"]["read_camera"]()

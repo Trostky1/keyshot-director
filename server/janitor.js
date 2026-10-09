@@ -25,10 +25,12 @@ async function tidyCameras(send, { keepFirst = 30, minAuto = 60 } = {}) {
   const info = await send('cameras_info', {}, 120000);
   if (info.auto_numbered <= minAuto) return { removed: 0, auto: info.auto_numbered };
   let removed = 0, left = 1, rounds = 0;
-  while (left > 0 && rounds++ < 40) {
-    const r = await send('cameras_cleanup', { keep_first: keepFirst, apply: true, max_secs: 15 }, 180000);
+  while (left > 0 && rounds++ < 400) {
+    // short batches with a breather in between: while a batch runs KeyShot's window can't respond
+    const r = await send('cameras_cleanup', { keep_first: keepFirst, apply: true, max_secs: 4 }, 180000);
     removed += r.removed; left = r.remaining_to_remove;
     if (r.error || r.removed === 0) break;
+    await new Promise(res => setTimeout(res, 1500));
   }
   return { removed, remaining: left };
 }
