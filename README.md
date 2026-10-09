@@ -77,6 +77,9 @@ Good to know: it matches lighting *style* and camera *motion*, not the reference
 
 It matches *lighting and tone*, not the product itself, and it's an approximation: contrast on clear glass can't always reach the contrast of matte gadgets.
 
+## Housekeeping
+The app cleans up after itself so it does not leave a mess: scratch pictures it takes for measuring are deleted a few minutes later, the frame pictures of a rendered video are deleted once the mp4 is made (send `keepFrames: true` to the render API to keep them), and the auto-numbered cameras that older versions piled up in the scene are removed when the app has been idle for 10 minutes or a job finishes. It never touches your own cameras, renders or files. `POST /api/tidy` does it on demand.
+
 ## Limits you should know
 - **Camera moves are not KeyShot timeline animations.** KeyShot's scripting can't create camera keyframes, and cameras imported from glTF arrive static. So the app renders a move itself, frame by frame, with KeyShot's renderer (*Render video*). It does not go through KeyShot's render queue.
 - Live preview is about 4-6 fps (each camera move costs KeyShot 100-250 ms). Final renders aren't affected.

@@ -261,7 +261,7 @@ def op_grab(c):
 
 def _auto_cam(name):
     import re
-    m = re.match(r'^.+[.] ([0-9]+)$', name)
+    m = re.match(r'^.+-KS[0-9]{4}[.] ([0-9]+)$', name)
     return int(m.group(1)) if m else None
 
 

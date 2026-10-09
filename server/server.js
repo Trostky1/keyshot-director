@@ -12,6 +12,7 @@ const { RIGS, ENV_RIGS, buildRig, toPos } = require('./rigs');
 const { decode, productStats } = require('./png');
 const style = require('./style');
 const video = require('./video');
+const janitor = require('./janitor');
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 // ---- studio lighting state (what we believe is in KeyShot; the bridge keeps the real registry) ----
@@ -80,7 +81,7 @@ async function matchStyle(name, { look, rounds = 3, settle = 2200 } = {}) {
     matchJob.result = { style: name, look: target.id, startDistance: start, finalDistance: final.distance, deltas: final.deltas, tuned: Object.fromEntries(params.map(p => [p.id, +(+p.get()).toFixed(3)])) };
     say(`done: distance ${start} -> ${final.distance}`);
   } catch (e) { matchJob.result = { error: e.message }; say('error: ' + e.message); }
-  finally { matchJob.running = false; }
+  finally { matchJob.running = false; tidyLater(); }
 }
 async function setExposure(x) {
   studio.exposure = Math.max(0.05, Math.min(12, x));
@@ -318,14 +319,14 @@ async function matchVideo({ frames, duration, lighting = true, camera = true, ro
     }
     videoJob.result = out;
   } catch (e) { videoJob.result = { error: e.message }; say('error: ' + e.message); }
-  finally { videoJob.running = false; }
+  finally { videoJob.running = false; tidyLater(); }
 }
 
 // ---- render a camera recipe: one KeyShot render per frame, then encode. (Camera keyframes cannot be put on KeyShot's
 // timeline by script, and imported glTF cameras arrive static, so the move is rendered pose by pose.) ----------------------
 const RENDERS = path.join(__dirname, '..', 'renders');
 const renderJob = { running: false, cancel: false, frame: 0, total: 0, log: [], result: null };
-async function renderRecipe({ recipe, fps = 24, width = 1280, height = 720, secs = 4, samples }) {
+async function renderRecipe({ recipe, fps = 24, width = 1280, height = 720, secs = 4, samples, keepFrames = false }) {
   if (renderJob.running) throw new Error('a render is already running');
   if (!recipe || !Array.isArray(recipe.keys) || recipe.keys.length < 2) throw new Error('no camera move to render (match a video or record a move first)');
   width = Math.round(width / 2) * 2; height = Math.round(height / 2) * 2;            // video encoders need even sizes
@@ -345,10 +346,12 @@ async function renderRecipe({ recipe, fps = 24, width = 1280, height = 720, secs
     if (renderJob.cancel) { say(`stopped after ${renderJob.frame} frames (kept in the folder)`); renderJob.result = { dir, frames: renderJob.frame, stopped: true }; return; }
     const v = await send('encode_video', { folder: dir, frames: 'frame.%d.png', video: 'move.mp4', fps, last: total }, 10 * 60 * 1000);
     if (!v.exists) throw new Error('KeyShot rendered the frames but could not encode the video (frames are in ' + dir + ')');
-    renderJob.result = { dir, video: v.video, frames: total, secs: +((Date.now() - renderJob.startedAt) / 1000).toFixed(0) };
-    say(`done: ${v.video}`);
+    let freed = 0;
+    if (keepFrames !== true) for (const f of fs.readdirSync(dir)) if (/^frame.d+.png$/.test(f)) { try { freed += fs.statSync(path.join(dir, f)).size; fs.unlinkSync(path.join(dir, f)); } catch { /* ignore */ } }
+    renderJob.result = { dir, video: v.video, frames: total, secs: +((Date.now() - renderJob.startedAt) / 1000).toFixed(0), framesDeleted: keepFrames !== true, freedMB: +(freed / 1048576).toFixed(0) };
+    say(`done: ${v.video}` + (keepFrames === true ? '' : ` (frame pictures deleted, ${renderJob.result.freedMB} MB freed)`));
   } catch (e) { renderJob.result = { error: e.message, dir }; say('error: ' + e.message); }
-  finally { renderJob.running = false; try { await applyPose(back); } catch { /* bridge gone */ } }
+  finally { renderJob.running = false; try { await applyPose(back); } catch { /* bridge gone */ } tidyLater(); }
 }
 
 function lanIPs() {
@@ -440,6 +443,7 @@ const json = (res, code, obj) => { res.writeHead(code, { 'Content-Type': 'applic
 
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');
+  if (req.method === 'POST' && url.pathname !== '/api/preview') janitor.touch();
   try {
     if (url.pathname === '/api/status') {
       lastClient = Date.now();
@@ -453,6 +457,7 @@ const server = http.createServer(async (req, res) => {
       return res.end(latestShot);
     }
     if (url.pathname === '/api/preview' && req.method === 'POST') { const b = await body(req); if (typeof b.live === 'boolean') { preview.live = b.live; if (b.live) preview.used = 0; } if (b.now) preview.wanted = true; return json(res, 200, { live: preview.live, used: preview.used, budget: preview.budget }); }
+    if (url.pathname === '/api/tidy' && req.method === 'POST') return json(res, 200, await janitor.run(tidyOpts, 'manual'));
     if (url.pathname === '/api/preview' && req.method === 'GET') return json(res, 200, { live: preview.live, used: preview.used, budget: preview.budget });
     if (url.pathname === '/api/pose' && req.method === 'GET') { base = base || (await readPose()); return json(res, 200, cur || base); }
     if (url.pathname === '/api/rebase' && req.method === 'POST') { base = cur = await readPose(); return json(res, 200, base); }
@@ -550,4 +555,8 @@ server.listen(PORT, '0.0.0.0', () => {
   console.log(`KeyShot control server: http://localhost:${PORT}`);
   for (const ip of lanIPs()) console.log(`  phone / other PC: http://${ip}:${PORT}`);
 });
+const tidyOpts = { send, alive: () => heartbeat().alive, busy: () => !!(playing || matchJob.running || videoJob.running || renderJob.running || (promptJob && !promptJob.done) || shotBusy) };
+let tidyTimer = null;
+function tidyLater() { clearTimeout(tidyTimer); tidyTimer = setTimeout(() => janitor.run(tidyOpts, 'job').catch(() => {}), 5000); }
+janitor.start(tidyOpts);
 captureLoop();
