@@ -31,6 +31,14 @@ function findCli(cfgPath) {
       for (const h of hs) { const p = path.join(root, v, h, exe); if (ok(p)) found.push({ p, key: v.split('.').map(n => parseInt(n, 10) || 0) }); }
     }
   };
+  // The Claude desktop app is a Microsoft Store (MSIX) app. Inside the app its data appears under AppData\\Roaming, but
+  // every other program (like this server) must use the real package folder:
+  //   <LocalAppData>\\Packages\\Claude_<id>\\LocalCache\\Roaming\\Claude\\claude-code
+  try {
+    for (const pk of fs.readdirSync(path.join(local, 'Packages'))) {
+      if (/^(Claude|Anthropic)/i.test(pk)) scan(path.join(local, 'Packages', pk, 'LocalCache', 'Roaming', 'Claude', 'claude-code'));
+    }
+  } catch { searched.push('no Packages folder under ' + local); }
   scan(path.join(appData, 'Claude', 'claude-code'));
   scan(path.join(local, 'Claude', 'claude-code'));
   scan(path.join(local, 'AnthropicClaude', 'claude-code'));
