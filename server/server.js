@@ -557,8 +557,14 @@ const server = http.createServer(async (req, res) => {
   } catch (e) { json(res, 500, { error: e.message }); }
 });
 
+server.on('error', e => {
+  if (e.code === 'EADDRINUSE') console.log(`\nPort ${PORT} is already in use - KeyShot Director is probably already running.\nOpen http://localhost:${PORT} , or close the other window first.`);
+  else console.log('\nServer error: ' + e.message);
+  process.exit(1);
+});
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`KeyShot control server: http://localhost:${PORT}`);
+  if (process.env.KD_OPEN && process.platform === 'win32') execFile('cmd', ['/c', 'start', '""', `http://localhost:${PORT}`], { windowsHide: true }, () => {});
   for (const ip of lanIPs()) console.log(`  phone / other PC: http://${ip}:${PORT}`);
 });
 const tidyOpts = { send, alive: () => heartbeat().alive, busy: () => !!(playing || matchJob.running || videoJob.running || renderJob.running || (promptJob && !promptJob.done) || shotBusy) };

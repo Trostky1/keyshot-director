@@ -25,19 +25,49 @@ Write-Host "KeyShot Scripts folder: $ScriptsFolder"
 # 3) launcher script (appears in KeyShot's Scripts tab)
 $launcher = Join-Path $ScriptsFolder 'KeyShot Director.py'
 $py = @"
-# KeyShot Director launcher (written by install.ps1). Run it from KeyShot's Scripts tab, or paste into the scripting console:
-#   exec(open(r"$launcher", encoding="utf-8-sig").read())
+# -*- coding: utf-8 -*-
+# AUTHOR KeyShot Director
+# VERSION 1.0
+# Connects KeyShot to the KeyShot Director app. Start the app first (Start KeyShot Director.bat), save your scene, then run this.
+# (Written by install.ps1. You can also paste the one-line connect command shown in the app into the scripting console.)
 # SAVE YOUR SCENE FIRST. While it runs, plain viewport interaction is fine; do not run other scripts, open dialogs or close panels.
+import os
 KD_HOME = r"$home_"
-exec(open(KD_HOME + r"\bridge\cc_bridge.py", encoding="utf-8-sig").read())
+if not os.path.isfile(os.path.join(KD_HOME, "bridge", "cc_bridge.py")):
+    raise Exception("KeyShot Director was moved or deleted. Run install.ps1 again from its folder. Looked in: " + KD_HOME)
+exec(open(os.path.join(KD_HOME, "bridge", "cc_bridge.py"), encoding="utf-8-sig").read())
 "@
 [IO.File]::WriteAllText($launcher, $py, (New-Object System.Text.UTF8Encoding($false)))
 Write-Host "launcher written: $launcher"
 
 # 4) folders + start script
 foreach ($d in 'bridge\cmd','bridge\resp','bridge\shots','references') { New-Item -ItemType Directory -Force (Join-Path $home_ $d) | Out-Null }
-$bat = "@echo off`r`ncd /d `"%~dp0`"`r`nstart `"`" http://localhost:8787`r`nnode server\server.js`r`npause`r`n"
-[IO.File]::WriteAllText((Join-Path $home_ 'Start KeyShot Director.bat'), $bat, (New-Object System.Text.ASCIIEncoding))
+$batLines = @(
+  '@echo off',
+  'title KeyShot Director (leave this window open)',
+  'cd /d "%~dp0"',
+  'where node >nul 2>nul',
+  'if errorlevel 1 goto nonode',
+  'netstat -ano | find ":8787" | find "LISTENING" >nul',
+  'if not errorlevel 1 goto running',
+  'echo Starting KeyShot Director ...',
+  'set KD_OPEN=1',
+  'node server\server.js',
+  'echo.',
+  'echo The server stopped. If that was not on purpose, the message above says why.',
+  'pause',
+  'exit /b',
+  ':running',
+  'echo KeyShot Director is already running - opening the page.',
+  'start "" http://localhost:8787',
+  'ping -n 4 127.0.0.1 >nul',
+  'exit /b',
+  ':nonode',
+  'echo Node.js is not installed or not on PATH.',
+  'echo Install the LTS version from https://nodejs.org , then double-click this file again.',
+  'pause'
+)
+[IO.File]::WriteAllText((Join-Path $home_ 'Start KeyShot Director.bat'), (($batLines -join "`r`n") + "`r`n"), (New-Object System.Text.ASCIIEncoding))
 
 Write-Host "`nDone. To use it:" -ForegroundColor White
 Write-Host "  1. Double-click  'Start KeyShot Director.bat'   (leave its window open; the page opens in your browser)"
