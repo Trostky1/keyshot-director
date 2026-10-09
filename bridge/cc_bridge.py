@@ -1,0 +1,131 @@
+"""
+cc_bridge.py - live bridge v2 (time-limited, hot-reloading ops).
+
+Run from KeyShot's scripting console:
+    (set KD_HOME, then exec cc_bridge.py - install.ps1 generates the launcher)
+
+Polls bridge\\cmd\\*.json, runs ops defined in bridge\\cc_ops.py (reloaded whenever that
+file changes), writes bridge\\resp\\<id>.json. Ends on op 'stop' or after RUN_SECONDS.
+Never calls lux.getAnimations() (known native crash).
+"""
+import lux, luxmath, os, json, time, shutil, traceback, math
+import ctypes, ctypes.wintypes as wt
+
+_user32 = ctypes.windll.user32
+_msg = wt.MSG()
+
+
+def pump():
+    """Process pending Windows messages so KeyShot's window stays responsive.
+    Validated by cc_pump_test.py (25s, ~6000 messages, no crash). Called only between
+    commands, never in the middle of one."""
+    n = 0
+    while n < 500 and _user32.PeekMessageW(ctypes.byref(_msg), None, 0, 0, 1):
+        _user32.TranslateMessage(ctypes.byref(_msg))
+        _user32.DispatchMessageW(ctypes.byref(_msg))
+        n += 1
+
+
+RUN_SECONDS = 14400
+try:
+    BASE = os.path.join(KD_HOME, "bridge")          # KD_HOME is set by the launcher script that install.ps1 writes
+except NameError:
+    BASE = os.path.join(os.environ["KD_HOME"], "bridge") if os.environ.get("KD_HOME") else None
+if not BASE or not os.path.isdir(BASE):
+    raise RuntimeError("KeyShot Director: start it through the launcher script (Scripts tab > KeyShot Director) "
+                       "so it knows where it is installed.")
+CMD = os.path.join(BASE, "cmd")
+RESP = os.path.join(BASE, "resp")
+SHOTS = os.path.join(BASE, "shots")
+OPS_FILE = os.path.join(BASE, "cc_ops.py")
+for d in (CMD, RESP, SHOTS):
+    os.makedirs(d, exist_ok=True)
+
+
+def heartbeat(state, extra=None):
+    with open(os.path.join(BASE, "heartbeat.json"), "w") as f:
+        json.dump({"t": time.time(), "state": state, "ops_loaded": _STATE["ops_mtime"],
+                   "err": _STATE["err"]}, f)
+
+
+_STATE = {"ops_mtime": 0, "ops": {}, "err": None}
+INITIAL = None
+
+
+def load_ops():
+    try:
+        m = os.path.getmtime(OPS_FILE)
+        if m == _STATE["ops_mtime"]:
+            return
+        with open(OPS_FILE, "r", encoding="utf-8-sig") as f:
+            src = f.read()
+        ns = {"lux": lux, "luxmath": luxmath, "os": os, "json": json, "time": time,
+              "shutil": shutil, "math": math, "SHOTS": SHOTS, "BASE": BASE, "INITIAL": INITIAL}
+        exec(compile(src, OPS_FILE, "exec"), ns)
+        _STATE["ops"] = ns["OPS"]
+        _STATE["ops_mtime"] = m
+        _STATE["err"] = None
+        _STATE["ns"] = ns
+    except Exception:
+        _STATE["err"] = traceback.format_exc()
+        _STATE["ops_mtime"] = os.path.getmtime(OPS_FILE) if os.path.exists(OPS_FILE) else 0
+
+
+def handle(path):
+    cid = os.path.splitext(os.path.basename(path))[0]
+    stop = False
+    try:
+        with open(path, "r", encoding="utf-8-sig") as f:
+            c = json.load(f)
+        os.remove(path)
+        t0 = time.time()
+        out = _STATE["ops"][c["op"]](c)
+        resp = {"ok": True, "result": out, "secs": round(time.time() - t0, 4)}
+        stop = c["op"] == "stop"
+    except Exception:
+        resp = {"ok": False, "error": traceback.format_exc()}
+        try:
+            os.remove(path)
+        except Exception:
+            pass
+    with open(os.path.join(RESP, cid + ".json"), "w", encoding="utf-8") as f:
+        json.dump(resp, f, default=str)
+    return stop
+
+
+def main():
+    global INITIAL
+    load_ops()
+    try:
+        INITIAL = _STATE["ns"]["read_camera"]()
+        _STATE["ns"]["INITIAL"] = INITIAL
+        _STATE["ops_mtime"] = 0      # force reload so ops see INITIAL
+        load_ops()
+    except Exception:
+        INITIAL = None
+    with open(os.path.join(BASE, "initial_camera.json"), "w") as f:
+        json.dump(INITIAL, f, default=str)
+    print("cc_bridge v2: running up to %ds. Op 'stop' ends it." % RUN_SECONDS)
+    end = time.time() + RUN_SECONDS
+    stop = False
+    last_hb = 0
+    try:
+        while time.time() < end and not stop:
+            pump()
+            if time.time() - last_hb > 1:
+                load_ops()
+                heartbeat("running")
+                last_hb = time.time()
+            for fn in sorted(os.listdir(CMD)):
+                if fn.endswith(".json"):
+                    if handle(os.path.join(CMD, fn)):
+                        stop = True
+                        break
+            pump()
+            time.sleep(0.01)
+    finally:
+        heartbeat("stopped")
+        print("cc_bridge v2: finished")
+
+
+main()

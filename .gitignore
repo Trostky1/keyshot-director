@@ -1,0 +1,23 @@
+# secrets and machine-local state
+config.local.json
+Start KeyShot Director.bat
+# bridge runtime files and dev probes
+bridge/cmd/
+bridge/resp/
+bridge/shots/
+bridge/anim/
+bridge/*.json
+bridge/*_out.txt
+bridge/*_api.txt
+bridge/cc_bridge_test.py
+bridge/cc_introspect.py
+bridge/cc_probe_env.py
+bridge/cc_pump_test.py
+# your own images and output (never published)
+references/*/
+renders/
+dist/
+# local planning notes
+GLTF_ROUTE_BRIEF.md
+.claude/
+bridge/dev.flag
