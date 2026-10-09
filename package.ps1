@@ -5,7 +5,7 @@ $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $stage = Join-Path $env:TEMP ("kd_pkg_" + [guid]::NewGuid().ToString('N').Substring(0, 8)); $app = Join-Path $stage 'KeyShotDirector'
 New-Item -ItemType Directory -Force $app | Out-Null
 function Copy-Rel($rel) { $src = Join-Path $root $rel; $dst = Join-Path $app $rel; New-Item -ItemType Directory -Force (Split-Path $dst) | Out-Null; Copy-Item $src $dst -Recurse -Force }
-foreach ($f in 'README.md', 'install.ps1') { Copy-Rel $f }
+foreach ($f in 'README.md', 'LICENSE', 'install.ps1') { Copy-Rel $f }
 foreach ($f in 'server\server.js','server\agent.js','server\bridge.js','server\png.js','server\rigs.js','server\shots.js','server\style.js','server\video.js','server\anim.js','server\gltf.js','server\glbanim.js','server\public\index.html') { Copy-Rel $f }
 foreach ($f in 'bridge\cc_bridge.py','bridge\cc_ops.py','bridge\cc_lights.py','bridge\cc_anim.py','bridge\assets\cc_light_panel.obj') { Copy-Rel $f }
 foreach ($f in 'tools\normalize.ps1','tools\resize.ps1') { Copy-Rel $f }

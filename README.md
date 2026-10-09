@@ -99,3 +99,6 @@ It matches *lighting and tone*, not the product itself, and it's an approximatio
 Experimental, not in the page yet: `server/anim.js`, `gltf.js`, `glbanim.js` and `bridge/cc_anim.py` can put **part animation** (turntable, exploded view, cap lift) on KeyShot's real timeline by exporting the product as GLB, adding animation, and importing it back with its materials re-applied.
 
 Screenshots KeyShot makes for the preview are deleted immediately; the app never writes into your Renderings folder permanently.
+
+## License
+MIT. Not affiliated with KeyShot / Luxion; KeyShot is a trademark of its owner.
