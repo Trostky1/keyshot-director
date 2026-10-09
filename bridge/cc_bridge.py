@@ -85,10 +85,23 @@ def load_ops():
 def handle(path):
     cid = os.path.splitext(os.path.basename(path))[0]
     stop = False
+    # Claim the command with an atomic rename. If another bridge (another KeyShot window) or the sender still has the file
+    # open, the rename fails or loses the race: then it is simply not ours - skip it quietly instead of erroring.
+    claim = path + ".run%d" % os.getpid()
     try:
-        with open(path, "r", encoding="utf-8-sig") as f:
+        os.replace(path, claim)
+    except OSError:
+        return False
+    try:
+        with open(claim, "r", encoding="utf-8-sig") as f:
             c = json.load(f)
-        os.remove(path)
+        for _ in range(10):                       # antivirus / sync tools can briefly hold the file
+            try:
+                os.remove(claim)
+                break
+            except OSError:
+                time.sleep(0.03)
+        path = claim
         t0 = time.time()
         out = _STATE["ops"][c["op"]](c)
         resp = {"ok": True, "result": out, "secs": round(time.time() - t0, 4)}
@@ -132,7 +145,7 @@ def main():
                 heartbeat("running")
                 last_hb = time.time()
             for fn in sorted(os.listdir(CMD)):
-                if fn.endswith(".json"):
+                if fn.endswith(".json"):                # (claimed files end in .json.run<pid> and are never picked up twice)
                     if handle(os.path.join(CMD, fn)):
                         stop = True
                         break
