@@ -43,7 +43,11 @@
   .stage { position:relative; border:1px solid var(--fg); background:var(--bg); aspect-ratio:16/9; display:flex; align-items:center; justify-content:center; overflow:hidden; touch-action:none; cursor:grab; }
   .stage.drag { cursor:grabbing; }
   .stage img { width:100%; height:100%; object-fit:contain; user-select:none; -webkit-user-drag:none; display:none; }
-  .stage .empty { color:var(--dim); padding:24px; text-align:center; font-size:11px; letter-spacing:.08em; text-transform:uppercase; }
+  .stage .empty { color:var(--dim); padding:24px; text-align:center; font-size:11px; letter-spacing:.08em; text-transform:uppercase; max-width:100%; }
+  .stage .empty b { color:var(--fg); }
+  .connectline { display:flex; gap:8px; align-items:stretch; margin:12px auto 10px; max-width:640px; text-transform:none; letter-spacing:0; }
+  .cline { flex:1; min-width:0; text-align:left; border:1px solid var(--fg); padding:8px 10px; font:11px/1.4 Consolas, "SF Mono", Menlo, monospace; color:var(--fg); background:var(--bg); word-break:break-all; user-select:all; cursor:text; }
+  .connectline button { flex:none; }
   .livebar { position:absolute; right:0; top:0; display:flex; gap:8px; align-items:center; background:var(--bg); border-left:1px solid var(--fg); border-bottom:1px solid var(--fg); padding:3px 8px; z-index:2; }
   .livebar label { margin:0; gap:5px; align-items:center; justify-content:flex-start; }
   .hint { position:absolute; left:0; bottom:0; font-size:9.5px; color:var(--bg); background:var(--fg); padding:3px 8px; letter-spacing:.08em; text-transform:uppercase; pointer-events:none; }
@@ -93,7 +97,7 @@
 </header>
 <main>
   <section class="col">
-    <div class="stage" id="stage"><img id="shot" alt="" draggable="false"><div class="empty" id="empty">Waiting for KeyShot<br><br>In KeyShot: Scripts tab &rarr; KeyShot Director</div><div class="livebar"><label><input type="checkbox" id="live"> live preview</label><button class="sm" id="refresh">Refresh</button></div><div class="hint">drag orbit &middot; right-drag / shift-drag pan &middot; wheel zoom &middot; touch: 1 finger orbit, 2 pan + pinch</div></div>
+    <div class="stage" id="stage"><img id="shot" alt="" draggable="false"><div class="empty" id="empty"><b>Waiting for KeyShot</b><br><br>Save your scene, then in KeyShot open <b>Window &rarr; Scripting</b>, click the console, paste this and press Enter:<div class="connectline"><code class="cline">...</code><button class="solid" data-copy>Copy</button></div><span class="dim">It keeps running in the background. Leave it alone while it runs (no other scripts or dialogs).</span></div><div class="livebar"><label><input type="checkbox" id="live"> live preview</label><button class="sm" id="refresh">Refresh</button></div><div class="hint">drag orbit &middot; right-drag / shift-drag pan &middot; wheel zoom &middot; touch: 1 finger orbit, 2 pan + pinch</div></div>
     <div id="log"></div>
     <div class="promptbar">
       <div class="thumbs" id="thumbs"></div>
@@ -110,6 +114,13 @@
   </section>
 
   <aside>
+    <div class="panel">
+      <details class="fold" id="connectFold"><summary>Connect KeyShot</summary>
+        <div class="dim" style="margin:8px 0;text-transform:none;letter-spacing:0;font-size:11.5px">Save your scene. In KeyShot: <b>Window &rarr; Scripting</b>, click the console, paste, Enter. Run it again if the header says the bridge is not running (it lasts up to 4 hours).</div>
+        <div class="connectline"><code class="cline">...</code><button class="solid" data-copy>Copy</button></div>
+      </details>
+    </div>
+
     <div class="panel">
       <h2>Reference video</h2>
       <div class="drop" id="vdrop">Drop a product video here<br><span class="dim">or click to choose &middot; mp4 / mov / webm</span></div>
@@ -410,6 +421,21 @@ $('vrender').onclick = () => busy($('vrender'), async () => {
 });
 $('vstop').onclick = () => { api('/api/video/stop', {}); api('/api/render/stop', {}); api('/api/stop', {}); };
 
+/* ---------- connect line: the one-liner for KeyShot's scripting console, with a Copy button ---------- */
+let CONNECT = '';
+async function loadConnect() {
+  try { CONNECT = (await api('/api/connect')).line; document.querySelectorAll('.cline').forEach(e => (e.textContent = CONNECT)); } catch { /* server not up yet */ }
+}
+document.addEventListener('click', async e => {
+  const b = e.target.closest('[data-copy]'); if (!b || !CONNECT) return;
+  let ok = false;
+  try { await navigator.clipboard.writeText(CONNECT); ok = true; } catch {
+    const ta = document.createElement('textarea'); ta.value = CONNECT; document.body.appendChild(ta); ta.select(); try { ok = document.execCommand('copy'); } catch { /* blocked */ } ta.remove();
+  }
+  const t = b.textContent; b.textContent = ok ? 'Copied' : 'Select + Ctrl+C'; setTimeout(() => (b.textContent = t), 1800);
+});
+loadConnect();
+
 /* ---------- settings ---------- */
 async function loadConfig() {
   CFG = await api('/api/config');
@@ -428,6 +454,7 @@ async function tick() {
   try {
     const s = await api('/api/status'); $('dot').className = 'dot' + (s.bridge.alive ? ' ok' : '');
     $('status').textContent = s.bridge.alive ? 'KeyShot connected' : 'KeyShot bridge not running';
+    if (!s.bridge.alive && !tick.opened) { tick.opened = true; $('connectFold').open = true; } if (s.bridge.alive) tick.opened = false;
     if (s.bridge.alive && !booted) { booted = true; await syncPose(); loadMotions().catch(() => {}); $('recipe').value = $('recipe').value || ''; }
     if (!qrDone && s.ips.length) { qrDone = true; const u = `http://${s.ips[0]}:${s.port}`; try { new QRCode($('qr'), { text: u, width: 120, height: 120 }); } catch { /* offline: no QR library */ } $('qrurl').textContent = u; }
   } catch { $('dot').className = 'dot'; $('status').textContent = 'server not reachable'; }

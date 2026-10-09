@@ -457,6 +457,12 @@ const server = http.createServer(async (req, res) => {
       return res.end(latestShot);
     }
     if (url.pathname === '/api/preview' && req.method === 'POST') { const b = await body(req); if (typeof b.live === 'boolean') { preview.live = b.live; if (b.live) preview.used = 0; } if (b.now) preview.wanted = true; return json(res, 200, { live: preview.live, used: preview.used, budget: preview.budget }); }
+    if (url.pathname === '/api/connect' && req.method === 'GET') {
+      // one statement for KeyShot's scripting console; forward slashes so there is nothing to escape
+      const root = path.resolve(__dirname, '..').split(path.sep).join('/');
+      const line = `exec("KD_HOME = '${root.replace(/'/g, "\\'")}'; exec(open(KD_HOME + '/bridge/cc_bridge.py', encoding='utf-8-sig').read())")`;
+      return json(res, 200, { line });
+    }
     if (url.pathname === '/api/tidy' && req.method === 'POST') return json(res, 200, await janitor.run(tidyOpts, 'manual'));
     if (url.pathname === '/api/preview' && req.method === 'GET') return json(res, 200, { live: preview.live, used: preview.used, budget: preview.budget });
     if (url.pathname === '/api/pose' && req.method === 'GET') { base = base || (await readPose()); return json(res, 200, cur || base); }
