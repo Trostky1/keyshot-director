@@ -42,7 +42,7 @@
   /* stage / preview */
   .stage { position:relative; border:1px solid var(--fg); background:var(--bg); aspect-ratio:16/9; display:flex; align-items:center; justify-content:center; overflow:hidden; touch-action:none; cursor:grab; }
   .stage.drag { cursor:grabbing; }
-  .stage img { width:100%; height:100%; object-fit:contain; user-select:none; -webkit-user-drag:none; }
+  .stage img { width:100%; height:100%; object-fit:contain; user-select:none; -webkit-user-drag:none; display:none; }
   .stage .empty { color:var(--dim); padding:24px; text-align:center; font-size:11px; letter-spacing:.08em; text-transform:uppercase; }
   .hint { position:absolute; left:0; bottom:0; font-size:9.5px; color:var(--bg); background:var(--fg); padding:3px 8px; letter-spacing:.08em; text-transform:uppercase; pointer-events:none; }
   /* prompt */
@@ -412,8 +412,7 @@ async function loadConfig() {
   $('mode').textContent = CFG.engine === 'cli' ? 'Claude · signed-in CLI' : CFG.engine === 'api' ? 'Claude · API key · ' + CFG.model : 'Offline mode · open Settings to connect Claude';
   $('model').value = CFG.model; $('engine').value = CFG.want || 'auto';
   const c = CFG.cli || {};
-  $('cliState').textContent = !c.found ? 'Claude CLI: not found on this computer.' : c.loggedIn ? 'Claude CLI: signed in (' + c.path + ')' : 'Claude CLI found but not signed in. Run this once in a terminal, then reopen Settings:
-"' + c.path + '" auth login';
+  $('cliState').textContent = !c.found ? 'Claude CLI: not found on this computer.' : c.loggedIn ? 'Claude CLI: signed in (' + c.path + ')' : 'Claude CLI found but not signed in. Run this once in a terminal, then reopen Settings:\n"' + c.path + '" auth login';
 }
 $('settingsBtn').onclick = () => { $('apikey').value = ''; $('settings').showModal(); };
 $('closeSettings').onclick = () => $('settings').close();
