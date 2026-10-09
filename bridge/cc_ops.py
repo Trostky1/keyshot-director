@@ -1,8 +1,7 @@
 # cc_ops.py - command implementations, hot-reloaded by cc_bridge.py when this file changes.
 # Namespace provides: lux, luxmath, os, json, time, shutil, math, SHOTS, INITIAL (dict or None)
-# DEV NOTE: the 'exec' op runs arbitrary Python inside KeyShot when a file is dropped in bridged. It is OFF unless
-# bridgedev.flag exists (never shipped). Original note:
-# bridge\cmd. Local-only, for development; remove before sharing this tool with anyone.
+# DEV NOTE: the 'exec' op runs arbitrary Python inside KeyShot when a file is dropped in bridge\cmd. It is for local
+# development only and is OFF unless the file bridge\dev.flag exists (that file is never shipped).
 
 
 def _v(t):
