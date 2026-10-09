@@ -10,7 +10,7 @@ const cli = require('./cli');
 const CONFIG = path.join(__dirname, '..', 'config.local.json');
 const getConfig = () => { try { return JSON.parse(fs.readFileSync(CONFIG, 'utf8')); } catch { return {}; } };
 const setConfig = patch => { const c = { ...getConfig(), ...patch }; fs.writeFileSync(CONFIG, JSON.stringify(c, null, 2)); return c; };
-const publicConfig = () => { const c = getConfig(); return { hasKey: !!(c.apiKey || process.env.ANTHROPIC_API_KEY), model: c.model || 'claude-sonnet-5-5', engine: c.engine || 'auto' }; };
+const publicConfig = () => { const c = getConfig(); return { hasKey: !!(c.apiKey || process.env.ANTHROPIC_API_KEY), model: c.model || 'claude-sonnet-5-5', engine: c.engine || 'auto', cliPath: c.cliPath || '' }; };
 // Which engine answers: an API key wins (unless the user picked the CLI); otherwise a signed-in Claude CLI; otherwise offline.
 async function pickEngine(cfg = getConfig()) {
   const key = !!(cfg.apiKey || process.env.ANTHROPIC_API_KEY), want = cfg.engine || 'auto';
@@ -21,7 +21,7 @@ async function pickEngine(cfg = getConfig()) {
 }
 async function engineStatus() {
   const cfg = getConfig(), st = await cli.status(cfg.cliPath), e = await pickEngine(cfg);
-  return { engine: e.engine, cli: { found: st.found, loggedIn: st.loggedIn, path: st.path }, hasKey: !!(cfg.apiKey || process.env.ANTHROPIC_API_KEY), want: cfg.engine || 'auto', why: e.why || null };
+  return { engine: e.engine, cli: { found: st.found, loggedIn: st.loggedIn, path: st.path, searched: st.searched || [], error: st.error || null }, hasKey: !!(cfg.apiKey || process.env.ANTHROPIC_API_KEY), want: cfg.engine || 'auto', why: e.why || null };
 }
 
 const SYSTEM = `You are the director inside "KeyShot Director", a companion app that drives the user's OPEN KeyShot scene live. You light and move the camera around the user's own product, so a non-expert can get studio-grade results in plain language.

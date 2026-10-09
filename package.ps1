@@ -6,9 +6,9 @@ $stage = Join-Path $env:TEMP ("kd_pkg_" + [guid]::NewGuid().ToString('N').Substr
 New-Item -ItemType Directory -Force $app | Out-Null
 function Copy-Rel($rel) { $src = Join-Path $root $rel; $dst = Join-Path $app $rel; New-Item -ItemType Directory -Force (Split-Path $dst) | Out-Null; Copy-Item $src $dst -Recurse -Force }
 foreach ($f in 'README.md', 'LICENSE', 'install.ps1') { Copy-Rel $f }
-foreach ($f in 'server\server.js','server\agent.js','server\bridge.js','server\png.js','server\rigs.js','server\shots.js','server\style.js','server\video.js','server\anim.js','server\gltf.js','server\glbanim.js','server\public\index.html') { Copy-Rel $f }
+foreach ($f in 'server\server.js','server\agent.js','server\bridge.js','server\png.js','server\rigs.js','server\shots.js','server\style.js','server\cli.js','server\janitor.js','server\video.js','server\anim.js','server\gltf.js','server\glbanim.js','server\public\index.html') { Copy-Rel $f }
 foreach ($f in 'bridge\cc_bridge.py','bridge\cc_ops.py','bridge\cc_lights.py','bridge\cc_anim.py','bridge\assets\cc_light_panel.obj') { Copy-Rel $f }
-foreach ($f in 'tools\normalize.ps1','tools\resize.ps1') { Copy-Rel $f }
+foreach ($f in 'tools\normalize.ps1','tools\resize.ps1','tools\stop.ps1') { Copy-Rel $f }
 New-Item -ItemType Directory -Force (Join-Path $app 'references') | Out-Null
 Set-Content (Join-Path $app 'references\README.txt') "Each folder in here is a style. Make a folder, put reference images in it (jpg/png/webp/avif), then Analyze it in the app." -Encoding ASCII
 Set-Content (Join-Path $app '.gitignore') "config.local.json`nbridge/cmd/`nbridge/resp/`nbridge/shots/`nbridge/anim/`nbridge/heartbeat.json`nreferences/*/`nrenders/`ndist/`n" -Encoding ASCII

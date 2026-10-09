@@ -8,36 +8,48 @@ const { execFile, spawn } = require('child_process');
 
 let cachedPath, cachedStatus = { at: 0, v: null };
 
+// Finds the claude command. Returns a path or null; `searched` (module-level) lists where it looked, for the Settings page.
+let searched = [];
 function findCli(cfgPath) {
-  if (cfgPath && fs.existsSync(cfgPath)) return cfgPath;
-  if (cachedPath && fs.existsSync(cachedPath)) return cachedPath;
+  searched = [];
+  const ok = p => { try { return !!p && fs.statSync(p).isFile(); } catch { return false; } };
   const exe = process.platform === 'win32' ? 'claude.exe' : 'claude';
-  const dirs = (process.env.PATH || '').split(path.delimiter).filter(Boolean);
-  for (const d of dirs) for (const n of process.platform === 'win32' ? ['claude.exe', 'claude.cmd'] : ['claude']) { const p = path.join(d, n); if (fs.existsSync(p)) return (cachedPath = p); }
-  // the Claude desktop app ships its own copy: ...\Claude\claude-code\<version>\<hash>\claude.exe
-  const roots = [process.env.APPDATA && path.join(process.env.APPDATA, 'Claude', 'claude-code'), path.join(os.homedir(), '.local', 'bin')].filter(Boolean);
+  if (cfgPath) { searched.push('Settings path: ' + cfgPath); if (ok(cfgPath)) return (cachedPath = cfgPath); }
+  if (cachedPath && ok(cachedPath)) return cachedPath;
+  // 1) on PATH (a .cmd shim cannot be run directly, so only real executables count)
+  for (const d of (process.env.PATH || '').split(path.delimiter).filter(Boolean)) { const p = path.join(d, exe); if (ok(p)) { searched.push('PATH: ' + p); return (cachedPath = p); } }
+  searched.push('PATH (' + (process.env.PATH || '').split(path.delimiter).length + ' folders): no ' + exe);
+  // 2) the copy the Claude desktop app ships: <AppData>Claudeclaude-code<version><hash>claude.exe  (newest version wins)
+  const home = os.homedir();
+  const appData = process.env.APPDATA || path.join(home, 'AppData', 'Roaming'), local = process.env.LOCALAPPDATA || path.join(home, 'AppData', 'Local');
   const found = [];
-  for (const r of roots) {
-    try {
-      if (path.basename(r) === 'bin') { const p = path.join(r, exe); if (fs.existsSync(p)) return (cachedPath = p); continue; }
-      for (const v of fs.readdirSync(r)) for (const h of fs.readdirSync(path.join(r, v))) {
-        const p = path.join(r, v, h, exe);
-        if (fs.existsSync(p)) found.push({ p, key: v.split('.').map(n => parseInt(n, 10) || 0) });
-      }
-    } catch { /* folder missing */ }
-  }
-  found.sort((a, b) => { for (let i = 0; i < 4; i++) { const d = (b.key[i] || 0) - (a.key[i] || 0); if (d) return d; } return 0; });   // newest version first
-  return found.length ? (cachedPath = found[0].p) : null;
+  const scan = root => {
+    let vs = []; try { vs = fs.readdirSync(root); } catch { searched.push('missing: ' + root); return; }
+    searched.push('scanned: ' + root + ' (' + vs.length + ' entries)');
+    for (const v of vs) {
+      let hs = []; try { hs = fs.readdirSync(path.join(root, v)); } catch { continue; }          // a file, not a folder
+      for (const h of hs) { const p = path.join(root, v, h, exe); if (ok(p)) found.push({ p, key: v.split('.').map(n => parseInt(n, 10) || 0) }); }
+    }
+  };
+  scan(path.join(appData, 'Claude', 'claude-code'));
+  scan(path.join(local, 'Claude', 'claude-code'));
+  scan(path.join(local, 'AnthropicClaude', 'claude-code'));
+  found.sort((x, y) => { for (let i = 0; i < 4; i++) { const d = (y.key[i] || 0) - (x.key[i] || 0); if (d) return d; } return 0; });
+  if (found.length) return (cachedPath = found[0].p);
+  // 3) the standalone installer's usual homes
+  for (const p of [path.join(home, '.local', 'bin', exe), path.join(local, 'Programs', 'claude', exe), path.join(appData, 'npm', exe)]) { searched.push('checked: ' + p); if (ok(p)) return (cachedPath = p); }
+  return null;
 }
 
 function status(cfgPath, force = false) {
   return new Promise(resolve => {
     if (!force && cachedStatus.v && Date.now() - cachedStatus.at < 30000) return resolve(cachedStatus.v);
-    const bin = findCli(cfgPath), done = v => { cachedStatus = { at: Date.now(), v }; resolve(v); };
+    cachedPath = null;                                                   // re-search: versions change when the desktop app updates
+    const bin = findCli(cfgPath), done = v => { cachedStatus = { at: Date.now(), v: { ...v, searched: searched.slice(0, 12) } }; resolve(cachedStatus.v); };
     if (!bin) return done({ found: false, loggedIn: false, path: null });
-    execFile(bin, ['auth', 'status'], { windowsHide: true, timeout: 15000 }, (e, so) => {
+    execFile(bin, ['auth', 'status'], { windowsHide: true, timeout: 20000 }, (e, so) => {
       let j = null; try { j = JSON.parse(so); } catch { /* old CLI */ }
-      done({ found: true, path: bin, loggedIn: !!(j && j.loggedIn), method: j && j.authMethod, version: null });
+      done({ found: true, path: bin, loggedIn: !!(j && j.loggedIn), method: j && j.authMethod, error: e && !j ? String(e.message).slice(0, 200) : null });
     });
   });
 }
