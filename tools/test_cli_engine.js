@@ -5,6 +5,7 @@ const fs = require('fs');
 const cli = require('../server/cli');
 const seen = [];
 cli.status = async () => ({ found: true, loggedIn: true, path: 'fake-claude' });
+cli.codexStatus = async () => ({ found: true, loggedIn: true, path: 'fake-codex' });
 let n = 0;
 cli.ask = async ({ system, prompt, dir }) => {
   const imgs = [...prompt.matchAll(/\[image: ([^\]]+)\]/g)].map(m => m[1]);

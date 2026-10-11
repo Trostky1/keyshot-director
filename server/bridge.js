@@ -15,8 +15,9 @@ let seq = 0;
 function send(op, payload = {}, timeoutMs = 8000) {
   const id = `${Date.now()}_${String(seq++).padStart(6, '0')}_${crypto.randomBytes(2).toString('hex')}`;
   const tmp = path.join(CMD, id + '.tmp');
-  fs.writeFileSync(tmp, JSON.stringify({ op, ...payload }), 'utf8');
-  fs.renameSync(tmp, path.join(CMD, id + '.json'));
+  const command = path.join(CMD, id + '.json');
+  fs.writeFileSync(tmp, JSON.stringify({ ...payload, op }), 'utf8');
+  fs.renameSync(tmp, command);
   const respFile = path.join(RESP, id + '.json');
   const t0 = Date.now();
   return new Promise((resolve, reject) => {
@@ -29,7 +30,11 @@ function send(op, payload = {}, timeoutMs = 8000) {
           return r.ok ? resolve(r.result) : reject(new Error(r.error || 'bridge error'));
         } catch (e) { /* partially written, retry */ }
       }
-      if (Date.now() - t0 > timeoutMs) return reject(new Error(`bridge timeout on ${op} (is cc_bridge.py running in KeyShot?)`));
+      if (Date.now() - t0 > timeoutMs) {
+        // Only our own still-pending command. A claimed native operation cannot be interrupted safely.
+        try { fs.unlinkSync(command); } catch { /* already claimed */ }
+        return reject(new Error(`bridge timeout on ${op}; a claimed KeyShot operation may still be finishing`));
+      }
       setTimeout(poll, 15);
     };
     poll();
@@ -40,7 +45,7 @@ function heartbeat() {
   try {
     const h = JSON.parse(fs.readFileSync(path.join(BASE, 'heartbeat.json'), 'utf8'));
     const age = Date.now() / 1000 - h.t;
-    return { state: h.state, age, alive: h.state === 'running' && age < 5, err: h.err };
+    return { state: h.state, age, alive: h.state === 'running' && age >= 0 && age < 5, err: h.err };
   } catch { return { state: 'missing', age: null, alive: false }; }
 }
 

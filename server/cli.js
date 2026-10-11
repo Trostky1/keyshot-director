@@ -97,6 +97,7 @@ function codexStatus(cfgPath, force = false) {
 // One call. opts: { provider: 'claude' | 'codex', bin, system, prompt, dir (folder the model may read), images: [file paths], model, signal, timeoutMs }
 function ask({ provider = 'claude', bin, system, prompt, dir, images = [], model, signal, timeoutMs = 5 * 60 * 1000 }) {
   return new Promise((resolve, reject) => {
+    if (signal?.aborted) return reject(new Error('Stopped.'));
     const who = provider === 'codex' ? 'Codex (ChatGPT)' : 'Claude';
     const cwd = dir || os.tmpdir();
     let args, outFile = null, stdin = prompt;
@@ -116,11 +117,14 @@ function ask({ provider = 'claude', bin, system, prompt, dir, images = [], model
     const p = spawn(bin, args, { cwd, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
     let out = '', err = '', killed = false;
     const t = setTimeout(() => { killed = true; p.kill(); }, timeoutMs);
-    if (signal) signal.addEventListener('abort', () => { killed = true; p.kill(); });
-    p.stdout.on('data', d => (out += d)); p.stderr.on('data', d => (err += d));
-    p.on('error', e => { clearTimeout(t); reject(e); });
+    const abort = () => { killed = true; p.kill(); };
+    if (signal) signal.addEventListener('abort', abort, { once: true });
+    p.stdout.on('data', d => (out = (out + d).slice(-2000000))); p.stderr.on('data', d => (err = (err + d).slice(-2000000)));
+    p.stdin.on('error', () => {});
+    p.on('error', e => { clearTimeout(t); signal?.removeEventListener('abort', abort); reject(e); });
     p.on('close', code => {
       clearTimeout(t);
+      signal?.removeEventListener('abort', abort);
       if (killed) return reject(Object.assign(new Error(signal && signal.aborted ? 'Stopped.' : who + ' took too long to answer'), { name: signal && signal.aborted ? 'AbortError' : 'Error' }));
       if (provider === 'codex') {
         let text = ''; try { text = fs.readFileSync(outFile, 'utf8'); fs.unlinkSync(outFile); } catch { /* no file */ }

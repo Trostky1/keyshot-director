@@ -5,11 +5,13 @@ $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $stage = Join-Path $env:TEMP ("kd_pkg_" + [guid]::NewGuid().ToString('N').Substring(0, 8)); $app = Join-Path $stage 'KeyShotDirector'
 New-Item -ItemType Directory -Force $app | Out-Null
 function Copy-Rel($rel) { $src = Join-Path $root $rel; $dst = Join-Path $app $rel; New-Item -ItemType Directory -Force (Split-Path $dst) | Out-Null; Copy-Item $src $dst -Recurse -Force }
-foreach ($f in 'README.md', 'LICENSE', 'install.ps1') { Copy-Rel $f }
-foreach ($f in 'server\server.js','server\agent.js','server\bridge.js','server\png.js','server\rigs.js','server\shots.js','server\style.js','server\cli.js','server\janitor.js','server\video.js','server\anim.js','server\gltf.js','server\glbanim.js','server\public\index.html') { Copy-Rel $f }
-foreach ($f in 'bridge\cc_bridge.py','bridge\cc_ops.py','bridge\cc_lights.py','bridge\cc_anim.py','bridge\assets\cc_light_panel.obj') { Copy-Rel $f }
+foreach ($f in 'README.md', 'LICENSE', 'install.ps1', 'install-mac.sh', 'start-mac.sh', 'Start KeyShot Director.command', 'PRODUCT.md', 'DESIGN.md') { Copy-Rel $f }
+foreach ($f in '.github\workflows\checks.yml', '.gitignore', '.impeccable\design.json') { Copy-Rel $f }
+foreach ($f in 'docs\PHOTO_WORKFLOW.md','docs\SCENE_STAGING.md') { Copy-Rel $f }
+foreach ($f in 'server\server.js','server\agent.js','server\bridge.js','server\png.js','server\rigs.js','server\shots.js','server\style.js','server\cli.js','server\janitor.js','server\video.js','server\anim.js','server\gltf.js','server\glbanim.js','server\photo.js','server\image-tools.js','server\public\index.html','server\public\director.css','server\public\photo-ui.js') { Copy-Rel $f }
+foreach ($f in 'bridge\cc_bridge.py','bridge\cc_ops.py','bridge\cc_lights.py','bridge\cc_anim.py','bridge\cc_stage.py','bridge\assets\cc_light_panel.obj','bridge\assets\cc_stage_cube.obj') { Copy-Rel $f }
 foreach ($f in 'tools\normalize.ps1','tools\resize.ps1','tools\stop.ps1') { Copy-Rel $f }
-New-Item -ItemType Directory -Force (Join-Path $app 'references') | Out-Null
+New-Item -ItemType Directory -Force (Join-Path $app 'references'), (Join-Path $app 'renders') | Out-Null
 Set-Content (Join-Path $app 'references\README.txt') "Each folder in here is a style. Make a folder, put reference images in it (jpg/png/webp/avif), then Analyze it in the app." -Encoding ASCII
 Set-Content (Join-Path $app '.gitignore') "config.local.json`nbridge/cmd/`nbridge/resp/`nbridge/shots/`nbridge/anim/`nbridge/heartbeat.json`nreferences/*/`nrenders/`ndist/`n" -Encoding ASCII
 # safety net: refuse to package anything that still mentions this machine or a key

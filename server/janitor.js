@@ -8,12 +8,15 @@ const fs = require('fs');
 const path = require('path');
 
 const SHOTS = path.join(__dirname, '..', 'bridge', 'shots');
+// Never infer ownership from a filename or age. Preserve anything already present at startup.
+const preexisting = new Set(fs.existsSync(SHOTS) ? fs.readdirSync(SHOTS) : []);
 const state = { last: 0, running: false, lastReport: null, idleSince: Date.now() };
 
 function tidyShots(maxAgeMs = 5 * 60 * 1000) {
   let n = 0, bytes = 0;
   try {
     for (const f of fs.readdirSync(SHOTS)) {
+      if (preexisting.has(f)) continue;
       const p = path.join(SHOTS, f);
       try { const st = fs.statSync(p); if (st.isFile() && Date.now() - st.mtimeMs > maxAgeMs) { bytes += st.size; fs.unlinkSync(p); n++; } } catch { /* in use or gone */ }
     }
@@ -41,7 +44,7 @@ async function run(opts, why = '') {
   state.running = true; state.last = Date.now();
   const rep = { why, at: new Date().toISOString(), shots: tidyShots(why === 'job' ? 60 * 1000 : 5 * 60 * 1000) };
   try {
-    if (opts.cameras !== false && opts.alive() && !opts.busy()) rep.cameras = await tidyCameras(opts.send);
+    if (opts.cameras === true && opts.alive() && !opts.busy()) rep.cameras = await tidyCameras(opts.send);
   } catch (e) { rep.error = e.message; }
   finally { state.running = false; state.lastReport = rep; }
   if (rep.shots.files || (rep.cameras && rep.cameras.removed)) console.log('[tidy]', JSON.stringify(rep));

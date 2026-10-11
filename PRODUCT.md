@@ -1,0 +1,28 @@
+# KeyShot Director
+
+A photo-first companion to KeyShot Studio, used alongside its live viewport on a second monitor. The user's own product geometry, materials and renderer remain the source of truth.
+
+## Primary task
+
+Choose a reference product photograph, describe the lighting qualities to borrow, and apply an editable lighting/environment setup to the currently open product. Check the result in actual KeyShot renders; refine visually rather than equating whole-image brightness with photographic similarity. Keep the current angle unless framing changes are requested. Support full-product shots and cropped details.
+
+## Constraints
+
+- KeyShot Studio 2026.2 is the user's installed version. No other scripts/dialogs should run while its bridge is working.
+- Preserve product geometry and materials. Never save the user's scene automatically.
+- The visual direction is now a calm, Apple-inspired creative workspace: a large real KeyShot scene first, with reference matching and controls in a focused inspector. Use system typography, silver/white surfaces, restrained blue actions, clear hierarchy, and responsive controls. Do not use Apple logos or imply Apple affiliation.
+- Matching is an inference, not exact inverse reconstruction. Clearly identify noise, different materials and physical sets/backplates that lights alone cannot recreate.
+- Reference and preview images may be sent to the selected signed-in AI provider only as part of the requested matching workflow. Explain this before the action.
+- Keep original lights intact; hide them during matching. Use an isolated environment and one intentional native rollback camera per photo job. Undo is session-local, one level; output images and recipe JSON are durable.
+- Do not delete preexisting files. Automatic camera deletion is disabled. Existing scratch files are preserved at startup.
+- Animation remains available but secondary to still-photo lighting and environment work.
+
+## Primary workflow
+
+Reference + brief → scene inspection and rollback checkpoint → visual lighting plan → custom product-scaled area lights and environment → real renderer preview → optional single visual refinement → compare, tune or undo.
+
+No reference-matching percentage or unsupported quality guarantee. Final-resolution output remains KeyShot's job in this iteration; downloadable images are explicitly previews.
+
+## Next investment
+
+Validate against the user's actual reference photos, especially dark reflective products, transparent materials and cropped details. Then add selected-part focus, calibrated exposure/render settings, physical set/backplate support, persistent reusable look application and richer animation direction. Image generation may support backplates or mood concepts, but must not substitute for the user's real product render.

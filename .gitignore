@@ -16,7 +16,12 @@ bridge/cc_pump_test.py
 # your own images and output (never published)
 references/*/
 renders/
+docs/review/
+.impeccable/review/
 dist/
+node_modules/
+.DS_Store
+__pycache__/
 # local planning notes
 GLTF_ROUTE_BRIEF.md
 .claude/

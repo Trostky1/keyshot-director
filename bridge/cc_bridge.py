@@ -9,16 +9,41 @@ file changes), writes bridge\\resp\\<id>.json. Ends on op 'stop' or after RUN_SE
 Never calls lux.getAnimations() (known native crash).
 """
 import lux, luxmath, os, json, time, shutil, traceback, math
-import ctypes, ctypes.wintypes as wt
 
-_user32 = ctypes.windll.user32
-_msg = wt.MSG()
+_user32 = None
+_msg = None
+_qt_core = None
+if os.name == "nt":
+    try:
+        import ctypes
+        import ctypes.wintypes as wt
+        _user32 = ctypes.windll.user32
+        _msg = wt.MSG()
+    except Exception:
+        _user32 = None
+else:
+    # KeyShot embeds Qt on macOS. Process its GUI events between bridge operations
+    # so the viewport and scripting window remain responsive while this loop runs.
+    try:
+        from PySide6.QtCore import QCoreApplication as _qt_core
+    except Exception:
+        try:
+            from PySide2.QtCore import QCoreApplication as _qt_core
+        except Exception:
+            _qt_core = None
 
 
 def pump():
-    """Process pending Windows messages so KeyShot's window stays responsive.
-    Validated by cc_pump_test.py (25s, ~6000 messages, no crash). Called only between
-    commands, never in the middle of one."""
+    """Process host GUI events between commands; never in the middle of one."""
+    if _user32 is None:
+        if _qt_core is not None:
+            try:
+                app = _qt_core.instance()
+                if app is not None:
+                    app.processEvents()
+            except Exception:
+                pass
+        return
     n = 0
     while n < 500 and _user32.PeekMessageW(ctypes.byref(_msg), None, 0, 0, 1):
         _user32.TranslateMessage(ctypes.byref(_msg))

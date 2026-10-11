@@ -1,0 +1,270 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-11T21:27:04Z",
+  "title": "Design System: KeyShot Director",
+  "extensions": {
+    "colorMeta": {
+      "bg": {
+        "role": "neutral",
+        "displayName": "Silver Canvas",
+        "canonical": "#f5f5f7",
+        "tonalRamp": [
+          "oklch(15% .006 270)",
+          "oklch(27% .006 270)",
+          "oklch(38% .006 270)",
+          "oklch(50% .006 270)",
+          "oklch(61% .006 270)",
+          "oklch(73% .006 270)",
+          "oklch(84% .006 270)",
+          "oklch(95% .006 270)"
+        ]
+      },
+      "fg": {
+        "role": "neutral",
+        "displayName": "Graphite",
+        "canonical": "#1d1d1f",
+        "tonalRamp": [
+          "oklch(15% .006 270)",
+          "oklch(27% .006 270)",
+          "oklch(38% .006 270)",
+          "oklch(50% .006 270)",
+          "oklch(61% .006 270)",
+          "oklch(73% .006 270)",
+          "oklch(84% .006 270)",
+          "oklch(95% .006 270)"
+        ]
+      },
+      "dim": {
+        "role": "neutral",
+        "displayName": "Muted Graphite",
+        "canonical": "#59595f",
+        "tonalRamp": [
+          "oklch(15% .006 270)",
+          "oklch(27% .006 270)",
+          "oklch(38% .006 270)",
+          "oklch(50% .006 270)",
+          "oklch(61% .006 270)",
+          "oklch(73% .006 270)",
+          "oklch(84% .006 270)",
+          "oklch(95% .006 270)"
+        ]
+      },
+      "line": {
+        "role": "neutral",
+        "displayName": "Soft Divider",
+        "canonical": "#dedee3",
+        "tonalRamp": [
+          "oklch(15% .006 270)",
+          "oklch(27% .006 270)",
+          "oklch(38% .006 270)",
+          "oklch(50% .006 270)",
+          "oklch(61% .006 270)",
+          "oklch(73% .006 270)",
+          "oklch(84% .006 270)",
+          "oklch(95% .006 270)"
+        ]
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "Working White",
+        "canonical": "#fff",
+        "tonalRamp": [
+          "oklch(15% .006 270)",
+          "oklch(27% .006 270)",
+          "oklch(38% .006 270)",
+          "oklch(50% .006 270)",
+          "oklch(61% .006 270)",
+          "oklch(73% .006 270)",
+          "oklch(84% .006 270)",
+          "oklch(95% .006 270)"
+        ]
+      },
+      "blue": {
+        "role": "primary",
+        "displayName": "Director Blue",
+        "canonical": "#0066cc",
+        "tonalRamp": [
+          "oklch(15% .16 255)",
+          "oklch(27% .16 255)",
+          "oklch(38% .16 255)",
+          "oklch(50% .16 255)",
+          "oklch(61% .16 255)",
+          "oklch(73% .16 255)",
+          "oklch(84% .16 255)",
+          "oklch(95% .16 255)"
+        ]
+      },
+      "blue-hover": {
+        "role": "primary",
+        "displayName": "Director Blue Hover",
+        "canonical": "#0054a8",
+        "tonalRamp": [
+          "oklch(15% .16 255)",
+          "oklch(27% .16 255)",
+          "oklch(38% .16 255)",
+          "oklch(50% .16 255)",
+          "oklch(61% .16 255)",
+          "oklch(73% .16 255)",
+          "oklch(84% .16 255)",
+          "oklch(95% .16 255)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "headline": {
+        "displayName": "Studio headline",
+        "purpose": "Main scene heading."
+      },
+      "title": {
+        "displayName": "Inspector title",
+        "purpose": "Reference task heading."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Shell and explanatory copy."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Field and control labels."
+      },
+      "mono": {
+        "displayName": "Technical output",
+        "purpose": "Commands, recipes and logs."
+      }
+    },
+    "shadows": [
+      {
+        "name": "scene-ambient",
+        "value": "0 10px 30px #1d1d1f0a",
+        "purpose": "Quiet depth for live render."
+      },
+      {
+        "name": "floating-preview",
+        "value": "0 2px 12px #0000000b",
+        "purpose": "Separates the preview control from the scene."
+      },
+      {
+        "name": "dialog",
+        "value": "0 24px 70px #1115",
+        "purpose": "Separates settings from the dimmed workspace."
+      },
+      {
+        "name": "toast",
+        "value": "0 8px 24px #0003",
+        "purpose": "Transient feedback."
+      }
+    ],
+    "motion": [
+      {
+        "name": "control-transition",
+        "value": "background .16s ease, border-color .16s ease, color .16s ease, box-shadow .16s ease",
+        "purpose": "Short control state changes; reduced-motion media query collapses durations."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "inspector-narrow",
+        "value": "1100px"
+      },
+      {
+        "name": "single-sequence",
+        "value": "800px"
+      },
+      {
+        "name": "phone",
+        "value": "600px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary action",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Blue action for committing a task.",
+      "html": "<button class=\"ds-primary\">Match this look</button>",
+      "css": ".ds-primary{font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI\",Arial,sans-serif;background:#0066cc;color:#fff;border:1px solid #0066cc;border-radius:9px;padding:8px 11px;min-height:36px;font-size:12px;font-weight:600;cursor:pointer;transition:background .16s ease,border-color .16s ease}.ds-primary:hover{background:#0054a8;border-color:#0054a8}.ds-primary:focus-visible{outline:3px solid #4285f4;outline-offset:2px}.ds-primary:disabled{opacity:.45;cursor:not-allowed}"
+    },
+    {
+      "name": "Secondary action",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Quiet bordered action for reversible or supporting tasks.",
+      "html": "<button class=\"ds-secondary\">Undo look</button>",
+      "css": ".ds-secondary{font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI\",Arial,sans-serif;background:#fff;color:#1d1d1f;border:1px solid #d2d2d8;border-radius:9px;padding:8px 11px;min-height:36px;font-size:12px;font-weight:600;cursor:pointer;transition:background .16s ease,border-color .16s ease}.ds-secondary:hover{background:#eeeef1;border-color:#c5c5cb}.ds-secondary:focus-visible{outline:3px solid #4285f4;outline-offset:2px}.ds-secondary:disabled{opacity:.45;cursor:not-allowed}"
+    },
+    {
+      "name": "Photo brief",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Readable, resizable task instruction field.",
+      "html": "<label class=\"ds-label\" for=\"ds-brief\">What should we borrow?</label><textarea class=\"ds-brief\" id=\"ds-brief\" placeholder=\"Soft side light, crisp edge reflections…\"></textarea>",
+      "css": ".ds-label{font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI\",Arial,sans-serif;display:block;color:#1d1d1f;font-size:12px;font-weight:600;margin-bottom:6px}.ds-brief{font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI\",Arial,sans-serif;display:block;width:100%;min-height:68px;padding:11px 12px;background:#fff;color:#1d1d1f;border:1px solid #d2d2d8;border-radius:9px;font-size:14px;resize:vertical}.ds-brief::placeholder{color:#71717a}.ds-brief:focus-visible{outline:3px solid #4285f4;outline-offset:2px}"
+    },
+    {
+      "name": "Operating header",
+      "kind": "nav",
+      "description": "Product identity, bridge state and Settings.",
+      "html": "<div class=\"ds-header\"><span class=\"ds-dot\"></span><strong>KeyShot Director</strong><span class=\"ds-status\">KeyShot connected</span><button class=\"ds-settings\">Settings</button></div>",
+      "css": ".ds-header{font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI\",Arial,sans-serif;display:flex;align-items:center;gap:12px;padding:10px 16px;min-height:62px;background:#fff;color:#1d1d1f;border-bottom:1px solid #dedee3}.ds-header strong{font-size:16px;font-weight:650;letter-spacing:-.025em}.ds-dot{width:8px;height:8px;border-radius:50%;background:#2ca36c;box-shadow:0 0 0 3px #2ca36c1c}.ds-status{font-size:12px;color:#59595f;background:#f5f5f7;border-radius:999px;padding:5px 9px}.ds-settings{margin-left:auto;min-height:30px;padding:6px 10px;background:#fff;border:1px solid #d2d2d8;border-radius:9px;color:#1d1d1f;font-size:12px}.ds-settings:hover{background:#eeeef1}.ds-settings:focus-visible{outline:3px solid #4285f4;outline-offset:2px}"
+    },
+    {
+      "name": "Inspector panel",
+      "kind": "card",
+      "refersTo": "inspector",
+      "description": "Rounded white task surface with divided sections.",
+      "html": "<section class=\"ds-panel\"><h2>Frame &amp; background</h2><p>Choose what fills the frame. Keep your viewing angle.</p></section>",
+      "css": ".ds-panel{font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI\",Arial,sans-serif;background:#fff;color:#1d1d1f;border:1px solid #dedee3;border-radius:18px;padding:21px 22px}.ds-panel h2{font-size:16px;font-weight:650;margin:0 0 5px}.ds-panel p{font-size:12px;line-height:1.5;color:#59595f;margin:0}"
+    },
+    {
+      "name": "Reference picker",
+      "kind": "custom",
+      "description": "Tinted dashed drop surface for an actual reference image.",
+      "html": "<button class=\"ds-drop\">Add a reference photo<span>Choose or drop · PNG, JPG, WebP</span></button>",
+      "css": ".ds-drop{font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI\",Arial,sans-serif;display:block;width:100%;min-height:122px;padding:18px;background:#f8fafd;color:#244e78;border:1px dashed #9da8b6;border-radius:12px;font-size:13px;font-weight:600;text-align:center;cursor:pointer}.ds-drop span{display:block;margin-top:3px;color:#59595f;font-size:11px;font-weight:400}.ds-drop:hover{background:#edf5ff;border-color:#0066cc;color:#163e68}.ds-drop:focus-visible{outline:3px solid #4285f4;outline-offset:2px}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Scene-First Creative Instrument",
+    "overview": "A real KeyShot render anchors a calm workspace. Soft silver surrounds white work surfaces; graphite text and restrained blue actions keep the interface legible without competing with the product image. The page uses system typography, rounded controls, fine dividers and selective ambient depth. This is the current built direction requested in PRODUCT.md, expressed by the later-loaded server/public/director.css.\n\nThe operating hierarchy follows the direction contract in the first body comment of server/public/index.html: see the scene, adjust the look, then refine through conversation. This document records reusable visual rules. The page-specific order and workflow remain in the surface brief.",
+    "keyCharacteristics": [
+      "The user's actual KeyShot scene carries the visual emphasis.",
+      "Silver canvas, white surfaces, graphite type and blue actions.",
+      "Rounded controls and panels with quiet borders.",
+      "Readable task guidance and distinct focus, disabled and connected states."
+    ],
+    "rules": [
+      {
+        "name": "Render Owns the Color",
+        "body": "Keep interface color restrained so the user's genuine product render and reference can supply the visual character.",
+        "section": "colors"
+      },
+      {
+        "name": "Sentence-Case",
+        "body": "Use natural-case labels and short instructions in the active interface; type hierarchy comes from scale and weight.",
+        "section": "typography"
+      },
+      {
+        "name": "Scene-First",
+        "body": "The live render leads the visual hierarchy; reference matching remains immediately available beside it on desktop and directly after it on mobile.",
+        "section": "layout"
+      },
+      {
+        "name": "Selective Depth",
+        "body": "Use elevation for the scene and truly overlaid controls; use borders and surface tone for ordinary inspector sections.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do keep the live KeyShot render prominent and unaltered by decorative image substitutes.",
+      "Do use silver, white, graphite and restrained blue for the reusable interface.",
+      "Do preserve visible focus, useful disabled states and reduced-motion behavior.",
+      "Do use rounded surfaces and fine dividers for tool grouping."
+    ],
+    "donts": [
+      "Don't bring back the former square, monochrome workbench as the governing style.",
+      "Don't use generated product geometry or imagery in place of real KeyShot evidence.",
+      "Don't turn secondary sections into floating shadowed cards."
+    ]
+  }
+}

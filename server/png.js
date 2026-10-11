@@ -3,21 +3,26 @@
 const zlib = require('zlib');
 
 function decode(buf) {
-  if (buf.readUInt32BE(0) !== 0x89504e47) throw new Error('not a PNG');
+  if (!Buffer.isBuffer(buf) || buf.length < 33 || !buf.subarray(0, 8).equals(Buffer.from([137,80,78,71,13,10,26,10]))) throw new Error('not a PNG');
   let pos = 8, w = 0, h = 0, depth = 8, ctype = 6, interlace = 0; const idat = [];
   while (pos < buf.length) {
+    if (pos + 12 > buf.length) throw new Error('truncated PNG');
     const len = buf.readUInt32BE(pos), type = buf.toString('ascii', pos + 4, pos + 8), data = buf.subarray(pos + 8, pos + 8 + len);
+    if (pos + 12 + len > buf.length || (type === 'IHDR' && len !== 13)) throw new Error('invalid PNG chunk');
     if (type === 'IHDR') { w = data.readUInt32BE(0); h = data.readUInt32BE(4); depth = data[8]; ctype = data[9]; interlace = data[12]; }
     else if (type === 'IDAT') idat.push(data);
     else if (type === 'IEND') break;
     pos += 12 + len;
   }
   if (interlace) throw new Error('interlaced PNG not supported');
+  if (!w || !h || w * h > 24000000 || ![8,16].includes(depth) || !idat.length) throw new Error('unsupported PNG dimensions or depth');
   const ch = { 0: 1, 2: 3, 4: 2, 6: 4 }[ctype]; if (!ch) throw new Error('PNG colour type ' + ctype + ' not supported');
   const bpp = Math.max(1, (ch * depth) / 8), stride = Math.ceil((w * ch * depth) / 8);
-  const raw = zlib.inflateSync(Buffer.concat(idat)), out = Buffer.alloc(h * stride);
+  const raw = zlib.inflateSync(Buffer.concat(idat), { maxOutputLength: h * (stride + 1) }), out = Buffer.alloc(h * stride);
+  if (raw.length !== h * (stride + 1)) throw new Error('invalid PNG pixel data');
   for (let y = 0; y < h; y++) {
     const f = raw[y * (stride + 1)], src = y * (stride + 1) + 1, dst = y * stride;
+    if (f > 4) throw new Error('invalid PNG filter');
     for (let x = 0; x < stride; x++) {
       const a = x >= bpp ? out[dst + x - bpp] : 0, b = y ? out[dst - stride + x] : 0, c = x >= bpp && y ? out[dst - stride + x - bpp] : 0;
       let v = raw[src + x];

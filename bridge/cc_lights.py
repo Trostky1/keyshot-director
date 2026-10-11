@@ -200,6 +200,8 @@ def op_subject(c):
         cands.append((nm, m))
     product = [(n, m) for n, m in cands if not any(w in n.lower() for w in SET_WORDS)]
     use = product or cands                             # if everything looks like a set piece, use it all
+    if not use:
+        raise ValueError("No visible product model found. Open or show your product first.")
     lo = [1e9] * 3; hi = [-1e9] * 3; names = []
     for nm, m in use:
         bb = m.getBoundingBox(world=True)
@@ -262,6 +264,8 @@ def op_light_set(c):
 
 def op_light_remove(c):
     lid = str(c["id"])
+    if lid not in REG:
+        adopt_orphans()  # recover a panel if creation failed after import but before registration
     ent = REG.pop(lid, None)
     if not ent:
         return {"removed": False}
@@ -285,7 +289,27 @@ def op_lights_clear(c):
 
 def op_lights_list(c):
     adopt_orphans()
-    return {lid: {"spec": e["spec"], "material": e["mat"], "adopted": bool(e.get("adopted"))} for lid, e in REG.items()}
+    out = {}
+    for lid, ent in REG.items():
+        node = _light_node(ent["obj_id"], lid)
+        out[lid] = {"spec": ent["spec"], "material": ent["mat"], "adopted": bool(ent.get("adopted")),
+                    "hidden": bool(node.isHidden()) if node is not None else True}
+    return out
+
+
+def op_light_visibility(c):
+    adopt_orphans()
+    changed = []
+    for lid in c.get("ids", []):
+        if lid not in REG:
+            continue
+        node = _light_node(REG[lid]["obj_id"], lid)
+        if node is not None:
+            if c.get("visible", True): node.show()
+            else: node.hide()
+            changed.append(lid)
+    lux.sync()
+    return {"changed": changed}
 
 
 def op_env_set(c):
@@ -300,16 +324,19 @@ def op_env_set(c):
             adopt_orphans()
             if ENV_STATE["prev"] is None:
                 ENV_STATE["prev"] = "Animation"
-    if ENV_NAME not in lux.getEnvironments():
-        lux.newEnvironment(ENV_NAME, activate=True, clone=True)
+    env_name = c.get("director_name", ENV_NAME)
+    if env_name != ENV_NAME and not (str(env_name).startswith("CC_Photo_") and len(str(env_name)) < 80):
+        raise ValueError("Invalid Director environment name")
+    if env_name not in lux.getEnvironments():
+        lux.newEnvironment(env_name, activate=True, clone=True)
     else:
-        lux.setActiveEnvironment(ENV_NAME)
+        lux.setActiveEnvironment(env_name)
     e = lux.getActiveEnvironment()
     if c.get("hdri"):
         h = c["hdri"]
         e.setLightingEnvironment(h if (":" in h) else ENV_DIR + h)
     if "bg" in c and c["bg"] is not None: e.setBackgroundColor(tuple(int(v) for v in c["bg"]))
-    if "brightness" in c: e.setBrightness(float(c["brightness"]))
+    if "brightness" in c: e.setBrightness(max(0.000001, float(c["brightness"])))
     if "rotation" in c: e.setRotation(float(c["rotation"]) % 360.0)
     if "ground_shadows" in c: e.setGroundShadows(bool(c["ground_shadows"]))
     if "ground_reflections" in c: e.setGroundReflections(bool(c["ground_reflections"]))
@@ -343,6 +370,44 @@ def op_image_style(c):
     return {"style": s.getName(), "applied": done}
 
 
+def op_env_info(c):
+    e = lux.getActiveEnvironment()
+    info = {"name": e.getName(), "hdri": str(e.getLightingEnvironment()),
+            "brightness": e.getBrightness(), "rotation": e.getRotation(), "bg": list(e.getBackgroundColor())}
+    for key, method in (("ground_shadows", "getGroundShadows"), ("ground_reflections", "getGroundReflections"),
+                        ("size", "getSize"), ("height", "getHeight")):
+        if hasattr(e, method):
+            try: info[key] = getattr(e, method)()
+            except Exception: pass
+    return info
+
+
+def op_env_restore(c):
+    # Select the original environment without removing any user environment.
+    info = c["snapshot"]
+    if info["name"] not in lux.getEnvironments():
+        raise ValueError("Original environment is no longer in the scene")
+    lux.setActiveEnvironment(info["name"])
+    if c.get("select_only"):
+        lux.sync()
+        return op_env_info({})
+    e = lux.getActiveEnvironment()
+    for key, method in (("hdri", "setLightingEnvironment"), ("brightness", "setBrightness"),
+                        ("rotation", "setRotation"), ("bg", "setBackgroundColor"),
+                        ("ground_shadows", "setGroundShadows"), ("ground_reflections", "setGroundReflections"),
+                        ("size", "setSize"), ("height", "setHeight")):
+        if key in info and hasattr(e, method):
+            value = info[key]
+            if key in ("brightness", "rotation", "size", "height"): value = float(value)
+            if key == "brightness": value = max(0.000001, value)
+            if key == "bg": value = tuple(int(v) for v in value)
+            getattr(e, method)(value)
+    lux.sync()
+    return op_env_info({})
+
+
 LIGHT_OPS = {"subject": op_subject, "light_set": op_light_set, "light_remove": op_light_remove,
              "lights_clear": op_lights_clear, "lights_list": op_lights_list, "env_set": op_env_set,
+             "env_info": op_env_info, "env_restore": op_env_restore,
+             "light_visibility": op_light_visibility,
              "studio_off": op_studio_off, "image_style": op_image_style}

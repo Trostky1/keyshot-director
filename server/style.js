@@ -3,11 +3,10 @@
 // be scored against a profile and the per-feature differences say what to change.
 const fs = require('fs');
 const path = require('path');
-const { execFile } = require('child_process');
 const { decode } = require('./png');
+const { normalizeFolder: normalizeImageFolder } = require('./image-tools');
 
 const ROOT = path.join(__dirname, '..', 'references');
-const TOOL = path.join(__dirname, '..', 'tools', 'normalize.ps1');
 const IMG = /\.(jpe?g|png|bmp|tiff?|gif|webp|avif|heic|heif|jxl)$/i;
 
 const lum = (r, g, b) => (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
@@ -95,12 +94,9 @@ function score(f, profile) {
   return { distance: +(total / wsum).toFixed(3), deltas };
 }
 
-function run(file, args) { return new Promise((res, rej) => execFile(file, args, { maxBuffer: 1 << 26, windowsHide: true }, (e, so, se) => e ? rej(new Error(se || e.message)) : res(so))); }
-
 async function normalizeFolder(name) {
   const dir = path.join(ROOT, name), cache = path.join(dir, '.cache');
-  const out = await run('powershell', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', TOOL, '-Folder', dir, '-OutDir', cache]);
-  const arr = JSON.parse(out || '[]'); return Array.isArray(arr) ? arr : [arr];
+  return normalizeImageFolder(dir, cache, 900);
 }
 
 // Split a folder into looks by backdrop brightness (light seamless vs dark), because one profile for both would match neither.

@@ -34,6 +34,30 @@ def op_get_camera(c):
     return read_camera()
 
 
+def op_camera_checkpoint(c):
+    # One intentional native rollback camera per photo job, not one camera per preview.
+    name = "CC_Photo_Before_" + str(int(time.time() * 1000))
+    before = read_camera()
+    if not lux.newCamera(name=name, unique=True):
+        raise RuntimeError("Could not create a rollback camera")
+    lux.saveCamera()
+    lux.sync()
+    after = read_camera()
+    if _dev(before["pos"], after["pos"]) > 0.05:
+        raise RuntimeError("Rollback camera did not preserve the current view")
+    return {"name": after["name"], "camera": before}
+
+
+def op_camera_restore(c):
+    name = c["name"]
+    if not str(name).startswith("CC_Photo_Before_") or name not in lux.getCameras():
+        raise ValueError("Rollback camera is unavailable")
+    lux.setCamera(name)
+    lux.sync()
+    LAST.clear()
+    return read_camera()
+
+
 def op_initial(c):
     return INITIAL
 
@@ -96,7 +120,7 @@ def _steps(name, eye, pivot, up, fov):
 
 STRATEGY_NAMES = ["pivot>dir>dist", "dir>pivot>dist", "dist>dir>pivot", "pos>lookat", "lookat>pos",
                   "pos>dir", "dir>pos", "pos>pivot>dir", "pivot>pos>dir", "pos>dir>pivot"]
-BEST = {"name": "pos>dir"}
+BEST = {"name": "dir>pos"}  # KeyShot 2026.2: direction-last can move the eye; position-last preserves it.
 LAST = {}      # last up / fov we set, to skip redundant setter calls
 
 
@@ -185,6 +209,7 @@ def op_reset(c):
 
 
 OPS = {"ping": op_ping, "get_camera": op_get_camera, "initial": op_initial,
+       "camera_checkpoint": op_camera_checkpoint, "camera_restore": op_camera_restore,
        "exec": op_exec, "screenshot": op_screenshot, "stop": op_stop,
        "set_view": op_set_view, "calibrate": op_calibrate, "reset": op_reset, "perf": op_perf}
 
@@ -207,4 +232,8 @@ try:
 except Exception:
     import traceback as _tb2
     OPS["anim_error"] = (lambda c, _e=_tb2.format_exc(): {"error": _e})
-# edit stamp for cc_lights.py / cc_anim.py (bump to force a hot reload after editing them): 18
+STAGE_FILE = os.path.join(os.path.dirname(SHOTS), "cc_stage.py")
+with open(STAGE_FILE, "r", encoding="utf-8-sig") as _f:
+    exec(compile(_f.read(), STAGE_FILE, "exec"), globals())
+OPS.update(STAGE_OPS)
+# edit stamp for companion modules: 44

@@ -29,11 +29,11 @@ function measureFrame(png) {
 
 // ---- 2. lighting ------------------------------------------------------------------------------------------------
 function saveAsStyle(frames, name = '_video') {
-  const dir = path.join(style.ROOT, name); fs.mkdirSync(dir, { recursive: true });
-  for (const f of fs.readdirSync(dir)) if (/^ref_\d+\.png$/.test(f)) fs.unlinkSync(path.join(dir, f));      // only files this feature wrote
-  const cache = path.join(dir, '.cache'); if (fs.existsSync(cache)) for (const f of fs.readdirSync(cache)) if (/^ref_\d+\./.test(f)) fs.unlinkSync(path.join(cache, f));
+  if (!/^[a-zA-Z0-9_-]{1,64}$/.test(name)) throw new Error('Invalid video style name.');
+  fs.mkdirSync(style.ROOT, { recursive: true });
+  const dir = fs.mkdtempSync(path.join(style.ROOT, name + '_'));
   frames.forEach((f, i) => fs.writeFileSync(path.join(dir, `ref_${String(i + 1).padStart(2, '0')}.png`), f.png));
-  return name;
+  return path.basename(dir);
 }
 // Pick the closest ready-made rig from measured tone (used when Claude is not available or gives no answer).
 function guessRig(ms) {

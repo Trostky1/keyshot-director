@@ -8,15 +8,18 @@ const { send, heartbeat, BASE, SHOTS } = require('./bridge');
 const { poseToEye, eyeToPose, sample, presets } = require('./shots');
 const agent = require('./agent');
 const { execFile } = require('child_process');
+const { resizeJpeg } = require('./image-tools');
 const { RIGS, ENV_RIGS, buildRig, toPos } = require('./rigs');
 const { decode, productStats } = require('./png');
 const style = require('./style');
 const video = require('./video');
 const janitor = require('./janitor');
+const photo = require('./photo');
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 // ---- studio lighting state (what we believe is in KeyShot; the bridge keeps the real registry) ----
 const studio = { rig: null, exposure: 1, frameAz: 0, mirror: false, subject: null, env: null, lights: {}, target: null, envScales: false, lastAuto: null };
+let stagingBusy = false;
 
 // Measure the product's own brightness in the live viewport (see png.js productStats).
 async function measure(settleMs = 2500) {
@@ -127,12 +130,18 @@ function lightSpec(l) {                       // stage-frame light -> concrete b
   return {
     id: l.id, pos: toPos(s.center, studio.frameAz, l, s.span), target: s.center, size: [l.w * s.span, l.h * s.span],
     power: +(l.E * (l.gain ?? 1) * dist * dist * studio.exposure).toFixed(2),
-    kelvin: l.kelvin, visible_refl: l.refl, visible_eye: l.eye,
+    kelvin: l.kelvin, roll: l.roll || 0, visible_refl: l.refl, visible_eye: l.eye,
   };
 }
 // Coalesce rapid edits to one light (slider drags): at most one bridge call in flight per light, latest values win.
 const lightJobs = new Map();
 function editLight(id, patch) {
+  if (!/^[a-zA-Z0-9_-]{1,64}$/.test(id || '')) return Promise.reject(new Error('Use a short light name with letters, numbers or underscores.'));
+  const limits = { az: [-360,360], el: [-85,85], d: [0.2,20], w: [0.01,20], h: [0.01,20], gain: [0,30], kelvin: [1500,12000], roll: [-360,360], E: [0,0.02] };
+  for (const [k, v] of Object.entries(patch)) {
+    if (limits[k] && (!Number.isFinite(v) || v < limits[k][0] || v > limits[k][1])) return Promise.reject(new Error('Invalid light ' + k));
+    if (!limits[k] && !['refl','eye','role'].includes(k)) return Promise.reject(new Error('Unknown light setting: ' + k));
+  }
   const job = lightJobs.get(id) || { running: false, dirty: false, patch: {}, waiters: [] };
   lightJobs.set(id, job);
   Object.assign(job.patch, patch);
@@ -146,8 +155,9 @@ function editLight(id, patch) {
         job.dirty = false;
         const p = job.patch, ws = job.waiters; job.patch = {}; job.waiters = [];
         try {
-          const l = studio.lights[id] = { ...(studio.lights[id] || { id, role: 'custom', az: -40, el: 30, d: 3, w: 1.5, h: 1.5, E: 0.003, kelvin: 5600, refl: true, eye: false, gain: 1 }), ...p, id };
+          const l = { ...(studio.lights[id] || { id, role: 'custom', az: -40, el: 30, d: 3, w: 1.5, h: 1.5, E: 0.0008, kelvin: 5600, refl: true, eye: false, gain: 1 }), ...p, id };
           const r = await send('light_set', lightSpec(l), 30000);
+          studio.lights[id] = l;
           ws.forEach(w => w.resolve({ light: l, bridge: r }));
         } catch (e) { ws.forEach(w => w.reject(e)); }
       }
@@ -164,6 +174,7 @@ async function syncFromKeyShot() {
     const l = await send('lights_list', {}, 20000), ids = Object.keys(l); if (!ids.length) return;
     const s = await ensureSubject(); studio.frameAz = 0;
     for (const id of ids) {
+      if (l[id].hidden) continue;
       const sp = l[id].spec || {};
       if (sp.pos && sp.size) {
         const v = [sp.pos[0] - s.center[0], sp.pos[1] - s.center[1], sp.pos[2] - s.center[2]], r = Math.hypot(...v) || 1;
@@ -176,6 +187,7 @@ async function syncFromKeyShot() {
 }
 async function clearLights() { await send('lights_clear', {}, 60000); studio.lights = {}; }
 async function applyRig(name, opts = {}) {
+  if (!RIGS[name] && !ENV_RIGS[name]) throw new Error('Unknown lighting rig.');
   await clearLights();                    // measure the product only after our own lights are gone
   await ensureSubject(true);
   if (ENV_RIGS[name]) {
@@ -221,9 +233,63 @@ async function readPose() {
 }
 
 async function applyPose(p) {
-  cur = { pivot: p.pivot, az: p.az, el: p.el, dist: p.dist, fov: p.fov };
+  if (!Array.isArray(p.pivot) || p.pivot.length !== 3 || !p.pivot.every(Number.isFinite) || ![p.az,p.el,p.dist,p.fov].every(Number.isFinite) || p.dist <= 0 || p.fov < 5 || p.fov > 120) throw new Error('Invalid camera pose.');
   const eye = poseToEye(p);
-  return send('set_view', { pivot: p.pivot, pos: eye, up: [0, 1, 0], fov: p.fov, noread: true });
+  const r = await send('set_view', { pivot: p.pivot, pos: eye, up: p.up || [0, 1, 0], fov: p.fov, noread: true });
+  cur = { ...p }; return r;
+}
+
+let currentPhotoSnapshot = null;
+const photoDirector = photo.createDirector({
+  async snapshot() {
+    await syncFromKeyShot();
+    const subject = await ensureSubject(true), camera = await readPose();
+    const lights = await send('lights_list');
+    const checkpoint = await send('camera_checkpoint', {}, 30000);
+    currentPhotoSnapshot = { subject, camera, checkpoint, environment: await send('env_info'), selectOnly: true, lights, createdIds: [], studio: JSON.parse(JSON.stringify(studio)) };
+    return currentPhotoSnapshot;
+  },
+  async restore(s) {
+    // Original lights stay in the scene with their actual transforms/materials. Only this run's creations are removed.
+    for (const id of s.createdIds) await send('light_remove', { id }, 30000);
+    for (const [id, l] of Object.entries(s.lights)) await send('light_visibility', { ids: [id], visible: !l.hidden }, 30000);
+    await send('env_restore', { snapshot: s.environment, select_only: !!s.selectOnly }, 30000);
+    if (s.checkpoint) { await send('camera_restore', { name: s.checkpoint.name }, 30000); cur = await readPose(); }
+    else await applyPose(s.camera);
+    Object.assign(studio, s.studio);
+  },
+  async apply(plan, opts) {
+    const subject = await ensureSubject(true), camera = await readPose();
+    const ids = plan.lights.map(l => 'photo_' + opts.id + '_' + l.id);
+    const existing = await send('lights_list');
+    await send('light_visibility', { ids: Object.keys(existing).filter(id => !ids.includes(id)), visible: false }, 30000);
+    studio.lights = {};
+    Object.assign(studio, { rig: 'reference_photo', exposure: 1, frameAz: camera.az, mirror: false, subject, envScales: false });
+    const { background, ...environment } = plan.environment;
+    studio.env = await send('env_set', { ...environment, director_name: 'CC_Photo_' + opts.id, bg: background.map(v => Math.round(255 * Math.pow(v / 255, 2.2))) }, 30000);
+    for (const [i, source] of plan.lights.entries()) {
+      const l = { ...source, id: ids[i] }; if (!currentPhotoSnapshot.createdIds.includes(l.id)) currentPhotoSnapshot.createdIds.push(l.id);
+      await send('light_set', lightSpec(l), 30000); await send('light_visibility', { ids: [l.id], visible: true }, 30000); studio.lights[l.id] = l;
+    }
+    if (opts.framing) await applyPose(photo.frame(subject, camera, plan.shot, opts.aspect));
+  },
+  async capture(file, aspect, secs) {
+    const width = Math.round(Math.min(960, 960 * aspect) / 2) * 2, height = Math.round(width / aspect / 2) * 2;
+    await send('grab', { path: file, width, height, secs }, 120000);
+    latestShot = fs.readFileSync(file); preview.last = Date.now();
+  },
+  refresh() { preview.wanted = true; },
+});
+function assertSceneAvailable(includePrompt = true) {
+  if (!heartbeat().alive) throw Object.assign(new Error(NOT_CONNECTED), { status: 409 });
+  if (stagingBusy || photoDirector.status().running || playing || matchJob.running || videoJob.running || renderJob.running || (includePrompt && promptJob && !promptJob.done))
+    throw Object.assign(new Error('Another scene job is running. Stop it or wait before changing the scene.'), { status: 409 });
+}
+async function stagingOperation(op, input = {}) {
+  assertSceneAvailable(false);
+  stagingBusy = true;
+  try { return await send(op, input, 60000); }
+  finally { studio.subject = null; studio.subjectOK = null; stagingBusy = false; preview.wanted = true; }
 }
 
 // Preview: OFF by default and capped. Each capture is a small KeyShot render (the screenshot call that used to do this
@@ -232,7 +298,7 @@ async function applyPose(p) {
 const preview = { live: false, budget: 300, used: 0, minGapMs: 3000, last: 0, wanted: false };
 let previewTimer = null;
 async function grabPreview() {
-  if (!heartbeat().alive || shotBusy || renderJob.running || preview.used >= preview.budget) return false;
+  if (!heartbeat().alive || stagingBusy || shotBusy || renderJob.running || photoDirector.status().running || matchJob.running || videoJob.running || (promptJob && !promptJob.done) || preview.used >= preview.budget) return false;
   shotBusy = true; preview.used++;
   try { const r = await send('screenshot', { name: 'live', width: 960, secs: 1.0 }, 30000); latestShot = fs.readFileSync(r.path); preview.last = Date.now(); return true; }
   catch { return false; } finally { shotBusy = false; }
@@ -293,12 +359,12 @@ async function matchVideo({ frames, duration, lighting = true, camera = true, ro
     if (!base) base = await readPose();
     const front = { ...(cur || base) };                       // the user's current view = the video's opening view
     if (lighting) {
-      video.saveAsStyle(fr, '_video');
-      const prof = await style.analyzeFolder('_video');
+      const videoStyle = video.saveAsStyle(fr, '_video');
+      const prof = await style.analyzeFolder(videoStyle);
       say(`look profile from ${prof.analyzed} frames; building rig ${plan.lighting.rig}`);
       await applyRig(plan.lighting.rig, { mirror: plan.lighting.mirror, iterations: 3 }); stopIf();
       say('tuning the rig toward the video (this is the slow part)');
-      await matchStyle('_video', { rounds });
+      await matchStyle(videoStyle, { rounds });
       const r = matchJob.result; say(r && !r.error ? `lighting matched: distance ${r.startDistance} -> ${r.finalDistance}` : 'lighting tune skipped: ' + (r && r.error)); stopIf();
     }
     if (camera) {
@@ -371,6 +437,44 @@ const needsBridge = fn => async (...a) => { if (!heartbeat().alive) throw new Er
 
 const actions = {
   setAttachments(a) { attachments = a || []; },
+  async scene_objects(input = {}) { return send('scene_objects', input, 30000); },
+  async move_object(input) {
+    const result = await stagingOperation('stage_transform', input);
+    return { summary: 'Object assembly transformed; staging undo available', ...result };
+  },
+  async duplicate_object(input) {
+    const result = await stagingOperation('stage_duplicate', input);
+    return { summary: 'Product copies created; staging undo available', ...result };
+  },
+  async create_set_piece(input) {
+    const result = await stagingOperation('stage_set', input);
+    return { summary: 'Physical set geometry created; staging undo available', ...result };
+  },
+  async undo_staging() {
+    const result = await stagingOperation('stage_undo');
+    return { summary: 'Last staging operation restored', ...result };
+  },
+  async match_photo({ brief, match_framing, quality }) {
+    assertSceneAvailable(false);
+    await photoDirector.start({ image: attachments[0], brief, framing: !!match_framing, quality });
+    const r = await photoDirector.wait();
+    if (r.error) throw new Error(r.error);
+    return { summary: r.result.title, ...r.result };
+  },
+  async frame_product({ kind, focus, fill, fov, aspect }) {
+    const subject = await ensureSubject(true), pose = await readPose();
+    await applyPose(photo.frame(subject, pose, { kind, focus, fill, fov }, aspect));
+    return { summary: 'Product framing updated', camera: camState() };
+  },
+  async set_environment({ brightness, rotation, background, ground_shadows, ground_reflections }) {
+    const p = {};
+    if (brightness != null) { if (!Number.isFinite(brightness) || brightness < 0 || brightness > 5) throw new Error('Environment brightness must be 0–5.'); p.brightness = brightness; }
+    if (rotation != null) { if (!Number.isFinite(rotation)) throw new Error('Invalid environment rotation.'); p.rotation = rotation; }
+    if (background != null) { if (!Array.isArray(background) || background.length !== 3 || !background.every(v => Number.isFinite(v) && v >= 0 && v <= 255)) throw new Error('Background needs RGB values 0–255.'); p.bg = background.map(v => Math.round(255 * Math.pow(v / 255, 2.2))); }
+    if (typeof ground_shadows === 'boolean') p.ground_shadows = ground_shadows;
+    if (typeof ground_reflections === 'boolean') p.ground_reflections = ground_reflections;
+    studio.env = await send('env_set', p, 30000); return { summary: 'Environment updated', environment: studio.env };
+  },
   async get_state() {
     if (!base) base = await readPose();
     const sub = studio.subject || await ensureSubject().catch(() => null);
@@ -381,7 +485,7 @@ const actions = {
     await sleep(1800);
     const r = await send('screenshot', { name: 'look', width: 960, secs: 3 }, 30000);
     const jpg = path.join(BASE, 'shots', 'look_small.jpg');
-    await run('powershell', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', path.join(__dirname, '..', 'tools', 'resize.ps1'), '-In', r.path, '-Out', jpg, '-MaxDim', '900']);
+    await resizeJpeg(r.path, jpg, 900);
     const m = productStats(decode(fs.readFileSync(r.path))), b64 = fs.readFileSync(jpg).toString('base64');
     return { summary: 'viewport captured', imageBase64: b64, imageDataUrl: 'data:image/jpeg;base64,' + b64,
       product_brightness: { median: R2(m.p50), highlights: R2(m.p95), clipped_pct: R2(m.clipFrac * 100) }, backdrop_brightness: R2(m.bg) };
@@ -422,10 +526,10 @@ const actions = {
   },
   async use_attached_images_as_style() {
     if (!attachments.length) throw new Error('no images are attached to this message');
-    const dir = path.join(style.ROOT, '_prompt'); fs.mkdirSync(dir, { recursive: true });
-    for (const f of fs.readdirSync(dir)) if (/^ref_\d+\./.test(f)) fs.unlinkSync(path.join(dir, f));       // only files this feature wrote
+    fs.mkdirSync(style.ROOT, { recursive: true });
+    const dir = fs.mkdtempSync(path.join(style.ROOT, '_prompt_')), name = path.basename(dir);
     attachments.forEach((d, i) => { const m = /^data:image\/([a-z0-9+.-]+);base64,(.+)$/i.exec(d); if (m) fs.writeFileSync(path.join(dir, `ref_${i + 1}.${m[1].replace('jpeg', 'jpg').replace('svg+xml', 'svg')}`), Buffer.from(m[2], 'base64')); });
-    return actions.analyze_style({ name: '_prompt' });
+    return { ...(await actions.analyze_style({ name })), name };
   },
   async match_style({ name, look }) {
     if (!studio.rig) throw new Error('build a rig first (apply_rig), then match it');
@@ -435,11 +539,18 @@ const actions = {
   },
 };
 
-for (const k of ['look', 'apply_rig', 'set_light', 'remove_light', 'set_exposure', 'auto_expose', 'studio_off', 'set_camera', 'play_motion', 'match_style']) actions[k] = needsBridge(actions[k]);
+for (const k of ['scene_objects', 'move_object', 'duplicate_object', 'create_set_piece', 'undo_staging', 'look', 'apply_rig', 'set_light', 'remove_light', 'set_exposure', 'auto_expose', 'studio_off', 'set_camera', 'play_motion', 'match_style']) actions[k] = needsBridge(actions[k]);
 { const gs = actions.get_state; actions.get_state = async () => (heartbeat().alive ? gs() : { summary: 'KeyShot is not connected', bridge_alive: false, styles: style.listStyles().filter(s => !s.name.startsWith('_')).map(s => ({ name: s.name, images: s.images, analyzed: s.analyzed })) }); }
 
 let promptJob = null;
-const body = req => new Promise(res => { let d = ''; req.on('data', c => (d += c)); req.on('end', () => { try { res(JSON.parse(d || '{}')); } catch { res({}); } }); });
+const body = req => new Promise((res, reject) => {
+  const chunks = []; let size = 0, tooLarge = false;
+  req.on('data', c => { size += c.length; if (size > 16 * 1024 * 1024) { tooLarge = true; chunks.length = 0; } else if (!tooLarge) chunks.push(c); });
+  req.on('error', reject); req.on('aborted', () => reject(new Error('Upload interrupted.')));
+  req.on('end', () => { if (tooLarge) return reject(Object.assign(new Error('Upload exceeds 16 MB.'), { status: 413 }));
+    try { const b = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}'); if (!b || typeof b !== 'object' || Array.isArray(b)) throw new Error(); res(b); }
+    catch { reject(Object.assign(new Error('Invalid request JSON.'), { status: 400 })); } });
+});
 const json = (res, code, obj) => { res.writeHead(code, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(obj)); };
 
 const server = http.createServer(async (req, res) => {
@@ -451,6 +562,40 @@ const server = http.createServer(async (req, res) => {
     clearTimeout(previewTimer); previewTimer = setTimeout(() => { preview.wanted = true; }, 1500);
   }
   try {
+    if (req.method === 'POST' && req.headers.origin) {
+      let origin; try { origin = new URL(req.headers.origin); } catch { throw Object.assign(new Error('Invalid request origin.'), { status: 403 }); }
+      if (origin.host !== req.headers.host) throw Object.assign(new Error('Cross-site scene commands are blocked.'), { status: 403 });
+    }
+    if (req.method === 'POST' && /^\/api\/(pose|rebase|play|rig|light|exposure|autoexpose|env|studio\/off|style\/match|video$|render$|prompt$|views\/goto)/.test(url.pathname)) assertSceneAvailable();
+    if (url.pathname === '/api/photo' && req.method === 'GET') return json(res, 200, photoDirector.status());
+    if (url.pathname === '/api/photo' && req.method === 'POST') { const b = await body(req); assertSceneAvailable(); return json(res, 202, await photoDirector.start(b)); }
+    if (url.pathname === '/api/photo/stop' && req.method === 'POST') { photoDirector.stop(); return json(res, 200, { stopping: true, note: 'The current KeyShot render finishes before restoration.' }); }
+    if (url.pathname === '/api/photo/undo' && req.method === 'POST') { assertSceneAvailable(); return json(res, 200, await photoDirector.undo()); }
+    if (url.pathname === '/api/photo/file' && req.method === 'GET') {
+      const slot = url.searchParams.get('slot'), file = photoDirector.file(url.searchParams.get('id'), slot);
+      if (!fs.existsSync(file)) return json(res, 404, { error: 'Photo output is not ready yet.' });
+      res.writeHead(200, { 'Content-Type': slot === 'recipe' ? 'application/json' : 'image/png', 'Cache-Control': 'no-store',
+        ...(url.searchParams.has('download') ? { 'Content-Disposition': `attachment; filename="keyshot-${slot}.${slot === 'recipe' ? 'json' : 'png'}"` } : {}) });
+      return fs.createReadStream(file).pipe(res);
+    }
+    if (url.pathname === '/api/frame' && req.method === 'POST') { const b = await body(req); assertSceneAvailable(); return json(res, 200, await actions.frame_product(b)); }
+    if (url.pathname === '/api/scene' && req.method === 'GET') {
+      const input = {};
+      for (const key of ['node_id', 'offset']) if (url.searchParams.has(key)) {
+        const value = url.searchParams.get(key);
+        if (!/^\d+$/.test(value) || !Number.isSafeInteger(Number(value))) throw Object.assign(new Error('Invalid inventory ' + key), { status: 400 });
+        input[key] = Number(value);
+      }
+      return json(res, 200, await actions.scene_objects(input));
+    }
+    if (url.pathname === '/api/staging' && req.method === 'POST') {
+      const b = await body(req); assertSceneAvailable();
+      const allowed = { move: 'move_object', duplicate: 'duplicate_object', set: 'create_set_piece', undo: 'undo_staging' };
+      if (!Object.hasOwn(allowed, b.action)) throw new Error('Unknown staging action');
+      return json(res, 200, await actions[allowed[b.action]](b));
+    }
+    if (url.pathname === '/api/environment' && req.method === 'GET') return json(res, 200, await send('env_info'));
+    if (url.pathname === '/api/environment' && req.method === 'POST') { const b = await body(req); assertSceneAvailable(); return json(res, 200, await actions.set_environment(b)); }
     if (url.pathname === '/api/status') {
       lastClient = Date.now();
       if (!synced && heartbeat().alive) syncFromKeyShot();
@@ -474,7 +619,7 @@ const server = http.createServer(async (req, res) => {
     // ---- lifecycle: restart / quit this app, or tell the bridge inside KeyShot to stop ----
     if (url.pathname === '/api/quit' && req.method === 'POST') {
       const b = await body(req); json(res, 200, { ok: true, restart: !!b.restart });
-      setTimeout(() => process.exit(b.restart ? 3 : 0), 250);       // exit code 3 makes the .bat start it again
+      setTimeout(() => process.exit(b.restart ? 3 : 0), 250);       // the platform launcher restarts on exit code 3
       return;
     }
     if (url.pathname === '/api/bridge/stop' && req.method === 'POST') {
@@ -513,7 +658,7 @@ const server = http.createServer(async (req, res) => {
       const since = +(url.searchParams.get('since') || 0); const j = promptJob;
       return json(res, 200, j ? { id: j.id, done: j.done, events: j.events.slice(since), next: j.events.length } : { id: null, done: true, events: [], next: 0 });
     }
-    if (url.pathname === '/api/prompt/stop' && req.method === 'POST') { if (promptJob && promptJob.abort) promptJob.abort(); if (playing) playing.cancel = true; return json(res, 200, { ok: true }); }
+    if (url.pathname === '/api/prompt/stop' && req.method === 'POST') { if (promptJob && promptJob.abort) promptJob.abort(); photoDirector.stop(); if (playing) playing.cancel = true; return json(res, 200, { ok: true }); }
     if (url.pathname === '/api/prompt/reset' && req.method === 'POST') { agent.history.length = 0; return json(res, 200, { ok: true }); }
     if (url.pathname === '/api/motions' && req.method === 'GET') { if (!base) base = await readPose(); return json(res, 200, Object.entries(presets(cur || base)).map(([id, r]) => ({ id, label: r.label, duration: r.duration }))); }
     if (url.pathname === '/api/style/match' && req.method === 'POST') { const b = await body(req); matchStyle(b.name, b).catch(() => {}); return json(res, 200, { started: true }); }
@@ -566,14 +711,15 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, await applyPose(p));
     }
     // static files
-    const file = path.join(PUBLIC, url.pathname === '/' ? 'index.html' : url.pathname.replace(/\.\./g, ''));
+    const file = path.resolve(PUBLIC, '.' + (url.pathname === '/' ? '/index.html' : decodeURIComponent(url.pathname)));
+    if (!file.startsWith(PUBLIC + path.sep)) return json(res, 403, { error: 'Invalid file path.' });
     if (fs.existsSync(file) && fs.statSync(file).isFile()) {
       const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css' };
       res.writeHead(200, { 'Content-Type': types[path.extname(file)] || 'application/octet-stream' });
       return res.end(fs.readFileSync(file));
     }
     res.writeHead(404); res.end('not found');
-  } catch (e) { json(res, 500, { error: e.message }); }
+  } catch (e) { json(res, e.status || 500, { error: e.message }); }
 });
 
 server.on('error', e => {
@@ -584,9 +730,10 @@ server.on('error', e => {
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`KeyShot control server: http://localhost:${PORT}`);
   if (process.env.KD_OPEN && process.platform === 'win32') execFile('cmd', ['/c', 'start', '""', `http://localhost:${PORT}`], { windowsHide: true }, () => {});
+  if (process.env.KD_OPEN && process.platform === 'darwin') execFile('open', [`http://localhost:${PORT}`], () => {});
   for (const ip of lanIPs()) console.log(`  phone / other PC: http://${ip}:${PORT}`);
 });
-const tidyOpts = { send, alive: () => heartbeat().alive, busy: () => !!(playing || matchJob.running || videoJob.running || renderJob.running || (promptJob && !promptJob.done) || shotBusy) };
+const tidyOpts = { send, cameras: false, alive: () => heartbeat().alive, busy: () => !!(photoDirector.status().running || playing || matchJob.running || videoJob.running || renderJob.running || (promptJob && !promptJob.done) || shotBusy) };
 let tidyTimer = null;
 function tidyLater() { clearTimeout(tidyTimer); tidyTimer = setTimeout(() => janitor.run(tidyOpts, 'job').catch(() => {}), 5000); }
 janitor.start(tidyOpts);

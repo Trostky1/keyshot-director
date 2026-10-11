@@ -6,7 +6,7 @@
 <title>KeyShot Director</title>
 <style>
   :root { --bg:#fff; --fg:#000; --dim:#6e6e6e; --line:#d4d4d4; }
-  * { box-sizing:border-box; border-radius:0 !important; }
+  * { box-sizing:border-box; }
   html, body { margin:0; background:var(--bg); color:var(--fg); }
   body { font:13px/1.45 "Helvetica Neue", Helvetica, Arial, sans-serif; letter-spacing:.01em; }
   header { display:flex; align-items:center; gap:14px; padding:10px 16px; border-bottom:1px solid var(--fg); }
@@ -88,8 +88,10 @@
   dialog::backdrop { background:#fffc; }
   #qr { background:#fff; border:1px solid var(--fg); padding:6px; display:inline-block; margin-top:8px; }
 </style>
+<link rel="stylesheet" href="/director.css">
 </head>
 <body>
+<!-- THESIS: A calm creative instrument for shaping a real KeyShot scene. OWN-WORLD: System typography, soft silver surfaces, precise blue actions, and the user's live render as the hero. STORY: See the scene, adjust the look, then refine through conversation. FIRST VIEWPORT: Full live scene with reference matching one glance away. FORM: Wide canvas and focused inspector. FINISH: Crisp controls, quiet depth, complete states, and responsive touch targets. -->
 <header>
   <span class="dot" id="dot"></span><h1>KeyShot Director</h1><span id="status">connecting</span>
   <span class="sp"></span><span class="dim" id="mode"></span>
@@ -97,11 +99,13 @@
 </header>
 <main>
   <section class="col">
+    <div class="stage-heading"><div><h2>Studio</h2><p>Shape your product in KeyShot, right from here.</p></div><span class="scene-tag">Live scene</span></div>
     <div class="stage" id="stage"><img id="shot" alt="" draggable="false"><div class="empty" id="empty"><b>Waiting for KeyShot</b><br><br>Save your scene, then in KeyShot open <b>Window &rarr; Scripting</b>, click the console, paste this and press Enter:<div class="connectline"><code class="cline">...</code><button class="solid" data-copy>Copy</button></div><span class="dim">It keeps running in the background. Leave it alone while it runs (no other scripts or dialogs).</span></div><div class="livebar"><label><input type="checkbox" id="live"> live preview</label><button class="sm" id="refresh">Refresh</button></div><div class="hint">drag orbit &middot; right-drag / shift-drag pan &middot; wheel zoom &middot; touch: 1 finger orbit, 2 pan + pinch</div></div>
+    <div class="conversation-heading"><h2>Ask Director</h2><span>Lighting, framing, scene layout, and motion</span></div>
     <div id="log"></div>
     <div class="promptbar">
       <div class="thumbs" id="thumbs"></div>
-      <textarea id="prompt" rows="3" placeholder="Describe the lighting or move you want. Attach reference images to match their look. (Enter = send, Shift+Enter = new line)"></textarea>
+      <textarea id="prompt" rows="3" placeholder="Describe a look, ask for a close-up, or arrange your product…"></textarea>
       <div class="row" style="margin-top:6px">
         <button id="send" class="solid">Send</button>
         <button id="stopBtn" disabled>Stop</button>
@@ -114,6 +118,26 @@
   </section>
 
   <aside>
+    <section class="photo-workspace" aria-labelledby="photoTitle">
+      <div class="photo-heading"><div><h2 id="photoTitle">Match a look</h2><p>Bring the lighting and mood of a photo to your own product.</p></div><span class="photo-phase" id="photoPhase">Ready</span></div>
+      <div class="photo-inputs">
+        <button class="photo-drop" id="photoDrop" type="button"><img id="photoRef" alt="Selected reference" hidden><span id="photoDropText">Add a reference photo<span>Choose or drop · PNG, JPG, WebP</span></span></button>
+        <input id="photoFile" type="file" accept="image/png,image/jpeg,image/webp" hidden>
+        <div class="photo-brief"><label for="photoBrief">What should we borrow?</label><textarea id="photoBrief" rows="2" placeholder="Soft side light, crisp edge reflections, a warm background…"></textarea>
+          <div class="photo-options"><label><input id="photoFraming" type="checkbox"> Match framing too</label><label for="photoQuality">Refinement <select id="photoQuality"><option value="refined">Visual refinement</option><option value="quick">Quick first look</option></select></label></div>
+          <div class="row"><button class="solid" id="photoMatch" disabled>Match this look</button><button id="photoStop" disabled>Stop &amp; restore</button><button id="photoUndo" disabled>Undo look</button></div>
+        </div>
+      </div>
+      <p class="photo-note">Reference and preview images are shared with your selected AI provider and saved locally. Your materials stay untouched. A rollback camera lets you undo a match; save your scene in KeyShot to keep the result.</p>
+      <div id="photoProgress" role="status" aria-live="polite"></div>
+      <details id="photoEvidence" hidden><summary>Lighting decisions &amp; limits</summary><div id="photoDecisions"></div></details>
+      <div id="photoComparison" hidden><div class="photo-compare"><figure><img id="photoBefore" alt="KeyShot render before matching"><figcaption>Before</figcaption></figure><figure><img id="photoAfter" alt="Actual KeyShot render after matching"><figcaption>Matched lighting</figcaption></figure></div><div class="row"><a id="photoDownload" download>Download preview</a><a id="photoRecipe" download>Download lighting recipe</a><span class="dim">Preview quality · use KeyShot for final output</span></div></div>
+    </section>
+    <section class="panel" aria-labelledby="frameTitle"><h2 id="frameTitle">Frame &amp; background</h2><p class="blurb">Choose what fills the frame. Keep your viewing angle.</p>
+      <div class="row"><button data-frame="hero">Full product</button><button data-frame="detail">Detail close-up</button><button data-frame="upper">Upper detail</button></div>
+      <label for="frameAspect">Output shape</label><select id="frameAspect"><option value="1.7777777778">Landscape · 16:9</option><option value="1">Square · 1:1</option><option value="0.8">Portrait · 4:5</option></select>
+      <details class="fold" id="environmentFold"><summary>Background &amp; ground</summary><label for="envColor">Backdrop color <input id="envColor" type="color" value="#f5f5f5"></label><label><input id="envShadows" type="checkbox" checked> Ground shadows</label><label><input id="envReflections" type="checkbox"> Ground reflections</label><button id="environmentApply">Apply background</button></details>
+    </section>
     <div class="panel">
       <details class="fold" id="connectFold"><summary>Connect KeyShot</summary>
         <div class="dim" style="margin:8px 0;text-transform:none;letter-spacing:0;font-size:11.5px">Save your scene. In KeyShot: <b>Window &rarr; Scripting</b>, click the console, paste, Enter. Run it again if the header says the bridge is not running (it lasts up to 4 hours).</div>
@@ -122,7 +146,7 @@
     </div>
 
     <div class="panel">
-      <h2>Reference video</h2>
+      <details class="fold"><summary>Reference video &amp; animation</summary>
       <div class="drop" id="vdrop">Drop a product video here<br><span class="dim">or click to choose &middot; mp4 / mov / webm</span></div>
       <input type="file" id="vfile" accept="video/*" hidden>
       <div class="chk2"><label><input type="checkbox" id="vlight" checked> match lighting</label><label><input type="checkbox" id="vcam" checked> match camera</label></div>
@@ -134,6 +158,7 @@
         <select id="vq" title="Render time per frame"><option value="2">draft 2s/frame</option><option value="6" selected>good 6s/frame</option><option value="20">high 20s/frame</option><option value="60">final 60s/frame</option></select></div>
       <div id="rlog" class="mono dim" style="margin-top:8px;white-space:pre-wrap"></div>
       <video id="rvid" controls loop style="display:none;width:100%;margin-top:8px;border:1px solid #fff"></video>
+      </details>
     </div>
 
     <div class="panel" id="studioPanel">
@@ -143,6 +168,7 @@
       <label>Exposure <span id="vexp">1.00&times;</span></label><input type="range" id="exp" min="-2" max="2" step="0.05" value="0">
       <label style="justify-content:flex-start;gap:6px;align-items:center"><input type="checkbox" id="mirror"> mirror left / right</label>
       <canvas id="stagecv" width="300" height="270" title="Top-down stage. Camera is at the bottom. Drag a light to move it."></canvas>
+      <p class="blurb stage-help">Drag a light, or open it below to adjust position and brightness with sliders.</p>
       <div id="lightlist"></div>
       <div class="row" style="margin-top:8px"><button id="addlight">Add light</button><button id="studiooff" title="Remove every light this app made and restore your original environment">Studio off</button></div>
       <div id="lightStatus" class="blurb"></div>
@@ -221,6 +247,7 @@ function panBy(dx, dy) {
 const pts = new Map(); let mode = null, lastPinch = 0;
 stage.addEventListener('contextmenu', e => e.preventDefault());
 stage.addEventListener('pointerdown', e => {
+  if (e.target.closest('button,input,label,a')) return;
   if (!P) return; stage.setPointerCapture(e.pointerId); stage.classList.add('drag'); pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
   mode = (e.button === 2 || e.shiftKey || e.button === 1) ? 'pan' : 'orbit';
   if (pts.size === 2) { const [a, b] = [...pts.values()]; lastPinch = Math.hypot(a.x - b.x, a.y - b.y); }
@@ -273,15 +300,17 @@ async function loadStudio() {
   renderLights(); drawStage();
 }
 const fmts = { gain: v => (+v).toFixed(2) + '×', kelvin: v => Math.round(v) + ' K', az: v => Math.round(v) + '°', el: v => Math.round(v) + '°', d: v => (+v).toFixed(2) + ' sp', w: v => (+v).toFixed(2), h: v => (+v).toFixed(2) };
-function slider(label, key, l, min, max, step) { return `<label>${label} <span>${fmts[key](l[key])}</span></label><input type="range" data-id="${l.id}" data-k="${key}" min="${min}" max="${max}" step="${step}" value="${l[key]}">`; }
+const htmlText = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const lightLabel = l => l.id.startsWith('photo_') ? (l.role || 'Photo light') : l.id;
+function slider(label, key, l, min, max, step) { return `<label>${label} <span>${fmts[key](l[key])}</span></label><input type="range" aria-label="${htmlText(lightLabel(l))} ${htmlText(label)}" data-id="${htmlText(l.id)}" data-k="${key}" min="${min}" max="${max}" step="${step}" value="${l[key]}">`; }
 function renderLights() {
   const box = $('lightlist'); const open = new Set([...box.querySelectorAll('details[open]')].map(d => d.dataset.id)); box.innerHTML = '';
   for (const l of Object.values(ST.studio.lights)) {
     const d = document.createElement('details'); d.className = 'lrow'; d.dataset.id = l.id; if (open.has(l.id)) d.open = true;
-    d.innerHTML = `<summary><span class="sw"></span><b>${l.id}</b><span class="dim">${l.role}</span><button class="rm sm" data-rm="${l.id}">Remove</button></summary><div class="body">
+    d.innerHTML = `<summary><span class="sw"></span><b>${htmlText(lightLabel(l))}</b><span class="dim">${htmlText(l.id.startsWith('photo_') ? 'reference' : l.role)}</span><button class="rm sm" data-rm="${htmlText(l.id)}">Remove</button></summary><div class="body">
       ${slider('Brightness', 'gain', l, 0.05, 4, 0.05)}${slider('Color temp', 'kelvin', l, 2000, 9000, 50)}${slider('Azimuth', 'az', l, -180, 180, 1)}${slider('Elevation', 'el', l, -10, 90, 1)}
       ${slider('Distance', 'd', l, 1.2, 6, 0.05)}${slider('Width', 'w', l, 0.1, 4, 0.05)}${slider('Height', 'h', l, 0.1, 4, 0.05)}
-      <div class="chk"><label><input type="checkbox" data-id="${l.id}" data-k="refl" ${l.refl ? 'checked' : ''}> in reflections</label><label><input type="checkbox" data-id="${l.id}" data-k="eye" ${l.eye ? 'checked' : ''}> visible to camera</label></div></div>`;
+      <div class="chk"><label><input type="checkbox" data-id="${htmlText(l.id)}" data-k="refl" ${l.refl ? 'checked' : ''}> in reflections</label><label><input type="checkbox" data-id="${htmlText(l.id)}" data-k="eye" ${l.eye ? 'checked' : ''}> visible to camera</label></div></div>`;
     box.appendChild(d);
   }
 }
@@ -311,7 +340,7 @@ function drawStage() {
   for (const l of Object.values(ST.studio.lights)) {
     const p = px(stageXY(l)), ang = Math.atan2(c.y - p.y, c.x - p.x);
     cx.save(); cx.translate(p.x, p.y); cx.rotate(ang + Math.PI / 2); cx.strokeStyle = FG; cx.lineWidth = 4; const hw = Math.max(4, l.w * s * .5); cx.beginPath(); cx.moveTo(-hw, 0); cx.lineTo(hw, 0); cx.stroke(); cx.restore();
-    cx.fillStyle = FG; cx.font = '10px Helvetica, Arial'; cx.fillText(l.id, p.x + 6, p.y - 6);
+    cx.fillStyle = FG; cx.font = '10px Helvetica, Arial'; cx.fillText(lightLabel(l).slice(0,24), p.x + 6, p.y - 6);
   }
 }
 let dragLight = null;
@@ -348,7 +377,7 @@ $('thumbs').addEventListener('click', e => { const i = e.target.dataset.x; if (i
 async function readImage(file) {                 // shrink client-side: the AI does not need 8 MB, and the request stays small
   const url = URL.createObjectURL(file); const img = new Image(); img.src = url; await img.decode();
   const s = Math.min(1, 1400 / Math.max(img.width, img.height)), c = document.createElement('canvas'); c.width = Math.round(img.width * s); c.height = Math.round(img.height * s);
-  c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url); return c.toDataURL('image/jpeg', 0.85);
+  c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url); return c.toDataURL('image/png');
 }
 async function addFiles(files) { for (const f of files) { if (!f.type.startsWith('image/')) continue; if (attached.length >= 8) break; try { attached.push(await readImage(f)); } catch { toast('Could not read ' + f.name); } } renderThumbs(); }
 $('attach').onclick = () => $('file').click(); $('file').onchange = e => { addFiles(e.target.files); e.target.value = ''; };
@@ -378,7 +407,7 @@ $('send').onclick = () => sendPrompt();
 $('prompt').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendPrompt(); } });
 $('stopBtn').onclick = () => api('/api/prompt/stop', {});
 $('newchat').onclick = async () => { await api('/api/prompt/reset', {}); log.innerHTML = ''; showExamples(); };
-const EXAMPLES = ['Dark moody lighting, edge-lit so the glass glows', 'Clean white catalog look', 'Warm luxury feel, a bit brighter', 'Slow hero push-in', 'Make it look like my ecommerce style folder'];
+const EXAMPLES = ['Soft studio light with crisp edges', 'A close-up of the top detail', 'Duplicate my product for a three-piece composition', 'Dark, cinematic reflections', 'Slow hero push-in'];
 function showExamples() { const e = $('examples'); e.innerHTML = ''; for (const t of EXAMPLES) { const b = document.createElement('button'); b.className = 'sm ex'; b.textContent = t; b.onclick = () => { $('prompt').value = t; $('prompt').focus(); }; e.appendChild(b); } }
 
 /* ---------- reference video: pull frames out in the browser, send them to be matched ---------- */
@@ -464,7 +493,7 @@ $('settingsBtn').onclick = () => { $('apikey').value = ''; $('settings').showMod
 $('closeSettings').onclick = () => $('settings').close();
 $('disconnectBtn').onclick = e => busy(e.target, async () => { await api('/api/bridge/stop', {}); toast('Bridge stopped. In KeyShot, run the launcher again to reconnect.'); });
 $('restartBtn').onclick = async () => { try { await api('/api/quit', { restart: true }); } catch { /* server already going down */ } toast('Restarting... this page reconnects by itself'); $('settings').close(); };
-$('quitBtn').onclick = async () => { if (!confirm('Quit KeyShot Director? Start it again with the Start .bat.')) return; try { await api('/api/quit', {}); } catch { /* going down */ } document.body.innerHTML = '<div style="padding:40px;font:14px Helvetica">KeyShot Director has quit. Close this tab. Start it again with <b>Start KeyShot Director.bat</b>.</div>'; };
+$('quitBtn').onclick = async () => { if (!confirm('Quit KeyShot Director? Start it again from its app folder.')) return; try { await api('/api/quit', {}); } catch { /* going down */ } document.body.innerHTML = '<div style="padding:40px;font:14px Helvetica">KeyShot Director has quit. Close this tab. Start it again from its app folder.</div>'; };
 $('saveSettings').onclick = async () => { const b = { model: $('model').value, engine: $('engine').value, cliPath: $('cliPath').value.trim(), codexPath: $('codexPath').value.trim() }; if ($('apikey').value.trim()) b.apiKey = $('apikey').value; await api('/api/config', b); await loadConfig(); $('settings').close(); toast(CFG.engine === 'offline' ? 'Saved. Still in offline mode.' : 'Saved. Prompts will use ' + (CFG.provider === 'codex' ? 'ChatGPT (Codex).' : 'Claude.')); };
 
 /* ---------- connection, preview loop ---------- */
@@ -481,11 +510,12 @@ async function tick() {
 setInterval(tick, 1500); tick();
 const img = $('shot');
 function nextFrame() { img.src = '/api/preview.png?t=' + Date.now(); }
-img.onload = () => { $('empty').style.display = 'none'; img.style.display = 'block'; setTimeout(nextFrame, 150); };
-img.onerror = () => { img.style.display = 'none'; $('empty').style.display = 'block'; setTimeout(nextFrame, 800); };
+img.onload = () => { $('empty').style.display = 'none'; img.style.display = 'block'; setTimeout(nextFrame, 3000); };
+img.onerror = () => { img.style.display = 'none'; $('empty').style.display = 'block'; setTimeout(nextFrame, 2000); };
 nextFrame();
 loadStudio().catch(() => {}); loadStyles().catch(() => {}); loadConfig().catch(() => {}); showExamples(); drawStage();
 setInterval(() => { if (ST === null) loadStudio().catch(() => {}); }, 3000);
 </script>
+<script src="/photo-ui.js"></script>
 </body>
 </html>
