@@ -177,7 +177,7 @@
     </div>
 
     <div class="panel">
-      <details class="fold"><summary>Material lab</summary>
+      <div class="material-inspector-content">
         <p class="blurb">Select a scene material to tune its exposed values, or create a separate Director material. Existing materials stay read-only until you explicitly enable edits for one.</p>
         <div class="row"><select id="materialSelect" aria-label="Scene material"></select><button id="materialRefresh">Refresh</button></div>
         <div id="materialEditControls" class="material-edit-controls" hidden><div><b id="materialEditTitle">Scene material is read-only</b><p id="materialEditHelp">Enable edits to change exposed values on this material in the live KeyShot scene.</p></div><button type="button" id="materialEditToggle">Enable edits</button></div>
@@ -186,7 +186,7 @@
         <div id="materialNodes" class="blurb"></div>
         <div class="row" style="margin-top:8px"><button id="materialUndo">Undo edit</button><button id="materialSave">Save package</button><button id="materialDiscard">Discard</button></div>
         <div id="materialStatus" class="blurb"></div>
-      </details>
+      </div>
     </div>
 
     <div class="panel">
@@ -227,15 +227,23 @@
 <section id="materialsWorkspace" class="workspace-page" hidden aria-labelledby="materialsTitle">
   <div class="workspace-heading"><div><h2 id="materialsTitle">Material Lab</h2><p>Build a reusable finish from reference photos or actual texture maps.</p></div><span class="scene-tag">Unassigned by default</span></div>
   <div class="material-grid"><div class="material-creative">
-    <div class="workspace-card"><h3>Describe the finish</h3><p>Drop a close-up or product photo, then describe the surface you want. Material Director will make a separate material; it will not alter your product automatically.</p>
+    <div class="workspace-card material-chat">
+      <div class="material-chat-heading"><div><h3>Material Director</h3><p>Describe the finish you want or add reference photos. Your product stays untouched until you apply the result in KeyShot.</p></div></div>
+      <div id="materialChatLog" role="log" aria-live="polite" aria-label="Material Director conversation"><p class="chat-empty">Your conversation and build results will appear here. Start with a finish description or add a reference below.</p></div>
+      <div class="material-composer">
+      <label for="materialPrompt">Your direction</label>
+      <textarea id="materialPrompt" rows="3" placeholder="Fine bead-blasted aluminum, cool silver, a soft satin sheen…"></textarea>
       <button type="button" id="materialDrop" class="workspace-drop"><span id="materialDropText">Add reference images <small>Choose, paste or drop up to 8 · PNG, JPEG, WebP</small></span></button><input id="materialFile" type="file" accept="image/png,image/jpeg,image/webp" multiple hidden>
       <div class="material-reference-heading"><span id="materialImageCount" aria-live="polite">No references added</span><button type="button" id="materialClearImages" class="text-button" hidden>Clear all</button></div><div id="materialThumbs" class="material-reference-grid" aria-label="Material reference images"></div>
-      <label for="materialPrompt">What should it feel like?</label><textarea id="materialPrompt" rows="3" placeholder="Fine bead-blasted aluminum, cool silver, a soft satin sheen…"></textarea>
-      <div class="row"><button id="materialSend" class="solid">Ask Material Director</button><button id="materialStop" disabled>Stop</button><button id="materialNewChat">New chat</button></div>
-      <p class="blurb">All references are considered together when you send a prompt. They’re sent to your selected AI provider for this request, not saved as a training dataset. Photo references help describe a finish; actual channel maps below can be wired into a new, unassigned material. Existing product materials stay separate.</p>
+      <div class="row"><button id="materialSend" class="solid">Ask Material Director</button><button id="materialStop" disabled hidden>Stop</button><button id="materialNewChat">New chat</button></div>
+      <p class="blurb">Reference photos guide the finish description; actual channel maps below can be wired into a new, unassigned material. Your references are sent to the selected AI provider for this request and aren’t saved as training data.</p>
+      </div>
     </div>
-    <div class="workspace-card material-chat"><h3>Material Director</h3><div id="materialChatLog" role="log" aria-live="polite"><p class="chat-empty">Describe a finish or add a photo to begin. I’ll say what I can build now and what still needs KeyShot’s Material Graph.</p></div></div>
-  </div><div id="materialInspectorHost"></div></div>
+  </div></div>
+  <details class="material-advanced">
+    <summary><span>Advanced</span><span>Inspect or tune exposed KeyShot material values</span></summary>
+    <div id="materialInspectorHost"></div>
+  </details>
   <section class="workspace-card material-texture-import" aria-labelledby="materialTextureTitle">
     <div class="material-assets-heading"><div><h3 id="materialTextureTitle">Import a texture set</h3><p>Use actual channel maps—not reference photos—to build a reusable KeyShot finish.</p></div><span class="scene-tag">Original maps stay local</span></div>
     <div class="texture-import-flow">
@@ -290,7 +298,7 @@ $('styleLibraryHost').appendChild($('styles').closest('.panel'));
 $('referenceVideoHost').appendChild($('vdrop').closest('.panel'));
 const materialPanel = $('materialSelect').closest('.panel');
 $('materialInspectorHost').appendChild(materialPanel);
-materialPanel.querySelector('details').open = true;
+materialPanel.querySelector('.material-inspector-content').insertAdjacentHTML('afterbegin', '<p class="material-advanced-note">For manual value edits. Existing materials remain locked until you explicitly enable changes. Use KeyShot for full Material Graph rewiring.</p>');
 function showWorkspace(name) {
   if (!['studio','references','materials'].includes(name)) name = 'studio';
   for (const key of ['studio','references','materials']) {
@@ -730,7 +738,7 @@ $('referencesWorkspace').addEventListener('paste', e => { const f = [...e.clipbo
 function materialLine(kind, value) { const p = document.createElement('p'); p.className = `material-line ${kind}`; p.textContent = value; $('materialChatLog').querySelector('.chat-empty')?.remove(); $('materialChatLog').appendChild(p); p.scrollIntoView({ block: 'nearest' }); }
 async function sendMaterialPrompt() {
   const text = $('materialPrompt').value.trim(); if ((!text && !materialImages.length) || materialRunning) return;
-  materialRunning = true; $('materialSend').disabled = true; $('materialStop').disabled = false;
+  materialRunning = true; $('materialSend').disabled = true; $('materialStop').disabled = false; $('materialStop').hidden = false;
   const countLabel = materialImages.length ? ` · ${materialImages.length} reference image${materialImages.length === 1 ? '' : 's'}` : '';
   materialLine('user', (text || 'Use these references as the material direction.') + countLabel);
   try {
@@ -747,12 +755,12 @@ async function sendMaterialPrompt() {
     }
     await loadMaterials(); await loadMaterialAssets();
   } catch (err) { materialLine('error', err.message); }
-  finally { materialRunning = false; $('materialSend').disabled = false; $('materialStop').disabled = true; }
+  finally { materialRunning = false; $('materialSend').disabled = false; $('materialStop').disabled = true; $('materialStop').hidden = true; }
 }
 $('materialSend').onclick = sendMaterialPrompt;
 $('materialPrompt').onkeydown = e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMaterialPrompt(); } };
 $('materialStop').onclick = () => api('/api/material/prompt/stop', {}).catch(err => toast(err.message));
-$('materialNewChat').onclick = async () => { await api('/api/material/prompt/reset', {}); $('materialChatLog').innerHTML = '<p class="chat-empty">Start a new material direction. Your previous materials remain in KeyShot.</p>'; materialImages = []; renderMaterialImages(); };
+$('materialNewChat').onclick = async () => { await api('/api/material/prompt/reset', {}); $('materialChatLog').innerHTML = '<p class="chat-empty">Your conversation and build results will appear here. Start with a finish description or add a reference below.</p>'; materialImages = []; renderMaterialImages(); };
 async function addFiles(files) { for (const f of files) { if (!f.type.startsWith('image/')) continue; if (attached.length >= 8) break; try { attached.push(await readImage(f)); } catch { toast('Could not read ' + f.name); } } renderThumbs(); }
 $('attach').onclick = () => $('file').click(); $('file').onchange = e => { addFiles(e.target.files); e.target.value = ''; };
 $('prompt').addEventListener('paste', e => { const f = [...e.clipboardData.files]; if (f.length) { e.preventDefault(); addFiles(f); } });
