@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="980" viewBox="0 0 1440 980" role="img" aria-labelledby="title desc">
+  <title id="title">KeyShot Director current desktop UI reference</title>
+  <desc id="desc">Editable vector approximation of the current KeyShot Director desktop screen: header, live scene, Ask Director conversation, and right inspector.</desc>
+  <style>
+    text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;fill:#1d1d1f} .muted{fill:#65656b}.tiny{font-size:12px}.small{font-size:14px}.body{font-size:16px}.h2{font-size:22px;font-weight:650}.h1{font-size:30px;font-weight:700}.label{font-size:13px;font-weight:600}.line{stroke:#dedee3;stroke-width:1}.surface{fill:#fff;stroke:#dedee3;stroke-width:1}.button{fill:#fff;stroke:#d6d6dc;stroke-width:1}.blue{fill:#0066cc}.blueText{fill:#fff}.pill{fill:#f1f1f4}.stage{fill:#fbfbfc;stroke:#d5d5da;stroke-width:1}.dash{fill:#f8fafd;stroke:#9da8b6;stroke-width:1;stroke-dasharray:6 5}
+  </style>
+  <rect width="1440" height="980" fill="#f5f5f7"/>
+  <rect width="1440" height="64" fill="#fff"/>
+  <line x1="0" y1="63.5" x2="1440" y2="63.5" class="line"/>
+  <circle cx="32" cy="31" r="5" fill="#38a169"/><text x="48" y="37" class="body" font-weight="700">KeyShot Director</text>
+  <rect x="192" y="17" width="132" height="30" rx="15" class="pill"/><text x="207" y="36" class="tiny muted">KeyShot connected</text>
+  <text x="1055" y="36" class="tiny muted">ChatGPT · signed-in Codex CLI</text><rect x="1336" y="14" width="78" height="36" rx="9" class="button"/><text x="1353" y="36" class="small">Settings</text>
+
+  <text x="30" y="111" class="h1">Studio</text><text x="30" y="137" class="body muted">Shape your product in KeyShot, right from here.</text>
+  <rect x="1250" y="92" width="108" height="34" rx="17" class="button"/><text x="1274" y="114" class="tiny">Live scene</text>
+  <rect x="30" y="158" width="900" height="506" rx="18" class="stage"/>
+  <rect x="730" y="173" width="184" height="45" rx="11" class="surface"/><rect x="746" y="188" width="16" height="16" rx="3" class="button"/><text x="772" y="201" class="small">live preview</text><rect x="843" y="181" width="60" height="29" rx="9" class="pill"/><text x="854" y="200" class="tiny">Refresh</text>
+  <g transform="translate(430 205) rotate(13)"><rect x="0" y="0" width="160" height="325" rx="20" fill="#292827"/><rect x="12" y="30" width="136" height="240" rx="8" fill="#141414"/><rect x="26" y="282" width="108" height="30" rx="7" fill="#aba19a"/><g fill="#3b3937"><rect x="32" y="289" width="18" height="9" rx="3"/><rect x="56" y="289" width="18" height="9" rx="3"/><rect x="80" y="289" width="18" height="9" rx="3"/><rect x="104" y="289" width="18" height="9" rx="3"/></g></g>
+  <ellipse cx="515" cy="560" rx="140" ry="26" fill="#d8d8d5" opacity=".65"/><rect x="43" y="620" width="445" height="28" rx="8" fill="#2d2d31"/><text x="55" y="639" class="tiny blueText">drag orbit · right-drag / shift-drag pan · wheel zoom · touch</text>
+  <text x="30" y="711" class="h2">Ask Director</text><text x="158" y="710" class="small muted">Lighting, framing, scene layout, and motion</text>
+  <rect x="30" y="730" width="900" height="58" rx="15" class="surface"/><text x="47" y="765" class="small muted">Your conversation will appear here.</text>
+  <rect x="30" y="788" width="900" height="146" rx="0 0 15 15" class="surface"/><rect x="47" y="806" width="866" height="74" rx="8" fill="#fcfcfd" stroke="#d8d8df"/><text x="62" y="838" class="small muted">Describe a look, ask for a close-up, or arrange your product...</text>
+  <rect x="47" y="893" width="57" height="34" rx="9" class="blue"/><text x="62" y="915" class="small blueText">Send</text><rect x="111" y="893" width="54" height="34" rx="9" class="button"/><text x="125" y="915" class="tiny muted">Stop</text><rect x="172" y="893" width="103" height="34" rx="9" class="button"/><text x="186" y="915" class="tiny">Attach images</text><rect x="282" y="893" width="88" height="34" rx="9" class="button"/><text x="298" y="915" class="tiny">New chat</text>
+
+  <rect x="950" y="88" width="460" height="846" rx="18" class="surface"/>
+  <text x="975" y="127" class="h2">Match a look</text><text x="975" y="151" class="small muted">Bring the lighting and mood of a photo to your own product.</text><rect x="975" y="166" width="135" height="24" rx="12" fill="#edf7f0"/><text x="988" y="182" class="tiny" fill="#427258">Ready for a reference</text>
+  <rect x="975" y="206" width="410" height="92" rx="12" class="dash"/><text x="1110" y="245" class="body" fill="#245c94">Add a reference photo</text><text x="1102" y="268" class="tiny muted">Choose or drop · PNG, JPG, WebP</text>
+  <text x="975" y="330" class="label">What should we borrow?</text><rect x="975" y="342" width="410" height="70" rx="8" fill="#fff" stroke="#d8d8df"/><text x="989" y="370" class="small muted">Soft side light, crisp edge reflections,</text><text x="989" y="392" class="small muted">a warm background...</text>
+  <rect x="976" y="430" width="16" height="16" rx="3" class="button"/><text x="1002" y="443" class="small muted">Match framing too</text><text x="975" y="480" class="small muted">Refinement</text><rect x="1198" y="460" width="187" height="40" rx="9" class="button"/><text x="1212" y="485" class="small">Visual refinement⌄</text>
+  <rect x="975" y="516" width="410" height="38" rx="9" class="blue"/><text x="1120" y="541" class="small blueText" font-weight="600">Match this look</text><rect x="975" y="564" width="200" height="38" rx="9" class="button"/><text x="1030" y="589" class="tiny muted">Stop &amp; restore</text><rect x="1185" y="564" width="200" height="38" rx="9" class="button"/><text x="1256" y="589" class="tiny muted">Undo look</text>
+  <text x="975" y="638" class="tiny muted">Reference and preview images are shared with your selected AI</text><text x="975" y="656" class="tiny muted">provider and saved locally. Your materials stay untouched.</text>
+  <line x1="950" y1="682" x2="1410" y2="682" class="line"/><text x="975" y="721" class="h2" font-size="18">Frame &amp; background</text><text x="975" y="746" class="small muted">Choose what fills the frame. Keep your viewing angle.</text>
+  <rect x="975" y="764" width="118" height="36" rx="9" class="button"/><text x="995" y="787" class="tiny">Full product</text><rect x="1102" y="764" width="126" height="36" rx="9" class="button"/><text x="1118" y="787" class="tiny">Detail close-up</text><rect x="1237" y="764" width="126" height="36" rx="9" class="button"/><text x="1252" y="787" class="tiny">Upper detail</text>
+  <rect x="975" y="815" width="410" height="40" rx="9" class="button"/><text x="990" y="840" class="small">Landscape · 16:9</text><text x="1360" y="840" class="small muted">⌄</text>
+  <line x1="950" y1="874" x2="1410" y2="874" class="line"/><text x="975" y="908" class="body" font-weight="600">Connect KeyShot</text><text x="1360" y="908" class="body muted">⌄</text>
+</svg>
