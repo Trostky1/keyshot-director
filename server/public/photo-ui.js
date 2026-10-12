@@ -24,6 +24,7 @@
   drop.ondragover = e => { e.preventDefault(); drop.classList.add('dragover'); };
   drop.ondragleave = () => drop.classList.remove('dragover');
   drop.ondrop = e => { e.preventDefault(); drop.classList.remove('dragover'); choose(e.dataTransfer.files[0]).catch(e => message(e.message)); };
+  drop.addEventListener('referencepaste', e => choose(e.detail).catch(err => message(err.message)));
   byId('photoMatch').onclick = async () => {
     pending = true; byId('photoMatch').disabled = true;
     try { await request('/api/photo', { image, brief: byId('photoBrief').value, framing: byId('photoFraming').checked, quality: byId('photoQuality').value }); await poll(); }

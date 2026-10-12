@@ -7,7 +7,7 @@ examples, limits and the CLI tool contract.
 
 A photo-first companion app for **KeyShot** that lights and frames *your own product*. Choose a reference photograph and borrow its light direction, softness, reflections and background tone through custom product-scaled lights, actual KeyShot previews and an optional visual refinement. Compare before/after and undo the look without changing product materials. Animation/video matching, preset rigs, plain-language prompts and second-monitor/phone control remain available.
 
-It does not replace KeyShot: materials, the timeline, scene saving and final-resolution rendering stay in KeyShot. Reference matching is photographic inference, not exact scene reconstruction. Physical sets/backplates and material differences are reported as limitations. See [the photo workflow and verification guide](docs/PHOTO_WORKFLOW.md).
+It does not replace KeyShot: final material assignment, the timeline, scene saving and final-resolution rendering stay in KeyShot. Reference matching is photographic inference, not exact scene reconstruction. Physical sets/backplates and material differences are reported as limitations. See [the photo workflow and verification guide](docs/PHOTO_WORKFLOW.md).
 
 > Early access. Verified on KeyShot Studio 2026.2 (EDU) on Windows 11. macOS support is included and needs first-run testing on a Mac; see [macOS setup](#macos-setup-and-first-run). Not affiliated with KeyShot / Luxion.
 
@@ -39,13 +39,23 @@ To stop: close the console script's job by waiting for it to end, or ask the app
 
 If your KeyShot edition does not expose the Scripting window, this integration cannot control that installation. KeyShot's documentation describes scripting as a Pro feature and locates the Scripts tab folders in the Scripting window. A Mac has not yet been used to verify this project end to end; please report the KeyShot version, macOS version and any script-console error when trying it.
 
+## The three workspaces
+
+- **Studio** keeps the live KeyShot viewport, general AI chat, camera, lighting and scene controls. A photo attached to this chat is interpreted with your written instruction; it may be used for a lighting match or another supported task.
+- **References** is the guided visual-matching workspace. Drop or paste one photo into **Match a look** to copy lighting and mood with preview and undo. Create a named style collection by pasting, dropping or choosing up to eight images at a time, then **Analyze** and **Match my rig**. Adding photos to an existing collection makes it ready for re-analysis. Reference video tools live here too. Images are stored locally under `references/<collection>/` and sent to the selected AI provider only for an action that needs them.
+- **Materials** has its own photo-reference drop, description and AI chat. Add up to eight PNG, JPEG or WebP references; the assistant treats them as context, not as a persistent training dataset. Separately, import a real texture set. With KeyShot 2026.2 connected, **Build KeyShot material** creates a new unassigned Plastic graph: Base Color → Diffuse, Roughness → Color To Number → Plastic Roughness, and Normal (or Bump fallback) → Bump. Those connected maps are verified in the live graph and included in the saved `.kmp`; original imported files remain unchanged under `materials/texture-sets/`. Specular, Metallic, AO, Displacement, arbitrary MaterialX nodes, and graph edits on existing materials are not supported by this converter and are reported as skipped. The Material Lab shelf lists the package with **Download KMP** and **Show in folder**. Import the KMP into KeyShot and drag its library material onto the part you choose; Director never assigns it automatically.
+- **Texture sets** are a separate Materials workflow for actual channel files. Choose a folder (or drop its files) containing PNG/JPEG/WebP/TIFF/EXR/HDR maps and optional `.mtlx`; Director copies originals byte-for-byte under `materials/texture-sets/`, recognizes common filename roles and offers **Open this set** or **Build KeyShot material**. A `.mtlx` is parsed for a readable conversion hint only; it is not executed or imported directly as a KeyShot material. Conversion requires the live KeyShot bridge and creates a separate unassigned material.
+
+The dedicated chats use workflow playbooks in `skills/material-lab/SKILL.md` and `skills/reference-video/SKILL.md`. They improve repeatable analysis and explain current KeyShot limits; the bridge and its implemented tools determine what Director can execute. Update a playbook when research or real reference examples show a better repeatable workflow.
+
 ## The page
 | Area | What it does |
 |---|---|
 | **Preview** | Live view of the KeyShot viewport (noisy while the real-time render converges; that's normal). Drag = orbit, right-drag/Shift-drag = pan, wheel = zoom, touch = 1 finger orbit / 2 fingers pan + pinch. |
-| **Reference video** | Drop a product video. The app copies its lighting and camera work onto your product. See *Match a video* below. |
+| **Reference video** | In References, drop a product video. The app copies its lighting and camera work onto your product. See *Match a video* below. |
 | **Prompt box** | Plain-language control. Attach reference images (button, paste, or drag-drop). |
-| **Studio lighting** | Rigs: *Hero soft*, *Dark & moody*, *Glass edge-light*, *Blank studio*, *Warm luxe*. Each is scaled to your product and auto-balanced. Then tune: exposure, per-light brightness / color temperature / angle / size, or drag lights on the top-down diagram. **Studio off** removes everything and restores your original environment. |
+| **Studio lighting** | Rigs: *Hero soft*, *Dark & moody*, *Glass edge-light*, *Blank studio*, *Warm luxe*. Each is scaled to your product and auto-balanced. Tune exposure, per-light brightness / color temperature / angle / size, camera/reflection/shadow visibility, or drag lights on the stage diagram. **Studio off** removes everything and restores your original environment. |
+| **Material lab** | Inspect scene material graphs; explicitly unlock one selected material to adjust its exposed numeric/color values; import source texture sets; build a new unassigned Plastic graph from Base Color, Roughness and Normal/Bump maps; and save a portable `.kmp` package. Existing material graph rewiring and Specular/Metallic/AO/Displacement conversion remain unsupported. |
 | **Styles** | Every folder in `references/` is a style. Put images in it, **Analyze**, then **Match my rig**: the app measures your references and tunes your lighting toward them. |
 | **Camera motion** | Live previews of moves (orbit, push-in, reveal, crane, whip) and a recorder for your own drags. |
 | **Open on phone** | QR code; the phone must be on the same Wi-Fi. |
@@ -55,6 +65,9 @@ If your KeyShot edition does not expose the Scripting window, this integration c
 - **Match still-photo lighting:** choose a reference image, describe the light qualities, preview a lighting plan in the real KeyShot renderer, compare before/after and undo.
 - **Shape a shot:** fit the whole product, create a centered or upper-detail crop, choose landscape/square/portrait framing and tune background/ground settings.
 - **Build and adjust a studio:** apply a lighting rig, tune individual lights, exposure, environment and backdrop.
+- **Control light behavior:** independently choose whether a Director light appears to the camera, in reflections, or in shadows. These toggles do not create KeyShot's native per-part Light Layers. KeyShot's scripting API does not expose native Light Layers, so set those in KeyShot's Light Layers panel.
+- **Tune an existing material:** choose it in Material Lab and select **Enable edits**. This changes the live scene material and every part sharing it; only exposed numeric/boolean/color values can be tuned. Connected maps and graph structure stay read-only on existing materials. Use **Undo edit** for the last value or save a KMP snapshot; save the `.bip` scene in KeyShot to persist live scene changes.
+- **Build a reusable texture material:** import a texture set and select **Build KeyShot material**. Director creates a separate unassigned Plastic material, wires supported Base Color, Roughness and Normal/Bump maps, saves it to KeyShot's Material Library and exports a `.kmp` under `materials/` (private, Git-ignored). The KMP includes connected map files; original imported files remain in the set. The Material Lab shelf provides **Download KMP** and **Show in folder**. Import the KMP in KeyShot and drag its library entry onto the part you choose. Specular, Metallic, AO and Displacement are not connected.
 - **Stage the scene:** move or rotate assemblies, make linked-material copies, add neutral pedestal/floor/backdrop geometry, and undo recent staging. Start with the full [scene-staging guide](docs/SCENE_STAGING.md).
 - **Direct with words:** use signed-in Claude or Codex CLI, an Anthropic API key, or a smaller set of offline commands. The companion calls KeyShot through its scripting bridge.
 - **Make camera moves:** preview recorded and preset moves, or infer a camera path from a reference video and render frames with KeyShot. This does not create native camera keyframes in the KeyShot timeline.
@@ -76,6 +89,7 @@ Type what you want. Examples:
 **Which engine** (Settings -> Engine; *Automatic* tries them in this order):
 - **Claude CLI, no API key**: install Claude Code, sign in once with `claude auth login`, then select it in Settings. On macOS, make sure `claude` is on your shell PATH or set its full path in Settings.
 - **Codex CLI, no API key**: install Codex CLI, sign in once with `codex login`, then select it in Settings. On macOS, make sure `codex` is on your shell PATH or set its full path in Settings.
+- **Codex model choice**: Settings has an optional ChatGPT / Codex model ID. Director passes it to Codex CLI; leave it blank to use your account's default. The selected ID must be available in your installed CLI and account.
 - **Claude API key**: Settings -> paste *your own* Anthropic API key. It is stored only on your computer (`config.local.json`) and sent only to Anthropic. Usage is billed to your key. Do not share `config.local.json`.
 - **Offline mode** (neither): understands basic commands only: a rig name (*hero, moody, glass, white/blank, warm*), *studio off*, *brighter / darker*, *auto expose*, *orbit / push in / reveal / crane / whip*, *match <style folder>*, *look*.
 

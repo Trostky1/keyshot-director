@@ -123,9 +123,13 @@ async function analyzeFolder(name) {
 function listStyles() {
   if (!fs.existsSync(ROOT)) return [];
   return fs.readdirSync(ROOT, { withFileTypes: true }).filter(d => d.isDirectory() && !d.name.startsWith('.')).map(d => {
-    const dir = path.join(ROOT, d.name), n = fs.readdirSync(dir).filter(f => IMG.test(f)).length;
-    let prof = null; try { prof = JSON.parse(fs.readFileSync(path.join(dir, 'style_profile.json'), 'utf8')); } catch { /* none yet */ }
-    return { name: d.name, images: n, analyzed: !!prof, looks: prof ? prof.looks.map(l => ({ id: l.id, count: l.images.length })) : [] };
+    const dir = path.join(ROOT, d.name), imageFiles = fs.readdirSync(dir).filter(f => IMG.test(f)), n = imageFiles.length;
+    let prof = null, fresh = false; try {
+      const profilePath = path.join(dir, 'style_profile.json'); prof = JSON.parse(fs.readFileSync(profilePath, 'utf8'));
+      const profileTime = fs.statSync(profilePath).mtimeMs;
+      fresh = !fs.readdirSync(dir).filter(f => IMG.test(f)).some(f => fs.statSync(path.join(dir, f)).mtimeMs > profileTime);
+    } catch { /* none yet */ }
+    return { name: d.name, images: n, previews: imageFiles.slice(0, 4), analyzed: !!prof && fresh, looks: prof && fresh ? prof.looks.map(l => ({ id: l.id, count: l.images.length })) : [] };
   });
 }
 function loadProfile(name) { return JSON.parse(fs.readFileSync(path.join(ROOT, name, 'style_profile.json'), 'utf8')); }

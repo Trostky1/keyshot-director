@@ -9,6 +9,7 @@ const { poseToEye, eyeToPose, sample, presets } = require('./shots');
 const agent = require('./agent');
 const { execFile } = require('child_process');
 const { resizeJpeg } = require('./image-tools');
+const textureSets = require('./material-textures');
 const { RIGS, ENV_RIGS, buildRig, toPos } = require('./rigs');
 const { decode, productStats } = require('./png');
 const style = require('./style');
@@ -16,6 +17,18 @@ const video = require('./video');
 const janitor = require('./janitor');
 const photo = require('./photo');
 const sleep = ms => new Promise(r => setTimeout(r, ms));
+const MATERIAL_PACKAGE_DIR = path.resolve(__dirname, '..', 'materials');
+
+function listMaterialPackages() {
+  if (!fs.existsSync(MATERIAL_PACKAGE_DIR)) return [];
+  return fs.readdirSync(MATERIAL_PACKAGE_DIR, { withFileTypes: true })
+    .filter(entry => entry.isFile() && entry.name.toLowerCase().endsWith('.kmp'))
+    .map(entry => {
+      const filePath = path.join(MATERIAL_PACKAGE_DIR, entry.name);
+      const stat = fs.statSync(filePath);
+      return { name: entry.name, path: filePath, size: stat.size, modified: stat.mtime.toISOString() };
+    }).sort((a, b) => b.modified.localeCompare(a.modified));
+}
 
 // ---- studio lighting state (what we believe is in KeyShot; the bridge keeps the real registry) ----
 const studio = { rig: null, exposure: 1, frameAz: 0, mirror: false, subject: null, env: null, lights: {}, target: null, envScales: false, lastAuto: null };
@@ -130,7 +143,7 @@ function lightSpec(l) {                       // stage-frame light -> concrete b
   return {
     id: l.id, pos: toPos(s.center, studio.frameAz, l, s.span), target: s.center, size: [l.w * s.span, l.h * s.span],
     power: +(l.E * (l.gain ?? 1) * dist * dist * studio.exposure).toFixed(2),
-    kelvin: l.kelvin, roll: l.roll || 0, visible_refl: l.refl, visible_eye: l.eye,
+    kelvin: l.kelvin, roll: l.roll || 0, visible_refl: l.refl, visible_eye: l.eye, visible_shadows: l.shadows ?? true,
   };
 }
 // Coalesce rapid edits to one light (slider drags): at most one bridge call in flight per light, latest values win.
@@ -140,7 +153,8 @@ function editLight(id, patch) {
   const limits = { az: [-360,360], el: [-85,85], d: [0.2,20], w: [0.01,20], h: [0.01,20], gain: [0,30], kelvin: [1500,12000], roll: [-360,360], E: [0,0.02] };
   for (const [k, v] of Object.entries(patch)) {
     if (limits[k] && (!Number.isFinite(v) || v < limits[k][0] || v > limits[k][1])) return Promise.reject(new Error('Invalid light ' + k));
-    if (!limits[k] && !['refl','eye','role'].includes(k)) return Promise.reject(new Error('Unknown light setting: ' + k));
+    if (!limits[k] && !['refl','eye','shadows','role'].includes(k)) return Promise.reject(new Error('Unknown light setting: ' + k));
+    if (['refl','eye','shadows'].includes(k) && typeof v !== 'boolean') return Promise.reject(new Error('Expected a yes/no light setting: ' + k));
   }
   const job = lightJobs.get(id) || { running: false, dirty: false, patch: {}, waiters: [] };
   lightJobs.set(id, job);
@@ -427,6 +441,7 @@ function lanIPs() {
 
 // ---- actions: what the prompt box (AI or offline) can do. Each returns {summary, ...data}; throwing = tool error. ----------------
 let attachments = [];
+let materialPromptJob = null;
 const run = (file, args) => new Promise((res, rej) => execFile(file, args, { windowsHide: true, maxBuffer: 1 << 26 }, (e, so, se) => e ? rej(new Error(se || e.message)) : res(so)));
 const R2 = n => (typeof n === 'number' ? +n.toFixed(2) : n);
 const camState = () => { const p = cur || base; return p ? { azimuth: R2(p.az), elevation: R2(p.el), distance_mm: R2(p.dist), fov: R2(p.fov) } : null; };
@@ -495,14 +510,66 @@ const actions = {
     const r = await applyRig(name, { mirror: !!mirror, auto: auto_exposure !== false });
     return { summary: `${RIGS[name].label}: ${r.lights.length} lights` + (r.auto ? `, exposure ${r.auto.exposure}` : ''), rig: name, lights: Object.values(studio.lights).map(lightView), exposure: studio.exposure };
   },
-  async set_light({ id, azimuth, elevation, distance, width, height, brightness, kelvin, in_reflections }) {
+  async set_light({ id, azimuth, elevation, distance, width, height, brightness, kelvin, in_reflections, visible_to_camera, in_shadows }) {
     await ensureSubject();
     const p = {}; if (azimuth != null) p.az = azimuth; if (elevation != null) p.el = elevation; if (distance != null) p.d = distance; if (width != null) p.w = width; if (height != null) p.h = height;
     if (brightness != null) p.gain = brightness; if (kelvin != null) p.kelvin = kelvin; if (in_reflections != null) p.refl = in_reflections;
+    if (visible_to_camera != null) p.eye = visible_to_camera; if (in_shadows != null) p.shadows = in_shadows;
     if (!studio.lights[id] && !studio.rig) studio.rig = 'custom';
     const r = await editLight(id, p);
     return { summary: `light ${id} updated`, light: lightView(r.light) };
   },
+  async list_materials() { const r = await send('materials_list', {}, 15000); return { summary: `${r.materials.length} scene and Director materials${r.editable_target ? `; authorized edit target: ${r.editable_target}` : ''}`, ...r }; },
+  async list_texture_sets() {
+    const sets = textureSets.listTextureSets();
+    return { summary: `${sets.length} imported texture set${sets.length === 1 ? '' : 's'}`,
+      sets: sets.map(set => ({ id: set.id, name: set.name, files: set.files.map(file => ({ name: file.name, role: file.role })) })) };
+  },
+  async build_material_from_texture_set({ texture_set_id, name }) {
+    assertSceneAvailable(false);
+    const set = textureSets.listTextureSets().find(item => item.id === String(texture_set_id || ''));
+    if (!set) throw new Error('That texture set is no longer available. Refresh Material Lab and try again.');
+    const fileFor = role => set.files.find(file => file.role === role);
+    const selected = [];
+    for (const role of ['base-color', 'roughness']) {
+      const file = fileFor(role); if (file) selected.push({ role, path: path.join(set.path, file.name), filename: file.name });
+    }
+    const normal = fileFor('normal') || fileFor('bump');
+    if (normal) selected.push({ role: fileFor('normal') ? 'normal' : 'bump', path: path.join(set.path, normal.name), filename: normal.name });
+    if (!selected.length) throw new Error('No supported Base Color, Roughness, Normal or Bump maps were found in this set.');
+    const scene = await send('materials_list', {}, 15000);
+    const existing = new Set(scene.materials || []);
+    const rawBase = String(name || `Director ${set.name}`).trim();
+    let baseName = rawBase.startsWith('Director ') ? rawBase : `Director ${rawBase}`;
+    baseName = baseName.replace(/[<>:"/\\|?*\u0000-\u001f]/g, '-').slice(0, 80).trim();
+    if (baseName.length < 12) throw new Error('Give this material a longer name (12 characters minimum).');
+    let materialName = baseName, suffix = 2;
+    while (existing.has(materialName)) {
+      const ending = ` (${suffix++})`;
+      materialName = baseName.slice(0, 80 - ending.length).trimEnd() + ending;
+    }
+    await send('material_create', { name: materialName }, 20000);
+    let wiring;
+    try {
+      wiring = await send('material_texture_apply', { name: materialName, maps: selected.map(({ role, path: filePath }) => ({ role, path: filePath })) }, 30000);
+    } catch (error) {
+      try { await send('material_discard', { name: materialName }, 15000); } catch { /* preserve the material if KeyShot says it is no longer safe to discard */ }
+      throw new Error(`KeyShot could not build this texture set: ${error.message}`);
+    }
+    const saved = await send('material_save', { name: materialName }, 60000);
+    const usedFiles = selected.map(({ role, filename }) => ({ role, name: filename }));
+    const usedNames = new Set(usedFiles.map(file => file.name));
+    const skipped = set.files.filter(file => !usedNames.has(file.name)).map(file => ({ name: file.name, role: file.role }));
+    const channels = wiring.maps.map(map => map.role).join(', ');
+    return { summary: `${materialName} built as an unassigned Plastic material from ${channels}; saved to the KeyShot library and as a portable KMP.`,
+      name: materialName, path: saved.path, library: saved.library, material: wiring, used_files: usedFiles, skipped_files: skipped,
+      assignment: 'Not applied to any product part. Drag it from KeyShot’s Material Library onto the chosen part.' };
+  },
+  async inspect_material({ name }) { return await send('material_inspect', { name }, 15000); },
+  async create_material({ name }) { const r = await send('material_create', { name }, 15000); return { summary: `${name} created but not applied to the product`, ...r }; },
+  async set_material_value({ name, node_id, parameter, value }) { const r = await send('material_set', { name, node_id, parameter, value }, 15000); return { summary: `${name}: ${parameter} updated`, ...r }; },
+  async undo_material() { const r = await send('material_undo', {}, 15000); return { summary: `${r.parameter} restored`, ...r }; },
+  async save_material({ name }) { const r = await send('material_save', { name }, 30000); return { summary: `Portable material package saved: ${r.path}`, ...r }; },
   async remove_light({ id }) { await send('light_remove', { id }, 30000); delete studio.lights[id]; return { summary: `removed ${id}` }; },
   async set_exposure({ value }) { await ensureSubject(); await setExposure(+value); return { summary: `exposure ${R2(studio.exposure)}x`, exposure: studio.exposure }; },
   async auto_expose() { await ensureSubject(); const a = await autoExpose({}); return { summary: `exposure ${a.exposure}`, ...a }; },
@@ -550,6 +617,12 @@ const body = req => new Promise((res, reject) => {
   req.on('end', () => { if (tooLarge) return reject(Object.assign(new Error('Upload exceeds 16 MB.'), { status: 413 }));
     try { const b = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}'); if (!b || typeof b !== 'object' || Array.isArray(b)) throw new Error(); res(b); }
     catch { reject(Object.assign(new Error('Invalid request JSON.'), { status: 400 })); } });
+});
+const rawBody = (req, limit) => new Promise((resolve, reject) => {
+  const chunks = []; let size = 0, tooLarge = false;
+  req.on('data', chunk => { size += chunk.length; if (size > limit) { tooLarge = true; chunks.length = 0; } else if (!tooLarge) chunks.push(chunk); });
+  req.on('error', reject); req.on('aborted', () => reject(new Error('Upload interrupted.')));
+  req.on('end', () => tooLarge ? reject(Object.assign(new Error('Texture file exceeds the 11 MB per-file limit.'), { status: 413 })) : resolve(Buffer.concat(chunks)));
 });
 const json = (res, code, obj) => { res.writeHead(code, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(obj)); };
 
@@ -643,11 +716,55 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/stop' && req.method === 'POST') { if (playing) playing.cancel = true; return json(res, 200, { ok: true }); }
     // ---- styles (reference folders) ----
     if (url.pathname === '/api/styles' && req.method === 'GET') return json(res, 200, style.listStyles());
+    if (url.pathname === '/api/styles/image' && req.method === 'GET') {
+      const name = url.searchParams.get('name'), file = url.searchParams.get('file');
+      const entry = style.listStyles().find(s => s.name === name);
+      if (!entry || !entry.previews.includes(file)) return json(res, 404, { error: 'Reference image not found.' });
+      const target = path.join(style.ROOT, name, file), ext = path.extname(file).toLowerCase();
+      const mime = { '.jpg':'image/jpeg','.jpeg':'image/jpeg','.png':'image/png','.webp':'image/webp','.gif':'image/gif','.bmp':'image/bmp','.avif':'image/avif' }[ext];
+      if (!mime || !fs.existsSync(target)) return json(res, 404, { error: 'Preview is unavailable for this image type.' });
+      res.writeHead(200, { 'Content-Type': mime, 'Cache-Control': 'private, max-age=60' }); return fs.createReadStream(target).pipe(res);
+    }
+    if (url.pathname === '/api/styles/save' && req.method === 'POST') {
+      const b = await body(req), name = String(b.name || '').trim();
+      if (!/^[a-zA-Z0-9][a-zA-Z0-9 _-]{1,63}$/.test(name) || name.startsWith('_')) return json(res, 400, { error: 'Use 2–64 letters, numbers, spaces, dashes or underscores for the style name.' });
+      if (!Array.isArray(b.images) || !b.images.length || b.images.length > 8) return json(res, 400, { error: 'Add 1–8 images to this style.' });
+      const images = b.images.map((data, i) => {
+        const m = /^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/=]+)$/.exec(data);
+        if (!m) throw Object.assign(new Error(`Image ${i + 1} must be PNG, JPEG or WebP.`), { status: 400 });
+        const bytes = Buffer.from(m[2], 'base64');
+        if (bytes.length > 4 * 1024 * 1024) throw Object.assign(new Error(`Image ${i + 1} is too large; use an image under 4 MB.`), { status: 400 });
+        const valid = m[1] === 'jpeg' ? bytes[0] === 0xff && bytes[1] === 0xd8 : m[1] === 'png' ? bytes.subarray(0, 8).equals(Buffer.from([137,80,78,71,13,10,26,10])) : bytes.toString('ascii', 0, 4) === 'RIFF' && bytes.toString('ascii', 8, 12) === 'WEBP';
+        if (!valid) throw Object.assign(new Error(`Image ${i + 1} is not a valid ${m[1]} file.`), { status: 400 });
+        return { ext: m[1] === 'jpeg' ? 'jpg' : m[1], bytes };
+      });
+      const folder = path.join(style.ROOT, name);
+      fs.mkdirSync(folder, { recursive: true });
+      const stamp = Date.now();
+      images.forEach((item, i) => fs.writeFileSync(path.join(folder, `reference_${stamp}_${i + 1}.${item.ext}`), item.bytes, { flag: 'wx' }));
+      return json(res, 200, { name, added: images.length, total: style.listStyles().find(s => s.name === name)?.images || images.length });
+    }
     if (url.pathname === '/api/styles/analyze' && req.method === 'POST') { const { name } = await body(req); const r = await style.analyzeFolder(name); return json(res, 200, { style: r.style, analyzed: r.analyzed, failed: r.failed, looks: r.looks.map(l => ({ id: l.id, images: l.images.length, profile: l.profile })) }); }
     if (url.pathname === '/api/style/score' && req.method === 'POST') { const { name, settle } = await body(req); return json(res, 200, await scoreLive(name, settle ?? 2500)); }
     // ---- prompt box ----
     if (url.pathname === '/api/config' && req.method === 'GET') return json(res, 200, { ...agent.publicConfig(), ...(await agent.engineStatus()) });
-    if (url.pathname === '/api/config' && req.method === 'POST') { const b = await body(req); const patch = {}; if (typeof b.apiKey === 'string') patch.apiKey = b.apiKey.trim(); if (typeof b.model === 'string' && b.model.trim()) patch.model = b.model.trim(); if (['auto', 'cli', 'codex', 'api', 'offline'].includes(b.engine)) patch.engine = b.engine; if (typeof b.cliPath === 'string') patch.cliPath = b.cliPath.trim(); if (typeof b.codexPath === 'string') patch.codexPath = b.codexPath.trim(); agent.setConfig(patch); await require('./cli').status(patch.cliPath ?? agent.getConfig().cliPath, true); await require('./cli').codexStatus(patch.codexPath ?? agent.getConfig().codexPath, true); return json(res, 200, { ...agent.publicConfig(), ...(await agent.engineStatus()) }); }
+    if (url.pathname === '/api/config' && req.method === 'POST') {
+      const b = await body(req), patch = {};
+      if (typeof b.codexModel === 'string') {
+        const model = b.codexModel.trim();
+        if (model.length > 80 || !/^[a-zA-Z0-9._:-]*$/.test(model)) return json(res, 400, { error: 'Enter a Codex model ID using letters, numbers, dots, underscores, colons or dashes, up to 80 characters. Leave it empty for the account default.' });
+        patch.codexModel = model;
+      }
+      if (typeof b.apiKey === 'string') patch.apiKey = b.apiKey.trim();
+      if (typeof b.model === 'string' && b.model.trim()) patch.model = b.model.trim();
+      if (['auto', 'cli', 'codex', 'api', 'offline'].includes(b.engine)) patch.engine = b.engine;
+      if (typeof b.cliPath === 'string') patch.cliPath = b.cliPath.trim();
+      if (typeof b.codexPath === 'string') patch.codexPath = b.codexPath.trim();
+      agent.setConfig(patch);
+      await require('./cli').status(patch.cliPath ?? agent.getConfig().cliPath, true);
+      await require('./cli').codexStatus(patch.codexPath ?? agent.getConfig().codexPath, true);
+      return json(res, 200, { ...agent.publicConfig(), ...(await agent.engineStatus()) });
+    }
     if (url.pathname === '/api/prompt' && req.method === 'POST') {
       if (promptJob && !promptJob.done) return json(res, 409, { error: 'still working on the last request' });
       const b = await body(req); const job = promptJob = { id: Date.now(), events: [], done: false };
@@ -660,6 +777,29 @@ const server = http.createServer(async (req, res) => {
     }
     if (url.pathname === '/api/prompt/stop' && req.method === 'POST') { if (promptJob && promptJob.abort) promptJob.abort(); photoDirector.stop(); if (playing) playing.cancel = true; return json(res, 200, { ok: true }); }
     if (url.pathname === '/api/prompt/reset' && req.method === 'POST') { agent.history.length = 0; return json(res, 200, { ok: true }); }
+    if (url.pathname === '/api/material/prompt' && req.method === 'POST') {
+      if (materialPromptJob && !materialPromptJob.done) return json(res, 409, { error: 'Material Director is still working.' });
+      const b = await body(req), images = Array.isArray(b.images) ? b.images : [];
+      if (images.length > 8) return json(res, 400, { error: 'A material reference pack can contain up to 8 images.' });
+      let imageBytes = 0;
+      for (const image of images) {
+        const match = typeof image === 'string' && /^data:image\/(png|jpeg|webp);base64,([a-z0-9+/]+=*)$/i.exec(image);
+        if (!match) return json(res, 400, { error: 'Each material reference must be a PNG, JPEG or WebP image.' });
+        const bytes = Buffer.from(match[2], 'base64').length;
+        if (bytes > 4 * 1024 * 1024) return json(res, 413, { error: 'Each material reference must be under 4 MB after resizing.' });
+        imageBytes += bytes;
+      }
+      if (imageBytes > 10 * 1024 * 1024) return json(res, 413, { error: 'The complete material reference pack must be under 10 MB.' });
+      const job = materialPromptJob = { id: Date.now(), events: [], done: false };
+      agent.run(job, { text: String(b.text || ''), images }, actions, 'material').catch(() => {});
+      return json(res, 200, { id: job.id });
+    }
+    if (url.pathname === '/api/material/prompt' && req.method === 'GET') {
+      const since = +(url.searchParams.get('since') || 0), j = materialPromptJob;
+      return json(res, 200, j ? { id: j.id, done: j.done, events: j.events.slice(since), next: j.events.length } : { id: null, done: true, events: [], next: 0 });
+    }
+    if (url.pathname === '/api/material/prompt/stop' && req.method === 'POST') { materialPromptJob?.abort?.(); return json(res, 200, { ok: true }); }
+    if (url.pathname === '/api/material/prompt/reset' && req.method === 'POST') { agent.materialHistory.length = 0; return json(res, 200, { ok: true }); }
     if (url.pathname === '/api/motions' && req.method === 'GET') { if (!base) base = await readPose(); return json(res, 200, Object.entries(presets(cur || base)).map(([id, r]) => ({ id, label: r.label, duration: r.duration }))); }
     if (url.pathname === '/api/style/match' && req.method === 'POST') { const b = await body(req); matchStyle(b.name, b).catch(() => {}); return json(res, 200, { started: true }); }
     if (url.pathname === '/api/style/match' && req.method === 'GET') return json(res, 200, matchJob);
@@ -691,6 +831,49 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/light/remove' && req.method === 'POST') {
       const { id } = await body(req); await send('light_remove', { id }, 30000); delete studio.lights[id]; return json(res, 200, { ok: true });
     }
+    if (url.pathname === '/api/materials' && req.method === 'GET') return json(res, 200, await send('materials_list', {}, 15000));
+    if (url.pathname === '/api/material/assets' && req.method === 'GET') return json(res, 200, { directory: MATERIAL_PACKAGE_DIR, assets: listMaterialPackages() });
+    if (url.pathname === '/api/material/texture-sets' && req.method === 'GET') return json(res, 200, { directory: textureSets.ROOT, sets: textureSets.listTextureSets() });
+    if (url.pathname === '/api/material/texture-sets' && req.method === 'POST') {
+      const b = await body(req), created = textureSets.createTextureSet(b.name);
+      return json(res, 201, created);
+    }
+    if (url.pathname === '/api/material/texture-file' && req.method === 'POST') {
+      const data = await rawBody(req, textureSets.MAX_FILE_BYTES);
+      const file = textureSets.addTextureFile(url.searchParams.get('id'), url.searchParams.get('name'), data);
+      return json(res, 201, file);
+    }
+    if (url.pathname === '/api/material/build-from-texture-set' && req.method === 'POST') {
+      const b = await body(req), result = await actions.build_material_from_texture_set({ texture_set_id: b.texture_set_id, name: b.name });
+      return json(res, 201, result);
+    }
+    if (url.pathname === '/api/material/file' && req.method === 'GET') {
+      const requested = url.searchParams.get('name');
+      const asset = listMaterialPackages().find(item => item.name === requested);
+      if (!asset || !fs.existsSync(asset.path)) return json(res, 404, { error: 'Material package not found. Refresh the asset list and try again.' });
+      res.writeHead(200, { 'Content-Type': 'application/octet-stream', 'Content-Length': asset.size,
+        'Content-Disposition': `attachment; filename="${asset.name.replace(/[\"\\\r\n]/g, '_')}"`, 'Cache-Control': 'no-store' });
+      return fs.createReadStream(asset.path).pipe(res);
+    }
+    if (url.pathname === '/api/material/open-folder' && req.method === 'POST') {
+      const b = await body(req);
+      const target = b.textureSet ? textureSets.listTextureSets().find(set => set.id === b.textureSet)?.path : MATERIAL_PACKAGE_DIR;
+      if (!target || !fs.existsSync(target)) return json(res, 404, { error: 'That material folder could not be found. Refresh the list and try again.' });
+      const opener = process.platform === 'win32' ? ['explorer.exe', target]
+        : process.platform === 'darwin' ? ['open', target]
+          : ['xdg-open', target];
+      execFile(opener[0], [opener[1]], { windowsHide: true }, error => {
+        if (error) console.warn('Could not open the materials folder:', error.message);
+      });
+      return json(res, 200, { opened: true, directory: target });
+    }
+    if (url.pathname === '/api/material/inspect' && req.method === 'POST') return json(res, 200, await send('material_inspect', await body(req), 15000));
+    if (url.pathname === '/api/material/create' && req.method === 'POST') return json(res, 200, await send('material_create', await body(req), 15000));
+    if (url.pathname === '/api/material/edit-target' && req.method === 'POST') return json(res, 200, await send('material_edit_target', await body(req), 15000));
+    if (url.pathname === '/api/material/set' && req.method === 'POST') return json(res, 200, await send('material_set', await body(req), 15000));
+    if (url.pathname === '/api/material/undo' && req.method === 'POST') return json(res, 200, await send('material_undo', {}, 15000));
+    if (url.pathname === '/api/material/save' && req.method === 'POST') return json(res, 200, await send('material_save', await body(req), 30000));
+    if (url.pathname === '/api/material/discard' && req.method === 'POST') return json(res, 200, await send('material_discard', await body(req), 15000));
     if (url.pathname === '/api/exposure' && req.method === 'POST') {
       const { value } = await body(req); await ensureSubject(); await setExposure(+value);
       return json(res, 200, { exposure: studio.exposure });
@@ -733,7 +916,7 @@ server.listen(PORT, '0.0.0.0', () => {
   if (process.env.KD_OPEN && process.platform === 'darwin') execFile('open', [`http://localhost:${PORT}`], () => {});
   for (const ip of lanIPs()) console.log(`  phone / other PC: http://${ip}:${PORT}`);
 });
-const tidyOpts = { send, cameras: false, alive: () => heartbeat().alive, busy: () => !!(photoDirector.status().running || playing || matchJob.running || videoJob.running || renderJob.running || (promptJob && !promptJob.done) || shotBusy) };
+const tidyOpts = { send, cameras: false, alive: () => heartbeat().alive, busy: () => !!(photoDirector.status().running || playing || matchJob.running || videoJob.running || renderJob.running || (promptJob && !promptJob.done) || (materialPromptJob && !materialPromptJob.done) || shotBusy) };
 let tidyTimer = null;
 function tidyLater() { clearTimeout(tidyTimer); tidyTimer = setTimeout(() => janitor.run(tidyOpts, 'job').catch(() => {}), 5000); }
 janitor.start(tidyOpts);

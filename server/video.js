@@ -12,6 +12,7 @@ const { decode } = require('./png');
 const style = require('./style');
 const agent = require('./agent');
 const cli = require('./cli');
+const VIDEO_SKILL = (() => { try { return fs.readFileSync(path.join(__dirname, '..', 'skills', 'reference-video', 'SKILL.md'), 'utf8'); } catch { return ''; } })();
 
 const RIGS = ['hero_soft', 'dark_moody', 'glass_edge', 'blank_studio', 'warm_luxe'];
 const med = a => { const s = [...a].sort((x, y) => x - y); return s.length ? s[Math.floor(s.length / 2)] : 0; };
@@ -74,7 +75,7 @@ async function askClaude(frames, ms, duration, signal) {
       });
       const prompt = 'Look at EVERY one of these frame images (read each file, or use the attached images), then answer.\n\n' + lines.join('\n') + '\n\nThe clip is ' + duration.toFixed(2) + ' seconds long, aspect ratio ' + ms[0].aspect + '. Return the JSON object only.';
       const imgs = fs.readdirSync(dir).filter(f => /[.]png$/.test(f)).map(f => path.join(dir, f));
-      return cli.extractJson(await cli.ask({ provider: eng.provider, bin: eng.bin, system: PLAN_SYSTEM, prompt, dir, images: imgs, model: eng.provider === 'codex' ? cfg.codexModel : cfg.cliModel, signal }));
+      return cli.extractJson(await cli.ask({ provider: eng.provider, bin: eng.bin, system: PLAN_SYSTEM + '\n\nWORKFLOW PLAYBOOK\n' + VIDEO_SKILL, prompt, dir, images: imgs, model: eng.provider === 'codex' ? cfg.codexModel : cfg.cliModel, signal }));
     } finally { cli.rmDir(dir); }
   }
   const key = cfg.apiKey || process.env.ANTHROPIC_API_KEY; if (eng.engine !== 'api' || !key) return null;
@@ -87,7 +88,7 @@ async function askClaude(frames, ms, duration, signal) {
   content.push({ type: 'text', text: `The clip is ${duration.toFixed(2)} seconds long, aspect ratio ${ms[0].aspect}. Return the JSON.` });
   const r = await fetch(base + '/v1/messages', {
     method: 'POST', signal, headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-    body: JSON.stringify({ model: cfg.model || 'claude-sonnet-5-5', max_tokens: 2000, system: PLAN_SYSTEM, messages: [{ role: 'user', content }] }),
+    body: JSON.stringify({ model: cfg.model || 'claude-sonnet-5-5', max_tokens: 2000, system: PLAN_SYSTEM + '\n\nWORKFLOW PLAYBOOK\n' + VIDEO_SKILL, messages: [{ role: 'user', content }] }),
   });
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(r.status === 401 ? 'The API key was rejected - check it in Settings.' : (j.error && j.error.message) || ('API error ' + r.status));

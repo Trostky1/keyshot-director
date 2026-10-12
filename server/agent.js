@@ -8,9 +8,10 @@ const path = require('path');
 const cli = require('./cli');
 
 const CONFIG = path.join(__dirname, '..', 'config.local.json');
+const readSkill = name => { try { return fs.readFileSync(path.join(__dirname, '..', 'skills', name, 'SKILL.md'), 'utf8'); } catch { return ''; } };
 const getConfig = () => { try { return JSON.parse(fs.readFileSync(CONFIG, 'utf8')); } catch { return {}; } };
 const setConfig = patch => { const c = { ...getConfig(), ...patch }; fs.writeFileSync(CONFIG, JSON.stringify(c, null, 2)); return c; };
-const publicConfig = () => { const c = getConfig(); return { hasKey: !!(c.apiKey || process.env.ANTHROPIC_API_KEY), model: c.model || 'claude-sonnet-5-5', engine: c.engine || 'auto', cliPath: c.cliPath || '', codexPath: c.codexPath || '' }; };
+const publicConfig = () => { const c = getConfig(); return { hasKey: !!(c.apiKey || process.env.ANTHROPIC_API_KEY), model: c.model || 'claude-sonnet-5-5', codexModel: c.codexModel || '', engine: c.engine || 'auto', cliPath: c.cliPath || '', codexPath: c.codexPath || '' }; };
 // Which engine answers (engine setting: auto | cli (Claude) | codex (ChatGPT) | api | offline). Automatic tries, in order:
 // a signed-in Claude CLI, a signed-in Codex (ChatGPT) CLI, an API key, then offline.
 async function pickEngine(cfg = getConfig()) {
@@ -50,7 +51,11 @@ How to work
 - create_set_piece imports neutral diffuse box geometry. size is [width,height,depth]; position is its center, not bottom. A pedestal is a box. A floor is a wide thin box, a backdrop a wide tall thin box; choose dimensions from product bounds. To support a product whose bottom is bounds[0][1], set pedestal center Y = bottomY - height/2. These are physical shadow/reflection geometry, NOT a generated image, HDRI, curved sweep or complex prop. Set-piece material editing is not yet supported; use KeyShot for colors/gloss/materials. Never claim an unsupported curved backdrop was created.
 - Each successful geometry operation has a native-transform staging undo (last 20 operations, current KeyShot session). undo_staging reverses ONE geometry operation; repeat only when user asks to revert multiple. It removes only geometry recorded as created by staging, and never original user geometry. Photo undo and studio_off do NOT undo staging. Do not save the scene. If a tool fails, inspect state, report accurately, and do not repeatedly retry a destructive operation.
 - Camera: set_camera for a still angle; play_motion for a move (orbit, push-in, reveal, crane, whip). These preview live in the viewport. To turn a move into a video, or to copy the lighting and camera work of a reference VIDEO, point the user at the "Reference video" panel (drop a clip, then Play move / Render video); you cannot do that from here.
-- KeyShot already has its own materials, environments, cameras, timeline and render dialog. Do not try to replace those; tell the user to use KeyShot for them. Never save the scene or render unless asked.
+- Material Lab can inspect existing scene material graphs. Director-created materials are editable. An existing scene material is editable only after the user explicitly enables editing for that exact material in the Material Inspector; list_materials reports the authorized target. Never edit another material or change graph structure on an existing scene material. You may adjust only concrete numeric, boolean or RGB(A) parameters surfaced by inspect_material. Existing-material edits are live and may affect every part sharing that material; use undo_material if a value is wrong.
+- For actual imported PBR texture sets, call list_texture_sets, select the intended set, then build_material_from_texture_set. This creates a NEW unassigned Plastic graph and saves it to the KeyShot library plus a portable KMP; it never applies the material to geometry. Verified KeyShot 2026.2 channels: Base Color→Diffuse, Roughness→Color To Number→Plastic Roughness, and Normal (or Bump fallback)→Bump. Report which files were used and which were skipped. Specular, Metallic, AO and displacement are not connected by this converter; do not imply they were. The KMP packages the connected image files. The original imported files are preserved unchanged.
+- For photo-inspired materials without an imported map set, create an unassigned material and tune only exposed values. Image references do not disclose a unique shader or map. New Director materials are unassigned; the user drags them onto parts in KeyShot.
+- Director light controls can toggle visibility to camera, in reflections, and in shadows without hiding the light node. These are not KeyShot's native Light Layers, which isolate lighting per part and currently have no bridge API. For native Light Layers direct the user to KeyShot's panel; do not claim Director applied one.
+- KeyShot already has its own environment, cameras, timeline and render dialog. Never save the scene or render unless asked.
 - Be concise. Say what you changed in one or two plain sentences. If a request is ambiguous in a way that changes the result a lot, ask one short question; otherwise pick a sensible default and say which.
 - Lights are named CC_L_* and studio_off removes app lights/restores the original environment. Staging geometry is separately named CC_S_* and has undo_staging. Mention the appropriate restore action when adding objects.
 
@@ -68,7 +73,15 @@ const TOOLS = [
   { name: 'get_state', description: 'Current rig, lights, exposure, camera pose, product size, and the style folders available.', input_schema: { type: 'object', properties: {} } },
   { name: 'look', description: 'Take a picture of the live KeyShot viewport (it is noisy while the real-time render converges; judge tone and light, not noise) plus brightness stats of the product.', input_schema: { type: 'object', properties: {} } },
   { name: 'apply_rig', description: 'Replace any previous AI lights with a ready-made studio rig scaled to the product, and auto-balance its exposure.', input_schema: { type: 'object', properties: { name: { type: 'string', enum: ['hero_soft', 'dark_moody', 'glass_edge', 'blank_studio', 'warm_luxe'] }, mirror: { type: 'boolean', description: 'flip left/right' }, auto_exposure: { type: 'boolean', description: 'default true' } }, required: ['name'] } },
-  { name: 'set_light', description: 'Create or adjust one light (rectangular softbox/strip). Omitted fields keep their value.', input_schema: { type: 'object', properties: { id: { type: 'string' }, azimuth: { type: 'number', description: 'degrees, 0 = from camera side, negative = camera-left' }, elevation: { type: 'number', description: 'degrees above level' }, distance: { type: 'number', description: 'multiples of product size, 1.2-6' }, width: { type: 'number', description: 'multiples of product size' }, height: { type: 'number' }, brightness: { type: 'number', description: 'multiplier, 1 = rig default' }, kelvin: { type: 'number', description: '2000 warm - 9000 cool' }, in_reflections: { type: 'boolean' } }, required: ['id'] } },
+  { name: 'set_light', description: 'Create or adjust one light (rectangular softbox/strip). Omitted fields keep their value. Camera/reflection/shadow visibility do not disable illumination or create native Light Layers.', input_schema: { type: 'object', properties: { id: { type: 'string' }, azimuth: { type: 'number', description: 'degrees, 0 = from camera side, negative = camera-left' }, elevation: { type: 'number', description: 'degrees above level' }, distance: { type: 'number', description: 'multiples of product size, 1.2-6' }, width: { type: 'number', description: 'multiples of product size' }, height: { type: 'number' }, brightness: { type: 'number', description: 'multiplier, 1 = rig default' }, kelvin: { type: 'number', description: '2000 warm - 9000 cool' }, in_reflections: { type: 'boolean' }, visible_to_camera: { type: 'boolean' }, in_shadows: { type: 'boolean' } }, required: ['id'] } },
+  { name: 'list_materials', description: 'List names of materials in the live scene and materials created in Material Lab.', input_schema: { type: 'object', properties: {} } },
+  { name: 'list_texture_sets', description: 'List imported texture sets and filename-based channel hints. Use this before building a KeyShot material from imported map files.', input_schema: { type: 'object', properties: {} } },
+  { name: 'build_material_from_texture_set', description: 'Build a NEW unassigned Plastic material from an imported texture set and save it to KeyShot’s Material Library plus a portable KMP. Uses Base Color→Diffuse, Roughness→Color To Number→Plastic Roughness, and Normal/Bump→Bump. Never modifies or assigns an existing product material. Ask which set only if ambiguous.', input_schema: { type: 'object', properties: { texture_set_id: { type: 'string' }, name: { type: 'string', description: 'Optional descriptive material name' } }, required: ['texture_set_id'] } },
+  { name: 'inspect_material', description: 'Read a scene material graph, node IDs, parameter names and concrete values. Use immediately before any authorized value edit.', input_schema: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] } },
+  { name: 'create_material', description: 'Create a new unassigned diffuse material. Name MUST begin with Director . Does not alter the product.', input_schema: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] } },
+  { name: 'set_material_value', description: 'Set a finite numeric, boolean or color-array parameter on a Director material or the one existing scene material explicitly unlocked by the user. Verify the exact name, node and parameter first. Does not connect texture nodes.', input_schema: { type: 'object', properties: { name: { type: 'string' }, node_id: { type: 'integer' }, parameter: { type: 'string' }, value: { anyOf: [{ type: 'number' }, { type: 'boolean' }, { type: 'array', items: { type: 'number' } }] } }, required: ['name', 'node_id', 'parameter', 'value'] } },
+  { name: 'undo_material', description: 'Undo the last Director material value edit in this KeyShot bridge session.', input_schema: { type: 'object', properties: {} } },
+  { name: 'save_material', description: 'Save a Director-created or explicitly unlocked scene material to KeyShot’s material library and export its portable KMP package to the local materials folder.', input_schema: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] } },
   { name: 'remove_light', description: 'Remove one light.', input_schema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] } },
   { name: 'set_exposure', description: 'Scale all lights (and the environment on white rigs). 1 = rig default, 2 = one stop brighter.', input_schema: { type: 'object', properties: { value: { type: 'number' } }, required: ['value'] } },
   { name: 'auto_expose', description: 'Measure the viewport and adjust exposure to the rig\'s target brightness.', input_schema: { type: 'object', properties: {} } },
@@ -81,13 +94,13 @@ const TOOLS = [
 ];
 
 // ------------------------------------------------------------------------------------------------------------------------
-async function callClaude(cfg, messages, signal) {
+async function callClaude(cfg, messages, signal, system = SYSTEM, tools = TOOLS) {
   const key = cfg.apiKey || process.env.ANTHROPIC_API_KEY;
   const base = (cfg.baseUrl || process.env.ANTHROPIC_BASE_URL || 'https://api.anthropic.com').replace(/\/+$/, '');   // override only for proxies / tests
   const r = await fetch(base + '/v1/messages', {
     method: 'POST', signal,
     headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-    body: JSON.stringify({ model: cfg.model || 'claude-sonnet-5-5', max_tokens: 2048, system: SYSTEM, tools: TOOLS, messages }),
+    body: JSON.stringify({ model: cfg.model || 'claude-sonnet-5-5', max_tokens: 2048, system, tools, messages }),
   });
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(r.status === 401 ? 'The API key was rejected - check it in Settings.' : (j.error && j.error.message) || ('API error ' + r.status));
@@ -121,14 +134,15 @@ function renderForCli(messages, dir) {
   }
   return lines.join('\n\n');
 }
-async function callCli(cfg, eng, messages, signal) {
+async function callCli(cfg, eng, messages, signal, system = SYSTEM, tools = TOOLS) {
   const dir = cli.tmpDir('chat');
   try {
     const prompt = renderForCli(messages, dir) + '\n\nYOUR TURN. Reply with the JSON object only.';
     const images = fs.readdirSync(dir).filter(f => /^img_[0-9]+[.](png|jpg)$/.test(f)).map(f => path.join(dir, f));
-    const text = await cli.ask({ provider: eng.provider, bin: eng.bin, system: SYSTEM + CLI_PROTOCOL, prompt, dir, images, model: eng.provider === 'codex' ? cfg.codexModel : cfg.cliModel, signal });
+    const protocol = CLI_PROTOCOL.slice(0, CLI_PROTOCOL.indexOf('Tools you may call:')) + 'Tools you may call:\n' + tools.map(t => '- ' + t.name + ' ' + JSON.stringify(t.input_schema.properties || {}) + ' : ' + t.description).join('\n');
+    const text = await cli.ask({ provider: eng.provider, bin: eng.bin, system: system + protocol, prompt, dir, images, model: eng.provider === 'codex' ? cfg.codexModel : cfg.cliModel, signal });
     let o; try { o = cli.extractJson(text); } catch { o = { say: text.trim(), calls: [] }; }      // plain prose = just talking
-    const calls = (Array.isArray(o.calls) ? o.calls : []).filter(c => c && TOOLS.some(t => t.name === c.name));
+    const calls = (Array.isArray(o.calls) ? o.calls : []).filter(c => c && tools.some(t => t.name === c.name));
     const content = [...(o.say && String(o.say).trim() ? [{ type: 'text', text: String(o.say).trim() }] : []), ...calls.map((c, i) => ({ type: 'tool_use', id: 'cli' + Date.now() + '_' + i, name: c.name, input: c.input || {} }))];
     return { stop_reason: calls.length ? 'tool_use' : 'end_turn', content };
   } finally { cli.rmDir(dir); }
@@ -158,34 +172,41 @@ function offlineModel(text) {
 const history = [];                                   // conversation memory (server session)
 // A conversation window must start at a plain user message: a tool_result with no tool_use before it is rejected by the API.
 const isPlainUser = m => m.role === 'user' && (typeof m.content === 'string' || !m.content.some(b => b.type === 'tool_result'));
-function trimHistory() {
-  while (history.length > 24) history.shift();
-  while (history.length && !isPlainUser(history[0])) history.shift();
+function trimHistory(memory = history) {
+  while (memory.length > 24) memory.shift();
+  while (memory.length && !isPlainUser(memory[0])) memory.shift();
   // drop images from older turns to keep requests small
-  history.forEach((m, i) => { if (i < history.length - 2 && Array.isArray(m.content)) m.content = m.content.map(b => b.type === 'image' ? { type: 'text', text: '[earlier image omitted]' } : (b.type === 'tool_result' && Array.isArray(b.content) ? { ...b, content: b.content.map(c => c.type === 'image' ? { type: 'text', text: '[earlier image omitted]' } : c) } : b)); });
+  memory.forEach((m, i) => { if (i < memory.length - 2 && Array.isArray(m.content)) m.content = m.content.map(b => b.type === 'image' ? { type: 'text', text: '[earlier image omitted]' } : (b.type === 'tool_result' && Array.isArray(b.content) ? { ...b, content: b.content.map(c => c.type === 'image' ? { type: 'text', text: '[earlier image omitted]' } : c) } : b)); });
 }
 
-async function run(job, { text, images = [] }, actions) {
+const materialHistory = [];
+const MATERIAL_TOOLS = TOOLS.filter(t => ['list_materials', 'list_texture_sets', 'build_material_from_texture_set', 'inspect_material', 'create_material', 'set_material_value', 'undo_material', 'save_material'].includes(t.name));
+const MATERIAL_SYSTEM = `You are the specialist in KeyShot Director's Material Lab. For imported texture assets, call list_texture_sets and build_material_from_texture_set; ask which set only if there is a real ambiguity. The verified converter builds a NEW unassigned Plastic material with Base Color→Diffuse, Roughness→Color To Number→Plastic Roughness, and Normal (or Bump fallback)→Bump. It saves to the KeyShot library and a portable KMP. Specular, Metallic, AO and displacement are skipped; say so. Never apply this material to product parts automatically. The user chooses parts in KeyShot. The KMP includes the image maps, while imported originals remain unchanged.\n\nFor photo-only material requests, discuss visible cues as approximate, create an unassigned starter only when asked, and use only supported material tools. Existing scene graphs are inspection-only unless the user explicitly enabled edits for that exact material; then change only concrete numeric, boolean or color values surfaced by inspect_material. Such edits are live and may affect all parts sharing the material; use undo_material when needed. Never modify existing graph structure or claim a photo reveals exact shader data. Save requested new materials or authorized edits and report the exact path. Keep responses concise.\n\nWORKFLOW PLAYBOOK\n${readSkill('material-lab')}`;
+async function run(job, { text, images = [] }, actions, scope = 'studio') {
   const ev = (type, data) => job.events.push({ type, ...data, t: Date.now() });
   const cfg = getConfig();
+  const memory = scope === 'material' ? materialHistory : history;
+  const system = scope === 'material' ? MATERIAL_SYSTEM : SYSTEM;
+  const tools = scope === 'material' ? MATERIAL_TOOLS : TOOLS;
   try {
     const eng = await pickEngine(cfg); const useClaude = eng.engine !== 'offline';
     ev('mode', { mode: eng.engine === 'cli' ? (eng.provider === 'codex' ? 'ChatGPT (Codex CLI)' : 'claude (signed-in CLI)') : eng.engine === 'api' ? 'claude' : 'offline', model: eng.engine === 'api' ? (cfg.model || 'claude-sonnet-5-5') : null });
     if (eng.why) ev('text', { text: eng.why + ' Using offline mode for now.' });
-    actions.setAttachments(images);
+    if (scope === 'studio') actions.setAttachments(images);
     const content = [...images.map(d => { const m = /^data:(image\/[a-z+.-]+);base64,(.+)$/i.exec(d); return m ? { type: 'image', source: { type: 'base64', media_type: m[1], data: m[2] } } : null; }).filter(Boolean), { type: 'text', text: text || '' }];
-    history.push({ role: 'user', content: useClaude ? content : text });
+    memory.push({ role: 'user', content: useClaude ? content : text });
     const ctl = new AbortController(); job.abort = () => ctl.abort();
     for (let turn = 0; turn < 14; turn++) {
       ctl.signal.throwIfAborted();
       let resp;
-      if (eng.engine === 'cli') resp = await callCli(cfg, eng, history, ctl.signal);
-      else if (useClaude) resp = await callClaude(cfg, history, ctl.signal);
+      if (eng.engine === 'cli') resp = await callCli(cfg, eng, memory, ctl.signal, system, tools);
+      else if (useClaude) resp = await callClaude(cfg, memory, ctl.signal, system, tools);
       else {
         if (turn > 0) break;                                    // offline: one pass of calls, then stop
-        const o = offlineModel(text); resp = { stop_reason: o.calls.length ? 'tool_use' : 'end_turn', content: [...(o.text ? [{ type: 'text', text: o.text }] : []), ...o.calls.map((c, i) => ({ type: 'tool_use', id: 'off' + i, name: c.name, input: c.input }))] };
+        const o = scope === 'material' ? { text: 'Material photo interpretation needs a signed-in Codex/Claude CLI or API engine. You can still create and tune a material manually below.', calls: [] } : offlineModel(text);
+        resp = { stop_reason: o.calls.length ? 'tool_use' : 'end_turn', content: [...(o.text ? [{ type: 'text', text: o.text }] : []), ...o.calls.map((c, i) => ({ type: 'tool_use', id: 'off' + i, name: c.name, input: c.input }))] };
       }
-      history.push({ role: 'assistant', content: resp.content });
+      memory.push({ role: 'assistant', content: resp.content });
       for (const b of resp.content) if (b.type === 'text' && b.text.trim()) ev('text', { text: b.text.trim() });
       const uses = resp.content.filter(b => b.type === 'tool_use');
       if (resp.stop_reason !== 'tool_use' || !uses.length) break;
@@ -194,7 +215,7 @@ async function run(job, { text, images = [] }, actions) {
         ctl.signal.throwIfAborted();
         ev('tool', { name: u.name, input: u.input });
         let out;
-        try { out = await actions[u.name](u.input || {}); } catch (e) { out = { error: e.message }; }
+        try { if (!tools.some(t => t.name === u.name)) throw new Error('This tool is unavailable in this workspace'); out = await actions[u.name](u.input || {}); } catch (e) { out = { error: e.message }; }
         const isErr = out && out.error; if (isErr) anyFail = true;
         ev('result', { name: u.name, ok: !isErr, summary: isErr ? out.error : (out && out.summary) || 'done', ...(out && out.imageDataUrl ? { image: out.imageDataUrl } : {}) });
         const block = [];
@@ -203,12 +224,12 @@ async function run(job, { text, images = [] }, actions) {
         block.push({ type: 'text', text: JSON.stringify(rest).slice(0, 6000) });
         results.push({ type: 'tool_result', tool_use_id: u.id, content: block, ...(isErr ? { is_error: true } : {}) });
       }
-      history.push({ role: 'user', content: useClaude ? results : [{ type: 'text', text: 'tool results ' + JSON.stringify(results.map(r => r.content[r.content.length - 1].text)).slice(0, 2000) }] });
+      memory.push({ role: 'user', content: useClaude ? results : [{ type: 'text', text: 'tool results ' + JSON.stringify(results.map(r => r.content[r.content.length - 1].text)).slice(0, 2000) }] });
       if (!useClaude) { ev('text', { text: anyFail ? "That didn't work (see the line above)." : 'Done.' }); break; }
       if (turn === 13) ev('text', { text: '(stopped after 14 steps)' });
     }
   } catch (e) { ev('error', { message: e.name === 'AbortError' ? 'Stopped.' : e.message }); }
-  finally { trimHistory(); job.done = true; ev('done', {}); }
+  finally { trimHistory(memory); job.done = true; ev('done', {}); }
 }
 
-module.exports = { run, getConfig, setConfig, publicConfig, engineStatus, pickEngine, TOOLS, SYSTEM, history };
+module.exports = { run, getConfig, setConfig, publicConfig, engineStatus, pickEngine, TOOLS, SYSTEM, history, materialHistory };
