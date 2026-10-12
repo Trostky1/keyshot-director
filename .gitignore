@@ -16,7 +16,8 @@ bridge/cc_pump_test.py
 # your own images and output (never published)
 references/*/
 renders/
-materials/
+/materials/*
+!/materials/README.md
 docs/review/
 .impeccable/review/
 dist/

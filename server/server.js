@@ -18,6 +18,7 @@ const janitor = require('./janitor');
 const photo = require('./photo');
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const MATERIAL_PACKAGE_DIR = path.resolve(__dirname, '..', 'materials');
+fs.mkdirSync(MATERIAL_PACKAGE_DIR, { recursive: true });
 
 function listMaterialPackages() {
   if (!fs.existsSync(MATERIAL_PACKAGE_DIR)) return [];
@@ -520,23 +521,39 @@ const actions = {
     return { summary: `light ${id} updated`, light: lightView(r.light) };
   },
   async list_materials() { const r = await send('materials_list', {}, 15000); return { summary: `${r.materials.length} scene and Director materials${r.editable_target ? `; authorized edit target: ${r.editable_target}` : ''}`, ...r }; },
+  async list_library_materials({ query = '' } = {}) {
+    const r = await send('material_library_list', { query: String(query).slice(0, 100) }, 60000);
+    return { summary: `${r.materials.length} KeyShot library materials${r.query ? ` matching “${r.query}”` : ''}`, ...r };
+  },
+  async copy_library_material({ name }) {
+    assertSceneAvailable(false);
+    const r = await send('material_library_copy', { name: String(name || '') }, 30000);
+    return { summary: `Copied “${r.source}” as “${r.name}” and applied the separate copy to ${r.objects.length} selected part${r.objects.length === 1 ? '' : 's'}. Describe the variation in Material Director; the library original is unchanged.`, ...r };
+  },
   async list_texture_sets() {
     const sets = textureSets.listTextureSets();
     return { summary: `${sets.length} imported texture set${sets.length === 1 ? '' : 's'}`,
       sets: sets.map(set => ({ id: set.id, name: set.name, files: set.files.map(file => ({ name: file.name, role: file.role })) })) };
   },
-  async build_material_from_texture_set({ texture_set_id, name }) {
+  async build_material_from_texture_set({ texture_set_id, name, surface_type = 'auto', projection = 'box' }) {
     assertSceneAvailable(false);
     const set = textureSets.listTextureSets().find(item => item.id === String(texture_set_id || ''));
     if (!set) throw new Error('That texture set is no longer available. Refresh Material Lab and try again.');
+    if (!['auto', 'plastic', 'metal', 'mixed'].includes(surface_type)) throw new Error('Choose Auto, Plastic/Fabric, Metal, or Mixed metal + plastic.');
+    if (!['planar', 'box', 'cylinder', 'sphere', 'uv', 'camera'].includes(projection)) throw new Error('Choose a supported texture projection.');
+    const selection = await send('material_selection', {}, 15000);
+    if (!selection.objects?.length) throw new Error('Select the target part in KeyShot first. The new material will be applied to the current selection.');
     const fileFor = role => set.files.find(file => file.role === role);
     const selected = [];
-    for (const role of ['base-color', 'roughness']) {
+    for (const role of ['base-color', 'roughness', 'specular', 'metallic', 'displacement']) {
       const file = fileFor(role); if (file) selected.push({ role, path: path.join(set.path, file.name), filename: file.name });
     }
     const normal = fileFor('normal') || fileFor('bump');
     if (normal) selected.push({ role: fileFor('normal') ? 'normal' : 'bump', path: path.join(set.path, normal.name), filename: normal.name });
-    if (!selected.length) throw new Error('No supported Base Color, Roughness, Normal or Bump maps were found in this set.');
+    if (!fileFor('roughness') && fileFor('glossiness')) {
+      const file = fileFor('glossiness'); selected.push({ role: 'glossiness', path: path.join(set.path, file.name), filename: file.name });
+    }
+    if (!selected.length) throw new Error('No supported Base Color, Roughness/Glossiness, Normal/Bump, Specular, Metalness or Displacement maps were found in this set.');
     const scene = await send('materials_list', {}, 15000);
     const existing = new Set(scene.materials || []);
     const rawBase = String(name || `Director ${set.name}`).trim();
@@ -550,20 +567,44 @@ const actions = {
     }
     await send('material_create', { name: materialName }, 20000);
     let wiring;
+    // Poliigon's common product-surface maps use a 30 cm tile; zero-scale
+    // displacement maps remain excluded from the geometry graph.
+    const mappingSizeM = 0.3;
+    const normalizedSetName = set.name.replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase().replace(/[^a-z0-9]+/g, ' ');
+    const mixedMetalName = /\b(rust|rusted|oxidized|oxidised|corrosion|corroded|patina)\b/.test(normalizedSetName) || /spottydiscoloration/i.test(set.name);
+    const metalName = /\b(metal|steel|aluminum|aluminium|copper|brass|iron|chrome)\b/.test(normalizedSetName);
+    const metalMode = surface_type === 'auto' ? (mixedMetalName ? 'mixed' : metalName ? 'metal' : 'plastic') : surface_type;
+    const sourceDisplacementScale = Number(set.materialx?.values?.displacementScale);
+    const displacementHeightM = Number.isFinite(sourceDisplacementScale) && sourceDisplacementScale > 0
+      ? Math.min(mappingSizeM * sourceDisplacementScale, 0.005) : 0;
     try {
-      wiring = await send('material_texture_apply', { name: materialName, maps: selected.map(({ role, path: filePath }) => ({ role, path: filePath })) }, 30000);
+      wiring = await send('material_texture_apply', { name: materialName,
+        mapping_size_m: mappingSizeM, displacement_height_m: displacementHeightM,
+        metal_mode: metalMode, projection,
+        maps: selected.map(({ role, path: filePath }) => ({ role, path: filePath })) }, 30000);
     } catch (error) {
       try { await send('material_discard', { name: materialName }, 15000); } catch { /* preserve the material if KeyShot says it is no longer safe to discard */ }
       throw new Error(`KeyShot could not build this texture set: ${error.message}`);
     }
-    const saved = await send('material_save', { name: materialName }, 60000);
-    const usedFiles = selected.map(({ role, filename }) => ({ role, name: filename }));
+    let saved;
+    try { saved = await send('material_save', { name: materialName }, 60000); }
+    catch (error) {
+      try { await send('material_discard', { name: materialName }, 15000); } catch { /* keep the scene material if KeyShot cannot safely discard it */ }
+      throw new Error(`KeyShot could not save the material package: ${error.message}`);
+    }
+    let assignment;
+    try { assignment = await send('material_apply_selection', { name: materialName }, 20000); }
+    catch (error) { assignment = { applied: false, error: error.message, objects: selection.objects }; }
+    const wiredRoles = new Set(wiring.maps.map(map => map.role));
+    const usedFiles = selected.filter(({ role }) => wiredRoles.has(role)).map(({ role, filename }) => ({ role, name: filename }));
     const usedNames = new Set(usedFiles.map(file => file.name));
     const skipped = set.files.filter(file => !usedNames.has(file.name)).map(file => ({ name: file.name, role: file.role }));
     const channels = wiring.maps.map(map => map.role).join(', ');
-    return { summary: `${materialName} built as an unassigned Plastic material from ${channels}; saved to the KeyShot library and as a portable KMP.`,
-      name: materialName, path: saved.path, library: saved.library, material: wiring, used_files: usedFiles, skipped_files: skipped,
-      assignment: 'Not applied to any product part. Drag it from KeyShot’s Material Library onto the chosen part.' };
+    const targetNames = selection.objects.map(object => `${object.name}${object.material ? ` (was ${object.material})` : ''}`).join(', ');
+    return { summary: `${materialName} built as a ${metalMode} KeyShot graph from ${channels}; saved to the KeyShot ${saved.library_folder || 'Director'} library folder and as a portable KMP.` +
+        (assignment.applied ? ` Applied to ${targetNames || `${assignment.objects.length} selected object(s)`}.` : ' It is saved but was not applied to the current selection.'),
+      name: materialName, path: saved.path, library: saved.library, library_folder: saved.library_folder || 'Director', material: wiring,
+      used_files: usedFiles, skipped_files: skipped, assignment };
   },
   async inspect_material({ name }) { return await send('material_inspect', { name }, 15000); },
   async create_material({ name }) { const r = await send('material_create', { name }, 15000); return { summary: `${name} created but not applied to the product`, ...r }; },
@@ -832,6 +873,8 @@ const server = http.createServer(async (req, res) => {
       const { id } = await body(req); await send('light_remove', { id }, 30000); delete studio.lights[id]; return json(res, 200, { ok: true });
     }
     if (url.pathname === '/api/materials' && req.method === 'GET') return json(res, 200, await send('materials_list', {}, 15000));
+    if (url.pathname === '/api/material/library' && req.method === 'GET') return json(res, 200, await actions.list_library_materials({ query: url.searchParams.get('q') || '' }));
+    if (url.pathname === '/api/material/library-copy' && req.method === 'POST') return json(res, 200, await actions.copy_library_material(await body(req)));
     if (url.pathname === '/api/material/assets' && req.method === 'GET') return json(res, 200, { directory: MATERIAL_PACKAGE_DIR, assets: listMaterialPackages() });
     if (url.pathname === '/api/material/texture-sets' && req.method === 'GET') return json(res, 200, { directory: textureSets.ROOT, sets: textureSets.listTextureSets() });
     if (url.pathname === '/api/material/texture-sets' && req.method === 'POST') {
@@ -844,7 +887,8 @@ const server = http.createServer(async (req, res) => {
       return json(res, 201, file);
     }
     if (url.pathname === '/api/material/build-from-texture-set' && req.method === 'POST') {
-      const b = await body(req), result = await actions.build_material_from_texture_set({ texture_set_id: b.texture_set_id, name: b.name });
+      const b = await body(req), result = await actions.build_material_from_texture_set({ texture_set_id: b.texture_set_id, name: b.name,
+        surface_type: b.surface_type, projection: b.projection });
       return json(res, 201, result);
     }
     if (url.pathname === '/api/material/file' && req.method === 'GET') {

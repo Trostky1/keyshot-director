@@ -178,7 +178,7 @@
 
     <div class="panel">
       <div class="material-inspector-content">
-        <p class="blurb">Select a scene material to tune its exposed values, or create a separate Director material. Existing materials stay read-only until you explicitly enable edits for one.</p>
+        <p class="blurb">Inspect scene materials, tune an authorized copy, or create a separate Director material. Live edits to a shared original require an explicit unlock.</p>
         <div class="row"><select id="materialSelect" aria-label="Scene material"></select><button id="materialRefresh">Refresh</button></div>
         <div id="materialEditControls" class="material-edit-controls" hidden><div><b id="materialEditTitle">Scene material is read-only</b><p id="materialEditHelp">Enable edits to change exposed values on this material in the live KeyShot scene.</p></div><button type="button" id="materialEditToggle">Enable edits</button></div>
         <p class="material-map-note">Existing scene graphs are read-only. To use actual image maps, build a separate material from an imported texture set below; it will not be assigned to your product.</p>
@@ -226,9 +226,15 @@
 
 <section id="materialsWorkspace" class="workspace-page" hidden aria-labelledby="materialsTitle">
   <div class="workspace-heading"><div><h2 id="materialsTitle">Material Lab</h2><p>Build a reusable finish from reference photos or actual texture maps.</p></div><span class="scene-tag">Unassigned by default</span></div>
+  <section class="workspace-card" aria-labelledby="libraryMaterialTitle">
+    <div class="material-assets-heading"><div><h3 id="libraryMaterialTitle">Copy a KeyShot library material</h3><p>Search the real KeyShot library, select a target part in KeyShot, then create an independent copy to customize.</p></div><span class="scene-tag">Original stays unchanged</span></div>
+    <div class="texture-import-flow"><div><label for="libraryMaterialSearch">Find a material</label><input id="libraryMaterialSearch" type="search" placeholder="Search material or library folder"></div><div><label for="libraryMaterialSelect">KeyShot library result</label><select id="libraryMaterialSelect" aria-label="KeyShot library material"><option value="">Search the library to load materials</option></select></div></div>
+    <div class="row"><button type="button" id="libraryMaterialSearchButton">Search KeyShot library</button><button type="button" id="libraryMaterialCopyButton" class="solid" disabled>Copy to selected part</button></div>
+    <p id="libraryMaterialStatus" class="blurb" role="status" aria-live="polite">Select the part(s) in KeyShot before creating the copy. Then tell Material Director how you want the copy changed.</p>
+  </section>
   <div class="material-grid"><div class="material-creative">
     <div class="workspace-card material-chat">
-      <div class="material-chat-heading"><div><h3>Material Director</h3><p>Describe the finish you want or add reference photos. Your product stays untouched until you apply the result in KeyShot.</p></div></div>
+      <div class="material-chat-heading"><div><h3>Material Director</h3><p>Describe a new finish or changes to your selected library-material copy. Existing library originals stay untouched.</p></div></div>
       <div id="materialChatLog" role="log" aria-live="polite" aria-label="Material Director conversation"><p class="chat-empty">Your conversation and build results will appear here. Start with a finish description or add a reference below.</p></div>
       <div class="material-composer">
       <label for="materialPrompt">Your direction</label>
@@ -236,7 +242,7 @@
       <button type="button" id="materialDrop" class="workspace-drop"><span id="materialDropText">Add reference images <small>Choose, paste or drop up to 8 · PNG, JPEG, WebP</small></span></button><input id="materialFile" type="file" accept="image/png,image/jpeg,image/webp" multiple hidden>
       <div class="material-reference-heading"><span id="materialImageCount" aria-live="polite">No references added</span><button type="button" id="materialClearImages" class="text-button" hidden>Clear all</button></div><div id="materialThumbs" class="material-reference-grid" aria-label="Material reference images"></div>
       <div class="row"><button id="materialSend" class="solid">Ask Material Director</button><button id="materialStop" disabled hidden>Stop</button><button id="materialNewChat">New chat</button></div>
-      <p class="blurb">Reference photos guide the finish description; actual channel maps below can be wired into a new, unassigned material. Your references are sent to the selected AI provider for this request and aren’t saved as training data.</p>
+      <p class="blurb">Reference photos guide the finish description. For a Poliigon download, use <button type="button" id="jumpToPoliigonImport" class="text-button">Import Poliigon maps</button> below so the original files are recognized and wired as channels. Variations of a copied library material are saved as a separate KeyShot library item and KMP. Your reference images are sent to the selected AI provider for this request and aren’t saved as training data.</p>
       </div>
     </div>
   </div></div>
@@ -248,10 +254,16 @@
     <div class="material-assets-heading"><div><h3 id="materialTextureTitle">Import a texture set</h3><p>Use actual channel maps—not reference photos—to build a reusable KeyShot finish.</p></div><span class="scene-tag">Original maps stay local</span></div>
     <div class="texture-import-flow">
       <div><label for="textureSetName">Set name</label><input id="textureSetName" type="text" value="Poliigon Plastic Mold Dry Blast" maxlength="100"></div>
-      <div class="texture-import-action"><button type="button" id="textureSetChoose">Choose a texture folder</button><input id="textureSetFiles" type="file" multiple webkitdirectory directory hidden accept=".png,.jpg,.jpeg,.webp,.tif,.tiff,.exr,.hdr,.mtlx"></div>
+      <div class="texture-import-action"><button type="button" id="poliigonFolderChoose">Import Poliigon download folder</button><input id="poliigonFolderFiles" type="file" multiple webkitdirectory directory hidden accept=".png,.jpg,.jpeg,.webp,.tif,.tiff,.exr,.hdr,.mtlx"><button type="button" id="textureSetChoose">Import another texture folder</button><input id="textureSetFiles" type="file" multiple webkitdirectory directory hidden accept=".png,.jpg,.jpeg,.webp,.tif,.tiff,.exr,.hdr,.mtlx"></div>
     </div>
-    <p class="texture-import-note">A folder import recognizes common Base Color, Roughness, Metallic, Normal, Displacement, Bump, Specular and AO filenames. It copies the source files unchanged into Director’s local Materials folder. A <code>.mtlx</code> file is retained as metadata; KeyShot’s documented importer does not list MaterialX, so Director must translate its graph.</p>
-    <p class="texture-import-note">This is separate from the photo references above: maps contain channel data used by a shader; photos describe a look. After import, choose <b>Build KeyShot material</b> to create a separate unassigned Plastic graph. Base Color, Roughness and Normal/Bump are supported; Specular, Metallic, AO, Displacement and MaterialX are preserved locally but not wired. Existing product materials are never altered or auto-assigned.</p>
+    <p id="poliigonImportStatus" class="blurb" role="status" aria-live="polite">For downloads like Poliigon_BoucleFabricBubbly_7827, choose the product folder or its 2K/4K subfolder. The importer keeps channel maps and MaterialX metadata, and leaves preview images out of the shader set.</p>
+    <div class="texture-import-flow texture-build-options">
+      <div><label for="textureSurfaceType">Surface type</label><select id="textureSurfaceType"><option value="auto">Auto from set name</option><option value="plastic">Plastic / fabric</option><option value="metal">Metal</option><option value="mixed">Mixed metal + plastic (rust / patina)</option></select></div>
+      <div><label for="textureProjection">Texture projection</label><select id="textureProjection"><option value="box">Box (boxes and general parts)</option><option value="sphere">Sphere</option><option value="uv">UV coordinates (best when available)</option><option value="planar">Planar</option><option value="cylinder">Cylinder</option><option value="camera">Camera</option></select></div>
+    </div>
+    <p class="texture-import-note">A folder import recognizes common Base Color, Roughness, Metallic, Normal, Displacement, Bump, Specular and AO filenames. It copies the source files unchanged into Director’s local Materials folder. A <code>.mtlx</code> file is read as conversion metadata because KeyShot does not directly import MaterialX.</p>
+    <p class="texture-import-note">Before building, select the intended part in KeyShot. Auto chooses a dielectric shader for fabrics and plastics, a Metal shader for metal assets, and the Metal + Plastic label graph for rust / patina. Choose the projection that matches the part; UV coordinates avoid projection seams when the model has usable UVs. Maps use a 30 cm tile. Zero-scale displacement maps are preserved but never connected to geometry.</p>
+    <details class="texture-import-note"><summary>Poliigon workflow in KeyShot</summary><p>For the full Poliigon graph, select the model in Project → Scene, open its material, choose Advanced, then Material Graph. Drag in the maps; connect Mapping 2D to each texture map's UV Mapping input and set each map's Mapping Type to Node. Connect Base Color to Diffuse, Roughness through Color To Number to Roughness, and Normal to Bump (Poliigon recommends negative normal strength). Only connect Displacement through a Displace node when the source material specifies a non-zero displacement scale.</p><p>For mixed metal and rust, build a Metal base with a Plastic label and use an inverted Metalness map to drive the Plastic label opacity. Import an HDRI through Library → Environments, double-click to assign, then tune it under Project → Environment.</p><p>Director builds this graph automatically when the required maps are present. Ambient Occlusion and arbitrary MaterialX graphs are still kept as source files without automatic conversion. Select the target object in KeyShot before building.</p></details>
     <p id="textureSetStatus" class="blurb" role="status" aria-live="polite">Your imported sets appear below. Choose a folder to add a new set, or use “Add missing maps” to continue an interrupted import.</p>
     <p id="textureBuildStatus" class="blurb" role="status" aria-live="polite"></p>
     <div id="textureSetList" class="material-asset-list" role="list"><p class="chat-empty">No texture sets imported yet.</p></div>
@@ -468,7 +480,28 @@ async function inspectMaterial() {
     box.appendChild(section);
   }
 }
+$('libraryMaterialSelect').onchange = () => { $('libraryMaterialCopyButton').disabled = !$('libraryMaterialSelect').value; };
+$('libraryMaterialSearchButton').onclick = e => busy(e.target, async () => {
+  const query = $('libraryMaterialSearch').value.trim();
+  $('libraryMaterialStatus').textContent = 'Searching the KeyShot Material Library…';
+  const result = await api('/api/material/library?q=' + encodeURIComponent(query));
+  const sel = $('libraryMaterialSelect'); sel.innerHTML = '';
+  for (const name of result.materials) { const option = document.createElement('option'); option.value = option.textContent = name; sel.appendChild(option); }
+  $('libraryMaterialCopyButton').disabled = !result.materials.length;
+  $('libraryMaterialStatus').textContent = result.materials.length ? `${result.materials.length} materials loaded${query ? ` for “${query}”` : ''}. Choose one, select your target part in KeyShot, and make the copy.` : 'No matches. Try a shorter name or a library folder such as Metal or Plastic.';
+});
+$('libraryMaterialCopyButton').onclick = e => busy(e.target, async () => {
+  const source = $('libraryMaterialSelect').value;
+  if (!source) return;
+  $('libraryMaterialStatus').textContent = `Copying “${source}” onto the selected KeyShot part(s)…`;
+  const result = await api('/api/material/library-copy', { name: source });
+  await loadMaterials(result.name);
+  $('libraryMaterialStatus').textContent = `Created “${result.name}” from “${source}” and applied it to ${result.objects.length} selected part(s). The source library material is unchanged. Describe your variation to Material Director; it will edit and save this copy.`;
+  $('materialPrompt').placeholder = `Describe how to change ${result.name}…`;
+  $('materialPrompt').focus();
+});
 $('materialRefresh').onclick = e => busy(e.target, () => loadMaterials());
+$('jumpToPoliigonImport').onclick = () => $('poliigonFolderChoose').scrollIntoView({ behavior: 'smooth', block: 'center' });
 $('materialSelect').onchange = () => loadMaterials($('materialSelect').value).catch(e => toast(e.message));
 $('materialEditToggle').onclick = e => busy(e.target, async () => {
   const name = $('materialSelect').value, enabling = !inspectedMaterial?.edit_enabled;
@@ -525,26 +558,27 @@ async function loadTextureSets() {
       info.append(recipe);
     }
     info.append(folder);
-    const supportedRoles = new Set(['base-color','roughness','normal','bump']);
+    const supportedRoles = new Set(['base-color','roughness','glossiness','normal','bump','specular','metallic','displacement']);
     const canBuild = set.files.some(file => supportedRoles.has(file.role));
-    const build = document.createElement('button'); build.type = 'button'; build.className = 'solid'; build.textContent = 'Build KeyShot material';
+    const build = document.createElement('button'); build.type = 'button'; build.className = 'solid'; build.textContent = 'Build & apply to selection';
     build.disabled = !canBuild;
-    build.title = canBuild ? 'Create a separate, unassigned Plastic material and save its KMP package.' : 'Add a Base Color, Roughness, Normal or Bump map to build a material.';
+    build.title = canBuild ? 'Build an Advanced material, save it to KeyShot and this project, and apply it to the selected part(s).' : 'Add supported PBR maps (Base Color, Roughness, Normal/Bump, Specular, Metalness or Displacement).';
     build.onclick = async () => {
       build.disabled = true; build.textContent = 'Building…';
       $('textureBuildStatus').textContent = `Building ${set.name} in the connected KeyShot scene…`;
       try {
-        const result = await api('/api/material/build-from-texture-set', { texture_set_id: set.id });
+        const result = await api('/api/material/build-from-texture-set', { texture_set_id: set.id,
+          surface_type: $('textureSurfaceType').value, projection: $('textureProjection').value });
         await loadMaterials(result.name); await loadMaterialAssets();
-        const channelNames = { 'base-color':'Base Color', roughness:'Roughness', normal:'Normal map', bump:'Bump map' };
+        const channelNames = { 'base-color':'Base Color', roughness:'Roughness', glossiness:'Glossiness', normal:'Normal map', bump:'Bump map', specular:'Specular', metallic:'Metalness', displacement:'Displacement' };
         const used = result.used_files.map(file => channelNames[file.role] || file.role).join(', ');
         const roleNames = { 'ambient-occlusion':'AO', metallic:'Metallic', displacement:'Displacement', specular:'Specular', glossiness:'Glossiness' };
         const skipped = [...new Set(result.skipped_files.map(file => roleNames[file.role]).filter(Boolean))];
-        $('textureBuildStatus').textContent = `${result.name} is in KeyShot’s Material Library and saved as a KMP. Connected: ${used}.${skipped.length ? ` Skipped: ${skipped.join(', ')}.` : ''} It is unassigned—drag it onto your chosen part in KeyShot. Package: ${result.path}`;
-        $('materialStatus').textContent = `Built ${result.name}. It is not applied to the product; drag it from KeyShot’s Material Library onto the part you choose.`;
+        $('textureBuildStatus').textContent = `${result.name} is in KeyShot’s Material Library → ${result.library_folder} and saved as a KMP in this project. Connected: ${used}.${skipped.length ? ` Preserved but skipped: ${skipped.join(', ')}.` : ''} ${result.assignment?.applied ? `Applied to ${result.assignment.objects.length} selected part(s).` : `Saved but not applied: ${result.assignment?.error || 'Select the target object in KeyShot first.'}`} Package: ${result.path}`;
+        $('materialStatus').textContent = `Built ${result.name}. ${result.assignment?.applied ? `Applied to ${result.assignment.objects.length} selected part(s).` : `Select the target in KeyShot and apply it from Material Library → ${result.library_folder}.`}`;
       } catch (error) {
         $('textureBuildStatus').textContent = `${error.message} Your imported source maps are unchanged. Check the KeyShot connection and try again.`;
-      } finally { build.disabled = !canBuild; build.textContent = 'Build KeyShot material'; }
+      } finally { build.disabled = !canBuild; build.textContent = 'Build & apply to selection'; }
     };
     const open = document.createElement('button'); open.type = 'button'; open.className = 'sm'; open.textContent = 'Open this set'; open.onclick = async () => { try { await api('/api/material/open-folder', { textureSet: set.id }); } catch (err) { toast(err.message); } };
     const addMore = document.createElement('button'); addMore.type = 'button'; addMore.className = 'sm'; addMore.textContent = 'Add missing maps'; addMore.onclick = () => { $('textureSetFiles').dataset.setId = set.id; $('textureSetFiles').click(); };
@@ -552,17 +586,90 @@ async function loadTextureSets() {
   }
 }
 const TEXTURE_EXTENSIONS = new Set(['.png','.jpg','.jpeg','.webp','.tif','.tiff','.exr','.hdr','.mtlx']);
-const TEXTURE_FILE_LIMIT = 11 * 1024 * 1024, TEXTURE_SET_LIMIT = 80 * 1024 * 1024;
+const TEXTURE_FILE_LIMIT = 128 * 1024 * 1024, TEXTURE_SET_LIMIT = 512 * 1024 * 1024;
 async function uploadTextureFile(file, id) {
   const response = await fetch(`/api/material/texture-file?id=${encodeURIComponent(id)}&name=${encodeURIComponent(file.name)}`, { method:'POST', headers:{'Content-Type':'application/octet-stream'}, body:file });
   const result = await response.json(); if (!response.ok) throw new Error(result.error || `Could not import ${file.name}.`); return result;
 }
+function poliigonRole(name) {
+  const stem = name.replace(/\\/g, '/').split('/').pop().replace(/\.[^.]+$/, '');
+  if (/preview|thumbnail|swatch/i.test(stem)) return 'preview';
+  const roles = [
+    ['ambient-occlusion', /(?:^|[_ .-])(?:ambient.?occlusion|ao)(?:[_ .-]|$)/i],
+    ['base-color', /(?:^|[_ .-])(?:base.?color|albedo|diffuse|color|col)(?:[_ .-]|$)/i],
+    ['displacement', /(?:^|[_ .-])(?:displacement|height|disp)(?:[_ .-]|$)/i],
+    ['metallic', /(?:^|[_ .-])(?:metallic|metalness|metal)(?:[_ .-]|$)/i],
+    ['normal', /(?:^|[_ .-])(?:normal|normalgl|normaldx|nrm)(?:[_ .-]|$)/i],
+    ['roughness', /(?:^|[_ .-])(?:roughness|rough)(?:[_ .-]|$)/i],
+    ['specular', /(?:^|[_ .-])(?:specular|spec)(?:[_ .-]|$)/i],
+    ['glossiness', /(?:^|[_ .-])(?:glossiness|gloss)(?:[_ .-]|$)/i],
+    ['bump', /(?:^|[_ .-])(?:bump)(?:[_ .-]|$)/i]
+  ];
+  for (const [role, re] of roles) if (re.test(stem)) return role;
+  return /\.mtlx$/i.test(name) ? 'materialx' : '';
+}
+function poliigonResolution(file) {
+  const full = `${file.webkitRelativePath || ''}/${file.name}`;
+  const match = full.match(/(?:^|[/_ .-])(1|2|4|8|16)K(?:[/_ .-]|$)/i);
+  return match ? Number(match[1]) : 0;
+}
+function poliigonSetName(file) {
+  const segments = (file.webkitRelativePath || '').replace(/\\/g, '/').split('/').filter(Boolean);
+  const root = segments.find(segment => !/^(?:1|2|4|8|16)K$/i.test(segment));
+  if (root && root !== file.name) return root.replace(/[_-]+/g, ' ').trim();
+  return file.name.replace(/\.[^.]+$/, '').replace(/(?:[_ .-](?:ambient.?occlusion|ao|base.?color|albedo|diffuse|color|col|displacement|height|disp|metallic|metalness|metal|normalgl|normaldx|normal|nrm|roughness|rough|specular|spec|glossiness|gloss|bump))$/i, '').replace(/[_-]+/g, ' ').trim();
+}
+async function importPoliigonFolder(files) {
+  const all = [...files];
+  if (!all.length) return;
+  const candidates = all.map(file => ({ file, role: poliigonRole(file.name) })).filter(item => item.role && item.role !== 'preview');
+  const maps = candidates.filter(item => item.role !== 'materialx');
+  if (!maps.length) { $('poliigonImportStatus').textContent = 'No named PBR texture maps found. Choose the Poliigon product folder or its 2K/4K maps folder.'; return; }
+  const resolutions = [...new Set(maps.map(item => poliigonResolution(item.file)).filter(Boolean))].sort((a, b) => a - b);
+  const selectedResolution = resolutions.includes(2) ? 2 : resolutions.includes(4) ? 4 : resolutions.length ? resolutions[resolutions.length - 1] : 0;
+  const atResolution = selectedResolution ? candidates.filter(item => !poliigonResolution(item.file) || poliigonResolution(item.file) === selectedResolution) : candidates;
+  const unique = new Map();
+  for (const item of atResolution) {
+    const key = item.role === 'materialx' ? 'materialx' : item.role;
+    if (!unique.has(key) || item.file.size > unique.get(key).file.size) unique.set(key, item);
+  }
+  const selected = [...unique.values()];
+  const total = selected.reduce((sum, item) => sum + item.file.size, 0);
+  if (selected.length > 32) { $('poliigonImportStatus').textContent = 'This download has more than 32 maps at the chosen resolution. Choose a specific resolution folder such as 2K, then import again.'; return; }
+  if (selected.some(item => !item.file.size || item.file.size > TEXTURE_FILE_LIMIT) || total > TEXTURE_SET_LIMIT) {
+    $('poliigonImportStatus').textContent = 'The chosen maps exceed the import limits (128 MB per file, 512 MB total). Choose a smaller resolution folder.'; return;
+  }
+  const first = selected.find(item => item.role !== 'materialx')?.file || selected[0].file;
+  const setName = poliigonSetName(first) || 'Poliigon PBR material';
+  $('textureSetName').value = setName;
+  $('poliigonFolderChoose').disabled = true;
+  $('poliigonImportStatus').textContent = `Importing ${selected.length} original files${selectedResolution ? ` from ${selectedResolution}K` : ''}…`;
+  try {
+    const created = await api('/api/material/texture-sets', { name: setName });
+    const imported = [];
+    for (let i = 0; i < selected.length; i++) {
+      const item = selected[i];
+      $('poliigonImportStatus').textContent = `Importing original files ${i + 1} of ${selected.length} · ${item.role}: ${item.file.name}`;
+      const result = await uploadTextureFile(item.file, created.id);
+      imported.push({ name: item.file.name, role: result.role });
+    }
+    const labels = imported.map(item => `${item.role}: ${item.name}`).join(' · ');
+    const skipped = all.filter(file => !selected.some(item => item.file === file)).length;
+    $('poliigonImportStatus').textContent = `Imported “${created.name}”${selectedResolution ? ` at ${selectedResolution}K` : ''}. Original files were preserved. Channels: ${labels}.${skipped ? ` Skipped ${skipped} preview, duplicate or other-resolution file(s).` : ''} Build the set below to create the KeyShot material.`;
+    await loadTextureSets();
+  } catch (error) {
+    $('poliigonImportStatus').textContent = `${error.message} Any files already copied remain in the imported set.`;
+    await loadTextureSets().catch(() => {});
+  } finally { $('poliigonFolderChoose').disabled = false; }
+}
+$('poliigonFolderChoose').onclick = () => $('poliigonFolderFiles').click();
+$('poliigonFolderFiles').onchange = event => { importPoliigonFolder(event.target.files); event.target.value = ''; };
 $('textureSetChoose').onclick = () => $('textureSetFiles').click();
 $('textureSetFiles').onchange = async event => {
   const files = [...event.target.files]; event.target.value = '';
   if (!files.length) return;
   const resumeId = event.target.dataset.setId || ''; event.target.dataset.setId = '';
-  if (files.length > 24) { $('textureSetStatus').textContent = 'A texture set can contain up to 24 files.'; return; }
+  if (files.length > 32) { $('textureSetStatus').textContent = 'A texture set can contain up to 32 files.'; return; }
   const existing = materialTextureSets.find(set => set.id === resumeId);
   const existingNames = new Set((existing?.files || []).map(file => file.name.toLowerCase()));
   const pending = files.filter(file => !existingNames.has(file.name.toLowerCase()));
@@ -570,8 +677,8 @@ $('textureSetFiles').onchange = async event => {
   const total = pending.reduce((n, file) => n + file.size, 0) + (existing?.bytes || 0);
   const invalid = pending.find(file => !TEXTURE_EXTENSIONS.has('.' + file.name.split('.').pop().toLowerCase()));
   if (invalid) { $('textureSetStatus').textContent = `${invalid.name} is not a supported texture or MaterialX file.`; return; }
-  if (pending.some(file => !file.size || file.size > TEXTURE_FILE_LIMIT)) { $('textureSetStatus').textContent = 'Each source file must be 11 MB or smaller.'; return; }
-  if (total > TEXTURE_SET_LIMIT) { $('textureSetStatus').textContent = 'This set is over the 80 MB import limit.'; return; }
+  if (pending.some(file => !file.size || file.size > TEXTURE_FILE_LIMIT)) { $('textureSetStatus').textContent = 'Each source file must be 128 MB or smaller.'; return; }
+  if (total > TEXTURE_SET_LIMIT) { $('textureSetStatus').textContent = 'This set is over the 512 MB import limit.'; return; }
   $('textureSetChoose').disabled = true;
   try {
     const folderName = files[0].webkitRelativePath?.split('/')[0];
@@ -580,7 +687,7 @@ $('textureSetFiles').onchange = async event => {
       const file = pending[i]; $('textureSetStatus').textContent = `Copying original maps ${i + 1} of ${pending.length} · ${file.name}`;
       await uploadTextureFile(file, created.id);
     }
-    $('textureSetStatus').textContent = `Imported ${pending.length} source file${pending.length === 1 ? '' : 's'} to ${created.path}. The maps are preserved locally; KeyShot graph conversion is still gated on the live 2026.2 compatibility check.`;
+    $('textureSetStatus').textContent = `Imported ${pending.length} source file${pending.length === 1 ? '' : 's'} to ${created.path}. The maps are preserved locally and ready to build into a KeyShot material.`;
     await loadTextureSets();
   } catch (error) {
     $('textureSetStatus').textContent = `${error.message} Any files already copied remain safely in the Materials folder.`;

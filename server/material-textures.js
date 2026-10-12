@@ -5,9 +5,9 @@ const path = require('path');
 const crypto = require('crypto');
 
 const ROOT = path.resolve(__dirname, '..', 'materials', 'texture-sets');
-const MAX_FILES = 24;
-const MAX_FILE_BYTES = 11 * 1024 * 1024;
-const MAX_SET_BYTES = 80 * 1024 * 1024;
+const MAX_FILES = 32;
+const MAX_FILE_BYTES = 128 * 1024 * 1024;
+const MAX_SET_BYTES = 512 * 1024 * 1024;
 const EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.webp', '.tif', '.tiff', '.exr', '.hdr', '.mtlx']);
 const ROLES = [
   ['ambient-occlusion', /(?:^|[_ .-])(?:ambient.?occlusion|ao)(?:[_ .-]|$)/i],
@@ -95,10 +95,10 @@ function addTextureFile(id, originalName, data) {
   const name = safeFilename(originalName);
   if (manifest.files.some(file => file.name.toLowerCase() === name.toLowerCase())) throw new Error(`A file named ${name} is already in this set.`);
   const bytes = Buffer.isBuffer(data) ? data : Buffer.from(data || []);
-  if (!bytes.length || bytes.length > MAX_FILE_BYTES) throw new Error(`${name} exceeds the 11 MB per-file limit.`);
+  if (!bytes.length || bytes.length > MAX_FILE_BYTES) throw new Error(`${name} exceeds the 128 MB per-file limit.`);
   const currentBytes = manifest.files.reduce((sum, file) => sum + file.bytes, 0);
   if (manifest.files.length >= MAX_FILES) throw new Error(`A texture set can contain up to ${MAX_FILES} files.`);
-  if (currentBytes + bytes.length > MAX_SET_BYTES) throw new Error('This texture set exceeds the 80 MB limit.');
+  if (currentBytes + bytes.length > MAX_SET_BYTES) throw new Error('This texture set exceeds the 512 MB limit.');
   const materialx = path.extname(name).toLowerCase() === '.mtlx' ? materialXSummary(bytes.toString('utf8')) : null;
   const filePath = path.join(setDir, name);
   fs.writeFileSync(filePath, bytes, { flag: 'wx' });

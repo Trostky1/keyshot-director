@@ -187,16 +187,38 @@ SET_WORDS = ("backdrop", "background", "backplate", "ground", "floor", "cyc", "s
 def op_subject(c):
     """Bounding box of the product: model nodes only; never our lights; set pieces (backdrop / floor / ramp ...) are
     left out when there is anything else in the scene, so a big backdrop does not become 'the product'."""
+    # KeyShot 2026.2 can expose visible primitive/imported geometry as object nodes
+    # without returning an enclosing model from find(types=NODE_TYPE_MODEL).
+    # The renderer still sees these (and getObjects() reports their IDs), so include
+    # those leaves as a fallback for product bounds and photo framing.
+    try:
+        geometry_ids = set(lux.getObjects())
+    except Exception:
+        geometry_ids = set()
     cands = []
-    for m in lux.getSceneTree().find(types=lux.NODE_TYPE_MODEL):
+    seen = set()
+    try:
+        nodes = lux.getSceneTree().find()
+    except Exception:
+        nodes = lux.getSceneTree().find(types=lux.NODE_TYPE_MODEL)
+    for m in nodes:
         nm = m.getName() or ""
         if nm.startswith(PREFIX) or nm.lower().startswith("cc_light_panel"):
             continue                                   # never count our own lights as part of the product
+        try:
+            if not (m.isModel() or m.getID() in geometry_ids):
+                continue
+        except Exception:
+            if m.getID() not in geometry_ids:
+                continue
         try:
             if m.isDeleted() or m.isHidden():
                 continue
         except Exception:
             pass
+        if m.getID() in seen:
+            continue
+        seen.add(m.getID())
         cands.append((nm, m))
     product = [(n, m) for n, m in cands if not any(w in n.lower() for w in SET_WORDS)]
     use = product or cands                             # if everything looks like a set piece, use it all
