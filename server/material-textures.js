@@ -5,9 +5,9 @@ const path = require('path');
 const crypto = require('crypto');
 
 const ROOT = path.resolve(__dirname, '..', 'materials', 'texture-sets');
-const MAX_FILES = 32;
-const MAX_FILE_BYTES = 128 * 1024 * 1024;
-const MAX_SET_BYTES = 512 * 1024 * 1024;
+const MAX_FILES = 24;
+const MAX_SET_BYTES = 80 * 1024 * 1024;
+const MAX_FILE_BYTES = MAX_SET_BYTES;
 const EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.webp', '.tif', '.tiff', '.exr', '.hdr', '.mtlx']);
 const ROLES = [
   ['ambient-occlusion', /(?:^|[_ .-])(?:ambient.?occlusion|ao)(?:[_ .-]|$)/i],
@@ -71,7 +71,15 @@ function listTextureSets() {
     try {
       const manifest = JSON.parse(fs.readFileSync(manifestFile, 'utf8'));
       const files = manifest.files.filter(f => fs.existsSync(path.join(dir, f.name)));
-      return { id: entry.name, name: manifest.name, path: dir, imported: manifest.imported, files, materialx: manifest.materialx || null,
+      const derivedDir = path.join(dir, 'derived');
+      if (fs.existsSync(derivedDir)) for (const name of fs.readdirSync(derivedDir)) {
+        if (path.extname(name).toLowerCase() === '.png' && fs.statSync(path.join(derivedDir, name)).isFile())
+          files.push({ name: `derived/${name}`, role: roleFor(name.replace(/__(invert|contrast|tile-offset|horizontal-grain|vertical-grain).*$/i, '.png')), bytes: fs.statSync(path.join(derivedDir, name)).size, derived: true });
+      }
+      const present = new Set(files.map(file => path.basename(file.name).toLowerCase()));
+      const missing = (manifest.materialx?.imageNodes || []).map(node => path.basename(String(node.file || '').replace(/\\/g, '/')))
+        .filter(name => name && !present.has(name.toLowerCase()));
+      return { id: entry.name, name: manifest.name, path: dir, imported: manifest.imported, files, materialx: manifest.materialx || null, missing,
         bytes: files.reduce((sum, file) => sum + file.bytes, 0) };
     } catch { return null; }
   }).filter(Boolean).sort((a, b) => b.imported.localeCompare(a.imported));
@@ -95,7 +103,7 @@ function addTextureFile(id, originalName, data) {
   const name = safeFilename(originalName);
   if (manifest.files.some(file => file.name.toLowerCase() === name.toLowerCase())) throw new Error(`A file named ${name} is already in this set.`);
   const bytes = Buffer.isBuffer(data) ? data : Buffer.from(data || []);
-  if (!bytes.length || bytes.length > MAX_FILE_BYTES) throw new Error(`${name} exceeds the 128 MB per-file limit.`);
+  if (!bytes.length || bytes.length > MAX_FILE_BYTES) throw new Error(`${name} exceeds the 80 MB per-file limit.`);
   const currentBytes = manifest.files.reduce((sum, file) => sum + file.bytes, 0);
   if (manifest.files.length >= MAX_FILES) throw new Error(`A texture set can contain up to ${MAX_FILES} files.`);
   if (currentBytes + bytes.length > MAX_SET_BYTES) throw new Error('This texture set exceeds the 512 MB limit.');

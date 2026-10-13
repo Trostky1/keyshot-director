@@ -21,6 +21,8 @@ renders/
 docs/review/
 .impeccable/review/
 dist/
+material-core/target/
+server/material-core.wasm
 node_modules/
 .DS_Store
 __pycache__/

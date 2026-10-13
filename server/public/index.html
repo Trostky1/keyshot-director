@@ -178,10 +178,10 @@
 
     <div class="panel">
       <div class="material-inspector-content">
-        <p class="blurb">Inspect scene materials, tune an authorized copy, or create a separate Director material. Live edits to a shared original require an explicit unlock.</p>
-        <div class="row"><select id="materialSelect" aria-label="Scene material"></select><button id="materialRefresh">Refresh</button></div>
+        <p class="blurb">Inspect scene materials here. To change one, create an independent copy on a chosen part below; the source and its other assignments stay unchanged.</p>
+        <div class="row"><select id="materialSelect" aria-label="Scene material"></select><button id="materialRefresh">Refresh</button><button type="button" id="materialSceneEditContext">Edit with chat</button></div>
         <div id="materialEditControls" class="material-edit-controls" hidden><div><b id="materialEditTitle">Scene material is read-only</b><p id="materialEditHelp">Enable edits to change exposed values on this material in the live KeyShot scene.</p></div><button type="button" id="materialEditToggle">Enable edits</button></div>
-        <p class="material-map-note">Existing scene graphs are read-only. To use actual image maps, build a separate material from an imported texture set below; it will not be assigned to your product.</p>
+        <p class="material-map-note">Source material graphs stay protected in the copy workflow. Imported image maps can be applied to the independent copy below, or used to build a new unassigned material.</p>
         <div class="row" style="margin-top:8px"><input id="materialName" placeholder="New material name" aria-label="New material name"><button id="materialCreate">Create</button></div>
         <div id="materialNodes" class="blurb"></div>
         <div class="row" style="margin-top:8px"><button id="materialUndo">Undo edit</button><button id="materialSave">Save package</button><button id="materialDiscard">Discard</button></div>
@@ -234,45 +234,68 @@
   </section>
   <div class="material-grid"><div class="material-creative">
     <div class="workspace-card material-chat">
-      <div class="material-chat-heading"><div><h3>Material Director</h3><p>Describe a new finish or changes to your selected library-material copy. Existing library originals stay untouched.</p></div></div>
+      <div class="material-chat-heading"><div><h3>Material Director</h3><p>Describe the finish you want or add reference photos. Your product stays untouched until you apply the result in KeyShot.</p></div></div>
+      <div id="materialContext" class="material-context" hidden><div><span class="material-context-label">Working on</span><strong id="materialContextName"></strong><small id="materialContextNote"></small></div><button type="button" id="materialContextClear" class="text-button">Clear</button></div>
       <div id="materialChatLog" role="log" aria-live="polite" aria-label="Material Director conversation"><p class="chat-empty">Your conversation and build results will appear here. Start with a finish description or add a reference below.</p></div>
       <div class="material-composer">
       <label for="materialPrompt">Your direction</label>
       <textarea id="materialPrompt" rows="3" placeholder="Fine bead-blasted aluminum, cool silver, a soft satin sheen…"></textarea>
-      <button type="button" id="materialDrop" class="workspace-drop"><span id="materialDropText">Add reference images <small>Choose, paste or drop up to 8 · PNG, JPEG, WebP</small></span></button><input id="materialFile" type="file" accept="image/png,image/jpeg,image/webp" multiple hidden>
+      <button type="button" id="materialDrop" class="workspace-drop"><span id="materialDropText">Add references or a Poliigon folder <small>Drop the texture folder and loose reference pictures together, or choose images</small></span></button><input id="materialFile" type="file" accept="image/png,image/jpeg,image/webp" multiple hidden>
+      <p id="materialDropStatus" class="material-drop-status" role="status" aria-live="polite"></p>
       <div class="material-reference-heading"><span id="materialImageCount" aria-live="polite">No references added</span><button type="button" id="materialClearImages" class="text-button" hidden>Clear all</button></div><div id="materialThumbs" class="material-reference-grid" aria-label="Material reference images"></div>
+      <div class="material-ratio-row"><label for="materialImageAspect">Generated material image ratio</label><select id="materialImageAspect" aria-describedby="materialImageAspectNote"><option value="original">Match reference</option><option value="1:1">Square · 1:1</option><option value="4:3">Landscape · 4:3</option><option value="3:2">Landscape · 3:2</option><option value="16:9">Wide · 16:9</option><option value="3:4">Portrait · 3:4</option><option value="2:3">Portrait · 2:3</option><option value="9:16">Tall · 9:16</option></select><small id="materialImageAspectNote">Saved as a preference for future material image generation. Image generation is not available yet.</small></div>
       <div class="row"><button id="materialSend" class="solid">Ask Material Director</button><button id="materialStop" disabled hidden>Stop</button><button id="materialNewChat">New chat</button></div>
-      <p class="blurb">Reference photos guide the finish description. For a Poliigon download, use <button type="button" id="jumpToPoliigonImport" class="text-button">Import Poliigon maps</button> below so the original files are recognized and wired as channels. Variations of a copied library material are saved as a separate KeyShot library item and KMP. Your reference images are sent to the selected AI provider for this request and aren’t saved as training data.</p>
+      <p class="blurb">Choose a tool below to browse texture sets, scene materials, the KeyShot library, or saved packages. Use Edit with chat on an item to make it the current chat target. Reference photos guide the finish description; they’re sent to the selected AI provider for this request and aren’t saved as training data.</p>
       </div>
     </div>
   </div></div>
-  <details class="material-advanced">
-    <summary><span>Advanced</span><span>Inspect or tune exposed KeyShot material values</span></summary>
-    <div id="materialInspectorHost"></div>
-  </details>
-  <section class="workspace-card material-texture-import" aria-labelledby="materialTextureTitle">
-    <div class="material-assets-heading"><div><h3 id="materialTextureTitle">Import a texture set</h3><p>Use actual channel maps—not reference photos—to build a reusable KeyShot finish.</p></div><span class="scene-tag">Original maps stay local</span></div>
-    <div class="texture-import-flow">
-      <div><label for="textureSetName">Set name</label><input id="textureSetName" type="text" value="Poliigon Plastic Mold Dry Blast" maxlength="100"></div>
-      <div class="texture-import-action"><button type="button" id="poliigonFolderChoose">Import Poliigon download folder</button><input id="poliigonFolderFiles" type="file" multiple webkitdirectory directory hidden accept=".png,.jpg,.jpeg,.webp,.tif,.tiff,.exr,.hdr,.mtlx"><button type="button" id="textureSetChoose">Import another texture folder</button><input id="textureSetFiles" type="file" multiple webkitdirectory directory hidden accept=".png,.jpg,.jpeg,.webp,.tif,.tiff,.exr,.hdr,.mtlx"></div>
+  <nav class="material-tools-nav" role="tablist" aria-label="Material tools">
+    <button id="materialTextureTab" type="button" role="tab" aria-selected="false" aria-controls="materialTexturePanel" data-material-tab="texture">Texture sets</button>
+    <button id="materialSceneTab" type="button" role="tab" aria-selected="false" aria-controls="materialScenePanel" data-material-tab="scene">Scene materials</button>
+    <button id="materialLibraryTab" type="button" role="tab" aria-selected="false" aria-controls="materialLibraryPanel" data-material-tab="library">KeyShot library</button>
+    <button id="materialSavedTab" type="button" role="tab" aria-selected="false" aria-controls="materialSavedPanel" data-material-tab="saved">Saved materials</button>
+  </nav>
+  <div id="materialToolPanels">
+  <section id="materialTexturePanel" class="workspace-card material-subpanel material-texture-import" role="tabpanel" aria-labelledby="materialTextureTitle" hidden>
+    <div class="material-assets-heading"><div><h3 id="materialTextureTitle">Texture sets</h3><p>Import Poliigon maps, review channels, then build a separate KeyShot material.</p></div><span class="scene-tag">Source maps stay unchanged</span></div>
+    <div class="texture-import-card">
+      <div class="texture-import-card-heading"><div><h4>Import a Poliigon asset</h4><p>Choose the downloaded asset folder. The original files are copied into Material Lab and kept unchanged.</p></div><span class="scene-tag">Folder import</span></div>
+      <div class="texture-import-flow">
+        <div><label for="textureSetName">Name this texture set <span class="dim">(optional)</span></label><input id="textureSetName" type="text" placeholder="Uses the folder name if blank" maxlength="100"></div>
+        <div class="texture-import-action"><button type="button" id="textureSetChoose" class="solid">Import Poliigon folder</button><input id="textureSetFiles" type="file" multiple webkitdirectory directory hidden accept=".png,.jpg,.jpeg,.webp,.tif,.tiff,.exr,.hdr,.mtlx"></div>
+      </div>
+      <p class="texture-import-note">Recognizes Base Color, Roughness, Metallic, Normal, Displacement, Bump, Specular and AO maps. MaterialX files are kept as conversion hints.</p>
+      <p id="textureSetStatus" class="blurb" role="status" aria-live="polite">Select the Poliigon folder that contains the downloaded maps.</p>
     </div>
-    <p id="poliigonImportStatus" class="blurb" role="status" aria-live="polite">For downloads like Poliigon_BoucleFabricBubbly_7827, choose the product folder or its 2K/4K subfolder. The importer keeps channel maps and MaterialX metadata, and leaves preview images out of the shader set.</p>
-    <div class="texture-import-flow texture-build-options">
-      <div><label for="textureSurfaceType">Surface type</label><select id="textureSurfaceType"><option value="auto">Auto from set name</option><option value="plastic">Plastic / fabric</option><option value="metal">Metal</option><option value="mixed">Mixed metal + plastic (rust / patina)</option></select></div>
-      <div><label for="textureProjection">Texture projection</label><select id="textureProjection"><option value="box">Box (boxes and general parts)</option><option value="sphere">Sphere</option><option value="uv">UV coordinates (best when available)</option><option value="planar">Planar</option><option value="cylinder">Cylinder</option><option value="camera">Camera</option></select></div>
-    </div>
-    <p class="texture-import-note">A folder import recognizes common Base Color, Roughness, Metallic, Normal, Displacement, Bump, Specular and AO filenames. It copies the source files unchanged into Director’s local Materials folder. A <code>.mtlx</code> file is read as conversion metadata because KeyShot does not directly import MaterialX.</p>
-    <p class="texture-import-note">Before building, select the intended part in KeyShot. Auto chooses a dielectric shader for fabrics and plastics, a Metal shader for metal assets, and the Metal + Plastic label graph for rust / patina. Choose the projection that matches the part; UV coordinates avoid projection seams when the model has usable UVs. Maps use a 30 cm tile. Zero-scale displacement maps are preserved but never connected to geometry.</p>
-    <details class="texture-import-note"><summary>Poliigon workflow in KeyShot</summary><p>For the full Poliigon graph, select the model in Project → Scene, open its material, choose Advanced, then Material Graph. Drag in the maps; connect Mapping 2D to each texture map's UV Mapping input and set each map's Mapping Type to Node. Connect Base Color to Diffuse, Roughness through Color To Number to Roughness, and Normal to Bump (Poliigon recommends negative normal strength). Only connect Displacement through a Displace node when the source material specifies a non-zero displacement scale.</p><p>For mixed metal and rust, build a Metal base with a Plastic label and use an inverted Metalness map to drive the Plastic label opacity. Import an HDRI through Library → Environments, double-click to assign, then tune it under Project → Environment.</p><p>Director builds this graph automatically when the required maps are present. Ambient Occlusion and arbitrary MaterialX graphs are still kept as source files without automatic conversion. Select the target object in KeyShot before building.</p></details>
-    <p id="textureSetStatus" class="blurb" role="status" aria-live="polite">Your imported sets appear below. Choose a folder to add a new set, or use “Add missing maps” to continue an interrupted import.</p>
     <p id="textureBuildStatus" class="blurb" role="status" aria-live="polite"></p>
     <div id="textureSetList" class="material-asset-list" role="list"><p class="chat-empty">No texture sets imported yet.</p></div>
   </section>
-  <section class="workspace-card material-assets" aria-labelledby="materialAssetsTitle">
+  <section id="materialScenePanel" class="workspace-card material-subpanel" role="tabpanel" aria-labelledby="materialSceneTitle" hidden>
+    <div class="material-assets-heading"><div><h3 id="materialSceneTitle">Scene materials</h3><p>Inspect the material graph in the open KeyShot scene. Use Edit with chat to set the current target.</p></div></div>
+    <div id="materialInspectorHost"></div>
+  </section>
+  <section id="materialLibraryPanel" class="workspace-card material-subpanel material-assets" role="tabpanel" aria-labelledby="materialCopyTitle" hidden>
+    <div class="material-assets-heading"><div><h3 id="materialCopyTitle">KeyShot Material Library</h3><p>Browse the loaded KeyShot library, copy a material onto one part, then edit the copy’s image maps. The library entry stays untouched.</p></div><button type="button" id="materialLibraryRefresh">Refresh library</button></div>
+    <div class="texture-import-flow">
+      <div><label for="materialLibrarySearch">Find a material</label><input id="materialLibrarySearch" type="search" placeholder="Search library names"></div>
+      <div><label for="materialLibrarySelect">Library material</label><select id="materialLibrarySelect" size="7" aria-label="KeyShot library materials"></select></div>
+      <div class="material-context-action"><span>Selected library material</span><button type="button" id="materialLibraryEditContext">Edit with Material Director</button></div>
+      <div><label for="materialCopyPart">Apply copy to this part</label><select id="materialCopyPart" aria-label="Scene part to receive the library copy"></select></div>
+      <div><label for="materialCopyName">Copy label</label><input id="materialCopyName" type="text" value="Director Library Copy" maxlength="80"></div>
+      <div><label for="materialMapRole">Image channel</label><select id="materialMapRole"><option value="bump">Bump</option><option value="normal">Normal</option><option value="base-color">Base Color</option><option value="roughness">Roughness</option></select></div>
+      <div><label for="materialMapSet">Use imported map</label><select id="materialMapSet" aria-label="Imported material map"><option value="">No imported maps yet</option></select></div>
+      <div><label for="materialMapFile">Choose image</label><input id="materialMapFile" type="file" accept="image/png,image/jpeg,image/webp,image/tiff,.tif,.exr,.hdr"></div>
+      <div><label for="materialBumpStrength">Bump strength (Bump/Normal only)</label><input id="materialBumpStrength" type="number" step="any" placeholder="Keep current"></div>
+    </div>
+    <div class="row"><button type="button" id="materialCopyMake" class="solid">Copy library material to part</button><button type="button" id="materialBumpApply" disabled>Apply channel map / bump</button><button type="button" id="materialCopySave" disabled>Save copy to library</button></div>
+    <p id="materialCopyStatus" class="blurb" role="status" aria-live="polite">Search for a library material and select the part to receive its independent copy.</p>
+  </section>
+  <section id="materialSavedPanel" class="workspace-card material-subpanel material-assets" role="tabpanel" aria-labelledby="materialAssetsTitle" hidden>
     <div class="material-assets-heading"><div><h3 id="materialAssetsTitle">Your material files</h3><p>Finished materials are saved here automatically as reusable KeyShot library entries and portable packages.</p></div><div class="row"><button type="button" id="materialOpenFolder">Show in folder</button><button type="button" id="materialAssetsRefresh">Refresh</button></div></div>
     <p class="material-folder mono" id="materialFolderPath" aria-live="polite"></p>
     <div id="materialAssetList" class="material-asset-list" role="list"><p class="chat-empty">Loading material packages…</p></div>
   </section>
+  </div>
 </section>
 
 <dialog id="settings">
@@ -425,6 +448,58 @@ $('addlight').onclick = e => busy(e.target, async () => { const n = 'light' + (O
 /* ---------- material lab ---------- */
 let inspectedMaterial = null;
 let activeMaterialEditTarget = null;
+let materialWorkContext = null;
+const materialTabs = [...document.querySelectorAll('[data-material-tab]')];
+materialTabs.forEach((tab, index) => { tab.tabIndex = index === 0 ? 0 : -1; });
+function materialContextLabel(context) {
+  return context.kind === 'texture-set' ? `Texture set · ${context.name}`
+    : context.kind === 'scene-material' ? `Scene material · ${context.name}`
+    : context.kind === 'library-material' ? `KeyShot library · ${context.name}`
+    : `Saved package · ${context.name}`;
+}
+function selectMaterialContext(context, scrollToChat = true) {
+  materialWorkContext = context;
+  $('materialContextName').textContent = materialContextLabel(context);
+  $('materialContextNote').textContent = context.kind === 'texture-set' ? `${context.files.length} source maps are in context; originals remain unchanged.`
+    : context.kind === 'scene-material' ? 'The source graph is selected. Chat will inspect it before suggesting changes.'
+    : context.kind === 'library-material' ? 'This library source stays unchanged; choose a scene part before making an editable copy.'
+    : context.source_texture_set ? `Using source set · ${context.source_texture_set.name}. Chat can build a new package from its imported maps; it cannot edit this KMP in place. The original stays unchanged.`
+      : 'This saved KMP package has no confidently matched source texture set. Select its source set below or load it in KeyShot to edit its graph.';
+  $('materialContext').hidden = false;
+  $('materialPrompt').placeholder = context.kind === 'material-package'
+    ? `Ask about ${context.name} or select its source texture set…`
+    : `Ask Material Director about ${context.name}…`;
+  if (scrollToChat) document.querySelector('.material-chat-heading').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+function clearMaterialContext() {
+  materialWorkContext = null;
+  $('materialContext').hidden = true;
+  $('materialPrompt').placeholder = 'Fine bead-blasted aluminum, cool silver, a soft satin sheen…';
+}
+function setMaterialToolTab(key, toggle = true) {
+  const current = materialTabs.find(tab => tab.getAttribute('aria-selected') === 'true')?.dataset.materialTab;
+  const selected = toggle && current === key ? null : key;
+  for (const tab of materialTabs) {
+    const active = tab.dataset.materialTab === selected;
+    tab.setAttribute('aria-selected', String(active));
+    tab.tabIndex = active || (!selected && tab.dataset.materialTab === key) ? 0 : -1;
+    $(tab.getAttribute('aria-controls')).hidden = !active;
+  }
+}
+for (const tab of materialTabs) tab.onclick = () => setMaterialToolTab(tab.dataset.materialTab);
+document.querySelector('.material-tools-nav').onkeydown = event => {
+  if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+  event.preventDefault();
+  const current = materialTabs.indexOf(document.activeElement);
+  const next = event.key === 'Home' ? 0 : event.key === 'End' ? materialTabs.length - 1
+    : (current + (event.key === 'ArrowRight' ? 1 : -1) + materialTabs.length) % materialTabs.length;
+  materialTabs[next].focus(); setMaterialToolTab(materialTabs[next].dataset.materialTab, false);
+};
+$('materialContextClear').onclick = clearMaterialContext;
+const materialAspectStorageKey = 'director.materialImageAspect';
+const materialImageAspect = $('materialImageAspect');
+materialImageAspect.value = localStorage.getItem(materialAspectStorageKey) || 'original';
+materialImageAspect.onchange = () => localStorage.setItem(materialAspectStorageKey, materialImageAspect.value);
 async function loadMaterials(selected) {
   const list = await api('/api/materials');
   const sel = $('materialSelect'), wanted = selected || sel.value;
@@ -440,7 +515,7 @@ async function inspectMaterial() {
   if (!name) { box.textContent = 'No scene materials yet.'; inspectedMaterial = null; editControls.hidden = true; activeMaterialEditTarget = null; return; }
   const graph = await api('/api/material/inspect', { name }); inspectedMaterial = graph;
   activeMaterialEditTarget = graph.edit_enabled ? name : null;
-  $('materialPrompt').placeholder = graph.edit_enabled ? 'Describe how to adjust this selected material…' : 'Fine bead-blasted aluminum, cool silver, a soft satin sheen…';
+  if (!materialWorkContext) $('materialPrompt').placeholder = graph.edit_enabled ? 'Describe how to adjust this selected material…' : 'Fine bead-blasted aluminum, cool silver, a soft satin sheen…';
   editControls.hidden = graph.director_created;
   if (!graph.director_created) {
     $('materialEditTitle').textContent = graph.edit_enabled ? 'Editing this KeyShot material' : 'Scene material is read-only';
@@ -503,6 +578,11 @@ $('libraryMaterialCopyButton').onclick = e => busy(e.target, async () => {
 $('materialRefresh').onclick = e => busy(e.target, () => loadMaterials());
 $('jumpToPoliigonImport').onclick = () => $('poliigonFolderChoose').scrollIntoView({ behavior: 'smooth', block: 'center' });
 $('materialSelect').onchange = () => loadMaterials($('materialSelect').value).catch(e => toast(e.message));
+$('materialSceneEditContext').onclick = () => {
+  const name = $('materialSelect').value;
+  if (!name) { toast('Select a scene material first.'); return; }
+  selectMaterialContext({ kind: 'scene-material', name });
+};
 $('materialEditToggle').onclick = e => busy(e.target, async () => {
   const name = $('materialSelect').value, enabling = !inspectedMaterial?.edit_enabled;
   if (enabling && !confirm(`Enable live edits for “${name}”? Every part sharing this material may change. The original material will not be cloned.`)) return;
@@ -514,6 +594,96 @@ $('materialCreate').onclick = e => busy(e.target, async () => { const raw = $('m
 $('materialUndo').onclick = e => busy(e.target, async () => { const r = await api('/api/material/undo', {}); await loadMaterials(r.name); $('materialStatus').textContent = `${r.parameter} restored.`; });
 $('materialSave').onclick = e => busy(e.target, async () => { const name = $('materialSelect').value; const r = await api('/api/material/save', { name }); $('materialStatus').textContent = `Saved ${r.path}`; await loadMaterialAssets(); });
 $('materialDiscard').onclick = e => busy(e.target, async () => { const name = $('materialSelect').value; if (!inspectedMaterial?.editable || !confirm(`Discard the unassigned material “${name}” from this KeyShot scene? Saved packages are not deleted.`)) return; await api('/api/material/discard', { name }); await loadMaterials(); $('materialStatus').textContent = `${name} discarded from the scene.`; });
+let materialCopyName = null;
+let materialSceneObjects = [];
+const textureSetsMaxFileBytes = 80 * 1024 * 1024;
+async function loadMaterialSceneObjects() {
+  const select = $('materialCopyPart');
+  select.innerHTML = '';
+  $('materialCopyMake').disabled = true;
+  const appendObjects = objects => {
+    for (const object of objects || []) {
+      const id = object.node_id ?? object.id;
+      if (!Number.isSafeInteger(Number(id))) continue;
+      if (object.locked || object.hidden) continue;
+      materialSceneObjects.push({ ...object, id: Number(id) });
+      const option = document.createElement('option'); option.value = String(id); option.textContent = object.name || `Part ${id}`; select.appendChild(option);
+    }
+  };
+  materialSceneObjects = [];
+  const result = await api('/api/scene/parts');
+  appendObjects(result.objects);
+  $('materialCopyMake').disabled = materialSceneObjects.length === 0 || !$('materialLibrarySelect').value;
+  if (!materialSceneObjects.length) $('materialCopyStatus').textContent = 'No unlocked scene parts are available.';
+}
+async function loadMaterialLibrary(query = '') {
+  $('materialLibrarySelect').innerHTML = '<option>Loading KeyShot library…</option>';
+  const result = await api(`/api/material/library?q=${encodeURIComponent(query)}`);
+  const select = $('materialLibrarySelect'); select.innerHTML = '';
+  for (const name of result.materials) { const option = document.createElement('option'); option.value = option.textContent = name; select.appendChild(option); }
+  $('materialCopyMake').disabled = !select.value || !materialSceneObjects.length;
+  $('materialCopyStatus').textContent = result.total
+    ? `${result.materials.length} of ${result.total} loaded library materials shown. Select a part, then make an independent copy.`
+    : 'No matching materials found in the loaded KeyShot library.';
+}
+$('materialLibraryRefresh').onclick = e => busy(e.target, async () => { await loadMaterialLibrary($('materialLibrarySearch').value.trim()); });
+$('materialLibraryEditContext').onclick = () => {
+  const name = $('materialLibrarySelect').value;
+  if (!name) { toast('Select a KeyShot library material first.'); return; }
+  selectMaterialContext({ kind: 'library-material', name });
+};
+$('materialLibrarySearch').oninput = () => { clearTimeout($('materialLibrarySearch').timer); $('materialLibrarySearch').timer = setTimeout(() => loadMaterialLibrary($('materialLibrarySearch').value.trim()).catch(e => toast(e.message)), 250); };
+$('materialLibrarySelect').onchange = () => { $('materialCopyMake').disabled = !$('materialLibrarySelect').value || !materialSceneObjects.length; };
+$('materialCopyPart').onchange = () => { $('materialCopyMake').disabled = !$('materialLibrarySelect').value || !$('materialCopyPart').value; };
+async function uploadMaterialMap(file) {
+  if (!file || !file.size || file.size > textureSetsMaxFileBytes) throw new Error('Choose a non-empty image no larger than 80 MB.');
+  const ext = '.' + file.name.split('.').pop().toLowerCase();
+  if (!['.png','.jpg','.jpeg','.webp','.tif','.tiff','.exr','.hdr'].includes(ext)) throw new Error('Choose a supported image file, not MaterialX or a document.');
+  const made = await api('/api/material/texture-sets', { name: `Material Library Editor Maps ${Date.now()}` });
+  let set = { id: made.id };
+  const response = await fetch(`/api/material/texture-file?id=${encodeURIComponent(set.id)}&name=${encodeURIComponent(file.name)}`, { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: file });
+  const result = await response.json(); if (!response.ok) throw new Error(result.error || 'Could not import this map.');
+  await loadTextureSets();
+  const fileRecord = materialTextureSets.find(item => item.id === set.id)?.files.find(item => item.name === file.name);
+  if (!fileRecord) throw new Error('Map uploaded, but its imported file entry could not be reloaded.');
+  return { ...fileRecord, path: `${made.path}/${file.name}` };
+}
+function refreshMaterialMapChoices() {
+  const select = $('materialMapSet'); if (!select) return;
+  select.innerHTML = '<option value="">Choose an imported map</option>';
+  for (const set of materialTextureSets) for (const file of set.files.filter(item => ['base-color','roughness','normal','bump'].includes(item.role))) {
+    const option = document.createElement('option'); option.value = `${set.id}/${file.name}`;
+    option.dataset.path = `${set.path}/${file.name}`; option.textContent = `${set.name} · ${file.role}: ${file.name}`; select.appendChild(option);
+  }
+}
+$('materialCopyMake').onclick = e => busy(e.target, async () => {
+  const source = $('materialLibrarySelect').value, object_id = Number($('materialCopyPart').value);
+  if (!source || !Number.isSafeInteger(object_id)) throw new Error('Select a library material and one scene part.');
+  const label = $('materialCopyName').value.trim().startsWith('Director ') ? $('materialCopyName').value.trim() : `Director ${$('materialCopyName').value.trim()}`;
+  const result = await api('/api/material/library-copy', { source, object_id, name: label });
+  materialCopyName = result.name;
+  await loadMaterials(result.name);
+  selectMaterialContext({ kind: 'scene-material', name: result.name });
+  $('materialBumpApply').disabled = false; $('materialCopySave').disabled = false;
+  $('materialMapFile').value = ''; $('materialBumpStrength').value = '';
+  $('materialCopyStatus').textContent = `Copied “${source}” as ${result.name} on the selected part. The KeyShot library original is unchanged.`;
+});
+$('materialBumpApply').onclick = e => busy(e.target, async () => {
+  if (!materialCopyName) throw new Error('Create an independent material copy first.');
+  const file = $('materialMapFile').files[0], selectedMap = $('materialMapSet').selectedOptions[0], role = $('materialMapRole').value, raw = $('materialBumpStrength').value;
+  if (!file && !selectedMap?.dataset.path && raw === '') throw new Error('Choose an image map or enter a bump strength.');
+  const imported = file ? await uploadMaterialMap(file) : null;
+  const result = await api('/api/material/bump', { name: materialCopyName, path: imported?.path || selectedMap?.dataset.path, role, ...(raw !== '' ? { strength: Number(raw) } : {}) });
+  $('materialMapFile').value = ''; $('materialMapSet').value = '';
+  $('materialCopyStatus').textContent = `${result.name} ${role} settings updated. The KeyShot library original is unchanged.`;
+  await inspectMaterial();
+});
+$('materialCopySave').onclick = e => busy(e.target, async () => {
+  if (!materialCopyName) throw new Error('Create an independent material copy first.');
+  const result = await api('/api/material/save', { name: materialCopyName });
+  $('materialCopyStatus').textContent = `Saved ${materialCopyName} to the KeyShot library and package ${result.path}.`;
+  await loadMaterialAssets();
+});
 async function loadMaterialAssets() {
   const result = await api('/api/material/assets'), list = $('materialAssetList');
   $('materialFolderPath').textContent = result.directory;
@@ -529,7 +699,10 @@ async function loadMaterialAssets() {
     const actions = document.createElement('div'); actions.className = 'row';
     const download = document.createElement('a'); download.className = 'asset-download'; download.href = `/api/material/file?name=${encodeURIComponent(asset.name)}`; download.download = asset.name; download.textContent = 'Download KMP';
     const show = document.createElement('button'); show.type = 'button'; show.className = 'sm'; show.textContent = 'Show in folder'; show.onclick = async () => { try { await api('/api/material/open-folder', {}); } catch (err) { toast(err.message); } };
-    actions.append(download, show); item.append(info, actions); list.appendChild(item);
+    const edit = document.createElement('button'); edit.type = 'button'; edit.className = 'sm'; edit.textContent = 'Edit with chat';
+    edit.onclick = () => selectMaterialContext({ kind: 'material-package', name: asset.name.replace(/\.kmp$/i, ''), file: asset.name,
+      source_texture_set: asset.source_texture_set });
+    actions.append(edit, download, show); item.append(info, actions); list.appendChild(item);
   }
 }
 $('materialAssetsRefresh').onclick = () => loadMaterialAssets().catch(e => toast(e.message));
@@ -537,6 +710,7 @@ $('materialOpenFolder').onclick = async () => { try { await api('/api/material/o
 let materialTextureSets = [];
 async function loadTextureSets() {
   const result = await api('/api/material/texture-sets'), host = $('textureSetList'); materialTextureSets = result.sets; host.innerHTML = '';
+  refreshMaterialMapChoices();
   if (!result.sets.length) { host.innerHTML = '<p class="chat-empty">No texture sets imported yet. Your source files will appear here after import.</p>'; return; }
   for (const set of result.sets) {
     const item = document.createElement('article'); item.className = 'material-asset texture-set'; item.setAttribute('role', 'listitem');
@@ -547,6 +721,11 @@ async function loadTextureSets() {
     roles.textContent = set.files.map(file => `${file.role}: ${file.name}`).join('  ·  ');
     const folder = document.createElement('code'); folder.textContent = set.path;
     info.append(title, meta, roles);
+    if (set.missing?.length) {
+      const missing = document.createElement('span'); missing.className = 'texture-set-roles';
+      missing.textContent = `Import unfinished · ${set.missing.length} map${set.missing.length === 1 ? '' : 's'} still expected: ${set.missing.join(', ')}`;
+      info.append(missing);
+    }
     if (set.materialx) {
       const recipe = document.createElement('span'); recipe.className = 'texture-set-roles';
       const links = set.materialx.connections.map(edge => `${edge.input} ← ${edge.source}`);
@@ -558,35 +737,60 @@ async function loadTextureSets() {
       info.append(recipe);
     }
     info.append(folder);
-    const supportedRoles = new Set(['base-color','roughness','glossiness','normal','bump','specular','metallic','displacement']);
+    const supportedRoles = new Set(['base-color','roughness','metallic','normal','bump','displacement']);
     const canBuild = set.files.some(file => supportedRoles.has(file.role));
-    const build = document.createElement('button'); build.type = 'button'; build.className = 'solid'; build.textContent = 'Build & apply to selection';
-    build.disabled = !canBuild;
-    build.title = canBuild ? 'Build an Advanced material, save it to KeyShot and this project, and apply it to the selected part(s).' : 'Add supported PBR maps (Base Color, Roughness, Normal/Bump, Specular, Metalness or Displacement).';
+    const options = document.createElement('div'); options.className = 'row';
+    const choice = (label, checked = true) => {
+      const wrap = document.createElement('label'); wrap.className = 'texture-set-roles';
+      const input = document.createElement('input'); input.type = 'checkbox'; input.checked = checked;
+      wrap.append(input, document.createTextNode(` ${label}`)); options.append(wrap); return input;
+    };
+    const ao = set.files.some(file => file.role === 'ambient-occlusion')
+      ? choice('Blend AO into Base Color') : null;
+    const displacement = set.files.some(file => file.role === 'displacement')
+      ? choice('Add displacement geometry') : null;
+    let height = null;
+    if (displacement) {
+      const wrap = document.createElement('label'); wrap.className = 'texture-set-roles';
+      wrap.textContent = 'Height (mm) ';
+      height = document.createElement('input'); height.type = 'number'; height.min = '0.01'; height.max = '5';
+      height.step = '0.01'; height.value = '0.1'; height.style.width = '5em';
+      wrap.append(height); options.append(wrap);
+    }
+    if (options.childNodes.length) info.append(options);
+    const build = document.createElement('button'); build.type = 'button'; build.className = 'solid'; build.textContent = 'Build KeyShot material';
+    build.disabled = !canBuild || !!set.missing?.length;
+    build.title = set.missing?.length ? 'This set is incomplete. Add the missing maps first for a fuller material.' : canBuild ? 'Supported AO and displacement maps are included by default; uncheck a map to omit it.' : 'Add a Base Color, Roughness, Metallic, Normal, Bump or Displacement map to build a material.';
     build.onclick = async () => {
       build.disabled = true; build.textContent = 'Building…';
       $('textureBuildStatus').textContent = `Building ${set.name} in the connected KeyShot scene…`;
       try {
         const result = await api('/api/material/build-from-texture-set', { texture_set_id: set.id,
-          surface_type: $('textureSurfaceType').value, projection: $('textureProjection').value });
+          use_ao: !!ao?.checked, use_displacement: !!displacement?.checked,
+          displacement_height_mm: height ? Number(height.value) : 0.1 });
         await loadMaterials(result.name); await loadMaterialAssets();
-        const channelNames = { 'base-color':'Base Color', roughness:'Roughness', glossiness:'Glossiness', normal:'Normal map', bump:'Bump map', specular:'Specular', metallic:'Metalness', displacement:'Displacement' };
+        selectMaterialContext({ kind: 'scene-material', name: result.name });
+        const channelNames = { 'base-color':'Base Color', 'ambient-occlusion':'AO blend', roughness:'Roughness',
+          metallic:'Metallic', normal:'Normal map', bump:'Bump map', displacement:'Displacement geometry' };
         const used = result.used_files.map(file => channelNames[file.role] || file.role).join(', ');
         const roleNames = { 'ambient-occlusion':'AO', metallic:'Metallic', displacement:'Displacement', specular:'Specular', glossiness:'Glossiness' };
         const skipped = [...new Set(result.skipped_files.map(file => roleNames[file.role]).filter(Boolean))];
-        $('textureBuildStatus').textContent = `${result.name} is in KeyShot’s Material Library → ${result.library_folder} and saved as a KMP in this project. Connected: ${used}.${skipped.length ? ` Preserved but skipped: ${skipped.join(', ')}.` : ''} ${result.assignment?.applied ? `Applied to ${result.assignment.objects.length} selected part(s).` : `Saved but not applied: ${result.assignment?.error || 'Select the target object in KeyShot first.'}`} Package: ${result.path}`;
-        $('materialStatus').textContent = `Built ${result.name}. ${result.assignment?.applied ? `Applied to ${result.assignment.objects.length} selected part(s).` : `Select the target in KeyShot and apply it from Material Library → ${result.library_folder}.`}`;
+        $('textureBuildStatus').textContent = `${result.name} (${result.material?.model || result.recipe?.material?.model || 'KeyShot material'}) is in KeyShot’s Material Library and saved as a KMP. Connected: ${used}.${skipped.length ? ` Skipped: ${skipped.join(', ')}.` : ''} It is unassigned—drag it onto your chosen part in KeyShot.${result.used_files.some(file => file.role === 'displacement') ? ' Execute Geometry in KeyShot after assigning it to see displacement.' : ''} Package: ${result.path}`;
+        $('materialStatus').textContent = `Built ${result.name}. It is not applied to the product; drag it from KeyShot’s Material Library onto the part you choose.`;
       } catch (error) {
         $('textureBuildStatus').textContent = `${error.message} Your imported source maps are unchanged. Check the KeyShot connection and try again.`;
-      } finally { build.disabled = !canBuild; build.textContent = 'Build & apply to selection'; }
+      } finally { build.disabled = !canBuild || !!set.missing?.length; build.textContent = 'Build KeyShot material'; }
     };
     const open = document.createElement('button'); open.type = 'button'; open.className = 'sm'; open.textContent = 'Open this set'; open.onclick = async () => { try { await api('/api/material/open-folder', { textureSet: set.id }); } catch (err) { toast(err.message); } };
     const addMore = document.createElement('button'); addMore.type = 'button'; addMore.className = 'sm'; addMore.textContent = 'Add missing maps'; addMore.onclick = () => { $('textureSetFiles').dataset.setId = set.id; $('textureSetFiles').click(); };
-    const actions = document.createElement('div'); actions.className = 'row'; actions.append(build, addMore, open); item.append(info, actions); host.appendChild(item);
+    const actions = document.createElement('div'); actions.className = 'row';
+    const edit = document.createElement('button'); edit.type = 'button'; edit.className = 'sm'; edit.textContent = 'Edit with chat';
+    edit.onclick = () => selectMaterialContext({ kind: 'texture-set', id: set.id, name: set.name, files: set.files.map(file => ({ name: file.name, role: file.role })), missing: set.missing || [] });
+    actions.append(edit, build, addMore, open); item.append(info, actions); host.appendChild(item);
   }
 }
 const TEXTURE_EXTENSIONS = new Set(['.png','.jpg','.jpeg','.webp','.tif','.tiff','.exr','.hdr','.mtlx']);
-const TEXTURE_FILE_LIMIT = 128 * 1024 * 1024, TEXTURE_SET_LIMIT = 512 * 1024 * 1024;
+const TEXTURE_FILE_LIMIT = 80 * 1024 * 1024, TEXTURE_SET_LIMIT = 80 * 1024 * 1024;
 async function uploadTextureFile(file, id) {
   const response = await fetch(`/api/material/texture-file?id=${encodeURIComponent(id)}&name=${encodeURIComponent(file.name)}`, { method:'POST', headers:{'Content-Type':'application/octet-stream'}, body:file });
   const result = await response.json(); if (!response.ok) throw new Error(result.error || `Could not import ${file.name}.`); return result;
@@ -665,35 +869,90 @@ async function importPoliigonFolder(files) {
 $('poliigonFolderChoose').onclick = () => $('poliigonFolderFiles').click();
 $('poliigonFolderFiles').onchange = event => { importPoliigonFolder(event.target.files); event.target.value = ''; };
 $('textureSetChoose').onclick = () => $('textureSetFiles').click();
-$('textureSetFiles').onchange = async event => {
-  const files = [...event.target.files]; event.target.value = '';
-  if (!files.length) return;
-  const resumeId = event.target.dataset.setId || ''; event.target.dataset.setId = '';
-  if (files.length > 32) { $('textureSetStatus').textContent = 'A texture set can contain up to 32 files.'; return; }
+async function importTextureFiles(files, { resumeId = '', folderName = '', setName = null, statusTarget = null } = {}) {
+  const showStatus = message => { $('textureSetStatus').textContent = message; if (statusTarget) $(statusTarget).textContent = message; };
+  if (!files.length) return null;
+  if (files.length > 24) { showStatus('A texture set can contain up to 24 files.'); return null; }
+  folderName = folderName || files[0].webkitRelativePath?.split('/')[0] || '';
+  if (!resumeId && folderName) {
+    const incoming = new Set(files.map(file => file.name.toLowerCase()));
+    const partial = materialTextureSets.find(set => set.name === folderName && set.files.some(file => incoming.has(file.name.toLowerCase())) && set.missing?.length);
+    if (partial) resumeId = partial.id;
+  }
   const existing = materialTextureSets.find(set => set.id === resumeId);
+  const mismatched = files.find(file => existing?.files.some(saved => saved.name.toLowerCase() === file.name.toLowerCase() && saved.bytes !== file.size));
+  if (mismatched) { showStatus(`${mismatched.name} has a different size than the copy already in this set. Choose a new set name for this version.`); return null; }
   const existingNames = new Set((existing?.files || []).map(file => file.name.toLowerCase()));
   const pending = files.filter(file => !existingNames.has(file.name.toLowerCase()));
-  if (!pending.length) { $('textureSetStatus').textContent = 'All selected maps are already in this set.'; return; }
+  if (!pending.length) {
+    if (existing) selectMaterialContext({ kind: 'texture-set', id: existing.id, name: existing.name, files: existing.files.map(file => ({ name: file.name, role: file.role })), missing: existing.missing || [] }, false);
+    showStatus(existing?.missing?.length ? `This set still needs ${existing.missing.join(', ')}. Drop the complete Poliigon folder again.` : 'All selected maps are already in this set.');
+    return existing ? { set: existing, imported: 0, channels: [] } : null;
+  }
   const total = pending.reduce((n, file) => n + file.size, 0) + (existing?.bytes || 0);
   const invalid = pending.find(file => !TEXTURE_EXTENSIONS.has('.' + file.name.split('.').pop().toLowerCase()));
-  if (invalid) { $('textureSetStatus').textContent = `${invalid.name} is not a supported texture or MaterialX file.`; return; }
-  if (pending.some(file => !file.size || file.size > TEXTURE_FILE_LIMIT)) { $('textureSetStatus').textContent = 'Each source file must be 128 MB or smaller.'; return; }
-  if (total > TEXTURE_SET_LIMIT) { $('textureSetStatus').textContent = 'This set is over the 512 MB import limit.'; return; }
+  if (invalid) { showStatus(`${invalid.name} is not a supported texture or MaterialX file.`); return null; }
+  if (pending.some(file => !file.size || file.size > TEXTURE_FILE_LIMIT)) { showStatus('Each source file must be 80 MB or smaller.'); return null; }
+  if (total > TEXTURE_SET_LIMIT) { showStatus('This set is over the 80 MB import limit.'); return null; }
   $('textureSetChoose').disabled = true;
   try {
-    const folderName = files[0].webkitRelativePath?.split('/')[0];
-    const created = existing || await api('/api/material/texture-sets', { name: $('textureSetName').value || folderName || 'Imported texture set' });
+    const created = existing || await api('/api/material/texture-sets', { name: setName || $('textureSetName').value.trim() || folderName || 'Imported texture set' });
+    const receipts = [];
     for (let i = 0; i < pending.length; i++) {
-      const file = pending[i]; $('textureSetStatus').textContent = `Copying original maps ${i + 1} of ${pending.length} · ${file.name}`;
-      await uploadTextureFile(file, created.id);
+      const file = pending[i]; showStatus(`Copying texture maps ${i + 1} of ${pending.length} · ${file.name}`);
+      const receipt = await uploadTextureFile(file, created.id);
+      if (receipt.name !== file.name || receipt.bytes !== file.size) throw new Error(`${file.name} was received with an unexpected size. Refresh the set list to inspect files already copied.`);
+      receipts.push(receipt);
     }
-    $('textureSetStatus').textContent = `Imported ${pending.length} source file${pending.length === 1 ? '' : 's'} to ${created.path}. The maps are preserved locally and ready to build into a KeyShot material.`;
     await loadTextureSets();
+    const importedSet = materialTextureSets.find(set => set.id === created.id);
+    const verified = importedSet && pending.every(file => importedSet.files.some(saved => saved.name === file.name && saved.bytes === file.size));
+    if (!verified) throw new Error('The upload finished, but one or more files did not appear in the refreshed Texture sets list. Refresh the list to inspect the partial import.');
+    const channelLabels = { 'base-color':'Base Color', roughness:'Roughness', metallic:'Metallic', normal:'Normal', bump:'Bump', displacement:'Displacement', specular:'Specular', 'ambient-occlusion':'AO', glossiness:'Glossiness' };
+    const detected = [...new Set(receipts.map(file => file.role).filter(role => channelLabels[role]).map(role => channelLabels[role]))];
+    const detectedText = detected.length ? `Detected channels: ${detected.join(', ')}.` : 'No channel names were recognized; check the imported filenames below.';
+    const message = importedSet.missing?.length
+      ? `Copied ${receipts.length} file${receipts.length === 1 ? '' : 's'}, but this set still needs ${importedSet.missing.join(', ')}. Drop the complete Poliigon folder again to finish it.`
+      : `Verified in Material Lab: ${receipts.length} file${receipts.length === 1 ? '' : 's'} copied and visible in this set. ${detectedText} The maps are ready to edit in Material Director; build a KeyShot material to create a graph in the connected scene.`;
+    showStatus(message);
+    selectMaterialContext({ kind: 'texture-set', id: importedSet.id, name: importedSet.name, files: importedSet.files.map(file => ({ name: file.name, role: file.role })), missing: importedSet.missing || [] }, false);
+    return { set: importedSet, imported: receipts.length, channels: detected };
   } catch (error) {
-    $('textureSetStatus').textContent = `${error.message} Any files already copied remain safely in the Materials folder.`;
+    showStatus(`${error.message} Any files already copied remain safely in the Materials folder.`);
     await loadTextureSets().catch(() => {});
+    return null;
   } finally { $('textureSetChoose').disabled = false; }
+}
+$('textureSetFiles').onchange = event => {
+  const files = [...event.target.files]; event.target.value = '';
+  const resumeId = event.target.dataset.setId || ''; event.target.dataset.setId = '';
+  importTextureFiles(files, { resumeId }).catch(error => toast(error.message));
 };
+function droppedEntryFile(entry) {
+  return new Promise((resolve, reject) => entry.file(resolve, reject));
+}
+async function droppedDirectoryFiles(entry) {
+  const reader = entry.createReader(), entries = [];
+  for (;;) {
+    const batch = await new Promise((resolve, reject) => reader.readEntries(resolve, reject));
+    if (!batch.length) break;
+    entries.push(...batch);
+  }
+  const nested = await Promise.all(entries.map(async child => child.isDirectory ? droppedDirectoryFiles(child) : [await droppedEntryFile(child)]));
+  return nested.flat();
+}
+async function classifyMaterialDrop(dataTransfer) {
+  const folders = [], looseFiles = [];
+  const items = [...(dataTransfer.items || [])].filter(item => item.kind === 'file');
+  if (!items.length) return { folders, looseFiles: [...(dataTransfer.files || [])], folderSupport: false };
+  for (const item of items) {
+    const entry = item.webkitGetAsEntry?.();
+    if (entry?.isDirectory) folders.push({ name: entry.name, files: await droppedDirectoryFiles(entry) });
+    else if (entry?.isFile) looseFiles.push(await droppedEntryFile(entry));
+    else { const file = item.getAsFile(); if (file) looseFiles.push(file); }
+  }
+  return { folders, looseFiles, folderSupport: items.some(item => typeof item.webkitGetAsEntry === 'function') };
+}
 const textureDrop = $('materialTextureTitle').closest('.workspace-card');
 textureDrop.addEventListener('dragover', event => { event.preventDefault(); textureDrop.classList.add('dragover'); });
 textureDrop.addEventListener('dragleave', event => textureDrop.classList.remove('dragover'));
@@ -804,7 +1063,7 @@ function renderMaterialImages() {
   });
   $('materialImageCount').textContent = materialImages.length ? `${materialImages.length} of ${MAX_MATERIAL_IMAGES} reference images` : 'No references added';
   $('materialClearImages').hidden = materialImages.length === 0;
-  $('materialDropText').innerHTML = materialImages.length ? `Add more reference images <small>${MAX_MATERIAL_IMAGES - materialImages.length} remaining · PNG, JPEG, WebP</small>` : 'Add reference images <small>Choose, paste or drop up to 8 · PNG, JPEG, WebP</small>';
+  $('materialDropText').innerHTML = materialImages.length ? `Add references or a Poliigon folder <small>${MAX_MATERIAL_IMAGES - materialImages.length} reference images remaining · folder maps and loose pictures can be dropped together</small>` : 'Add references or a Poliigon folder <small>Drop the texture folder and loose reference pictures together, or choose images</small>';
 }
 async function readMaterialImage(file) {
   const url = URL.createObjectURL(file), img = new Image();
@@ -837,8 +1096,45 @@ function queueMaterialImages(files) { materialImageQueue = materialImageQueue.th
 $('materialDrop').onclick = () => $('materialFile').click();
 $('materialFile').onchange = e => { queueMaterialImages(e.target.files).catch(err => toast(err.message)); e.target.value = ''; };
 $('materialDrop').ondragover = e => { e.preventDefault(); e.currentTarget.classList.add('dragover'); };
-$('materialDrop').ondragleave = e => e.currentTarget.classList.remove('dragover');
-$('materialDrop').ondrop = e => { e.preventDefault(); e.currentTarget.classList.remove('dragover'); queueMaterialImages(e.dataTransfer.files).catch(err => toast(err.message)); };
+$('materialDrop').ondragleave = e => { if (!e.currentTarget.contains(e.relatedTarget)) e.currentTarget.classList.remove('dragover'); };
+$('materialDrop').ondrop = async e => {
+  e.preventDefault(); e.currentTarget.classList.remove('dragover');
+  const status = $('materialDropStatus'); status.textContent = 'Reading dropped items…';
+  try {
+    const { folders, looseFiles } = await classifyMaterialDrop(e.dataTransfer);
+    const referenceFiles = looseFiles.filter(file => /^image\/(png|jpeg|webp)$/.test(file.type));
+    const looseTextureFiles = looseFiles.filter(file => !/^image\/(png|jpeg|webp)$/.test(file.type) && TEXTURE_EXTENSIONS.has('.' + file.name.split('.').pop().toLowerCase()));
+    const supportedFolderFiles = folders.map(folder => ({ ...folder, files: folder.files.filter(file => TEXTURE_EXTENSIONS.has('.' + file.name.split('.').pop().toLowerCase())) }));
+    const ignored = looseFiles.length - referenceFiles.length - looseTextureFiles.length
+      + folders.reduce((sum, folder) => sum + folder.files.filter(file => !TEXTURE_EXTENSIONS.has('.' + file.name.split('.').pop().toLowerCase())).length, 0);
+    if (!supportedFolderFiles.some(folder => folder.files.length) && !referenceFiles.length && !looseTextureFiles.length) throw new Error('Drop a Poliigon folder or PNG, JPEG or WebP reference pictures.');
+    const beforeReferences = materialImages.length;
+    const jobs = [];
+    const textureGroups = supportedFolderFiles.filter(folder => folder.files.length).map(folder => ({ name: folder.name, files: folder.files }));
+    if (looseTextureFiles.length) textureGroups.push({ name: 'Dropped texture maps', files: looseTextureFiles });
+    const textureResults = [];
+    if (textureGroups.length) jobs.push((async () => {
+      for (const group of textureGroups) textureResults.push(await importTextureFiles(group.files, { folderName: group.name, setName: textureGroups.length === 1 ? ($('textureSetName').value.trim() || group.name) : group.name, statusTarget: 'materialDropStatus' }));
+    })());
+    if (referenceFiles.length) jobs.push(queueMaterialImages(referenceFiles));
+    await Promise.all(jobs);
+    const addedReferences = materialImages.length - beforeReferences;
+    const summary = [];
+    const importedCount = textureResults.filter(Boolean).length, failedCount = textureResults.length - importedCount;
+    if (importedCount) {
+      const completeCount = textureResults.filter(result => result && !result.set.missing?.length).length;
+      const incompleteCount = importedCount - completeCount;
+      if (completeCount) summary.push(`${completeCount} texture set${completeCount === 1 ? '' : 's'} verified and ready`);
+      if (incompleteCount) summary.push(`${incompleteCount} texture set${incompleteCount === 1 ? '' : 's'} still need maps`);
+    }
+    if (addedReferences) summary.push(`${addedReferences} reference picture${addedReferences === 1 ? '' : 's'} added`);
+    if (ignored) summary.push(`${ignored} unsupported file${ignored === 1 ? '' : 's'} skipped`);
+    if (failedCount) summary.push(`${failedCount} texture import${failedCount === 1 ? '' : 's'} need attention`);
+    const missingNames = [...new Set(textureResults.filter(Boolean).flatMap(result => result.set.missing || []))];
+    const readyNote = [importedCount ? 'The imported set is now the chat target.' : '', missingNames.length ? `Still needed: ${missingNames.join(', ')}.` : '', addedReferences ? 'Reference pictures will be sent with your next prompt.' : ''].filter(Boolean).join(' ');
+    status.textContent = summary.length ? `${summary.join(' · ')}. ${failedCount ? status.textContent : readyNote}` : 'No supported references or texture maps were added.';
+  } catch (error) { status.textContent = error.message; }
+};
 $('materialClearImages').onclick = () => { materialImages = []; renderMaterialImages(); };
 $('materialsWorkspace').addEventListener('paste', e => { const files = [...e.clipboardData.files].filter(f => /^image\/(png|jpeg|webp)$/.test(f.type)); if (files.length) { e.preventDefault(); queueMaterialImages(files).catch(err => toast(err.message)); } });
 $('referencesWorkspace').addEventListener('paste', e => { const f = [...e.clipboardData.files].filter(f => f.type.startsWith('image/')); if (!f.length) return; e.preventDefault(); if (document.activeElement === $('styleName') || document.activeElement === $('styleDrop')) addStyleImages(f); else $('photoDrop').dispatchEvent(new CustomEvent('referencepaste', { detail: f[0] })); });
@@ -849,7 +1145,7 @@ async function sendMaterialPrompt() {
   const countLabel = materialImages.length ? ` · ${materialImages.length} reference image${materialImages.length === 1 ? '' : 's'}` : '';
   materialLine('user', (text || 'Use these references as the material direction.') + countLabel);
   try {
-    await api('/api/material/prompt', { text: text || 'Create an unassigned material inspired by these reference images.', images: materialImages.map(item => item.data) });
+    await api('/api/material/prompt', { text: text || 'Create an unassigned material inspired by these reference images.', images: materialImages.map(item => item.data), context: materialWorkContext, imageAspectRatio: materialImageAspect.value });
     $('materialPrompt').value = ''; let since = 0;
     for (;;) {
       await new Promise(r => setTimeout(r, 700)); const j = await api('/api/material/prompt?since=' + since); since = j.next;
@@ -1003,7 +1299,7 @@ function nextFrame() { img.src = '/api/preview.png?t=' + Date.now(); }
 img.onload = () => { $('empty').style.display = 'none'; img.style.display = 'block'; setTimeout(nextFrame, 3000); };
 img.onerror = () => { img.style.display = 'none'; $('empty').style.display = 'block'; setTimeout(nextFrame, 2000); };
 nextFrame();
-loadStudio().catch(() => {}); loadMaterials().catch(() => {}); loadMaterialAssets().catch(() => {}); loadTextureSets().catch(() => {}); loadStyles().catch(() => {}); loadConfig().catch(() => {}); showExamples(); drawStage();
+loadStudio().catch(() => {}); loadMaterials().catch(() => {}); loadMaterialAssets().catch(() => {}); loadTextureSets().catch(() => {}); loadMaterialLibrary().catch(() => {}); loadMaterialSceneObjects().catch(() => {}); loadStyles().catch(() => {}); loadConfig().catch(() => {}); showExamples(); drawStage();
 setInterval(() => { if (ST === null) loadStudio().catch(() => {}); }, 3000);
 </script>
 <script src="/photo-ui.js"></script>

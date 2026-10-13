@@ -39,10 +39,11 @@ test('release package source includes the texture converter, bridge and workflow
   for (const file of [
     'bridge/cc_materials.py',
     'server/material-textures.js',
+    'server/texture-edit.js',
     'skills/material-lab/SKILL.md',
     'skills/reference-video/SKILL.md',
   ]) assert.equal(fs.existsSync(path.join(root, file)), true, `Missing release dependency: ${file}`);
   const packager = fs.readFileSync(path.join(root, 'package.ps1'), 'utf8');
-  for (const file of ['bridge\\cc_materials.py', 'server\\material-textures.js', 'skills\\material-lab\\SKILL.md', 'skills\\reference-video\\SKILL.md'])
+  for (const file of ['bridge\\cc_materials.py', 'server\\material-textures.js', 'server\\texture-edit.js', 'skills\\material-lab\\SKILL.md', 'skills\\reference-video\\SKILL.md'])
     assert.equal(packager.includes(file), true, `Packager does not include ${file}`);
 });

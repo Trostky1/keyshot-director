@@ -2,6 +2,9 @@
 // Supports 8/16-bit grey, grey+alpha, RGB, RGBA, non-interlaced (what KeyShot screenshots are).
 const zlib = require('zlib');
 
+const CRC_TABLE = Array.from({ length: 256 }, (_, n) => { let c = n; for (let k = 0; k < 8; k++) c = (c & 1) ? (0xedb88320 ^ (c >>> 1)) : (c >>> 1); return c >>> 0; });
+function crc32(buf) { let c = 0xffffffff; for (const b of buf) c = CRC_TABLE[(c ^ b) & 255] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0; }
+
 function decode(buf) {
   if (!Buffer.isBuffer(buf) || buf.length < 33 || !buf.subarray(0, 8).equals(Buffer.from([137,80,78,71,13,10,26,10]))) throw new Error('not a PNG');
   let pos = 8, w = 0, h = 0, depth = 8, ctype = 6, interlace = 0; const idat = [];
@@ -72,4 +75,4 @@ function productStats(img, r = { x0: 0.30, x1: 0.70, y0: 0.12, y1: 0.82 }, tol =
   return { n, bg, share: n / tot, p05: q(0.05), p25: q(0.25), p50: q(0.5), p75: q(0.75), p95: q(0.95), p99: q(0.99), clipFrac: clip / n, fallback: false };
 }
 
-module.exports = { decode, stats, productStats };
+module.exports = { decode, stats, productStats, crc32 };

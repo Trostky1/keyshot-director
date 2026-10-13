@@ -240,4 +240,4 @@ MATERIAL_FILE = os.path.join(os.path.dirname(SHOTS), "cc_materials.py")
 with open(MATERIAL_FILE, "r", encoding="utf-8-sig") as _f:
     exec(compile(_f.read(), MATERIAL_FILE, "exec"), globals())
 OPS.update(MATERIAL_OPS)
-# edit stamp for companion modules: 80 (surface type and projection controls for texture import)
+# edit stamp for companion modules: 68 (template-driven procedural displacement blend)

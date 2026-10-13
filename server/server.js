@@ -10,6 +10,8 @@ const agent = require('./agent');
 const { execFile } = require('child_process');
 const { resizeJpeg } = require('./image-tools');
 const textureSets = require('./material-textures');
+const textureEdit = require('./texture-edit');
+const { compileTexturePlan } = require('./material-core');
 const { RIGS, ENV_RIGS, buildRig, toPos } = require('./rigs');
 const { decode, productStats } = require('./png');
 const style = require('./style');
@@ -18,17 +20,89 @@ const janitor = require('./janitor');
 const photo = require('./photo');
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const MATERIAL_PACKAGE_DIR = path.resolve(__dirname, '..', 'materials');
-fs.mkdirSync(MATERIAL_PACKAGE_DIR, { recursive: true });
+const packageEntryCache = new Map();
+
+function kmpEntryNames(filePath, stat) {
+  const cached = packageEntryCache.get(filePath);
+  if (cached && cached.mtimeMs === stat.mtimeMs && cached.size === stat.size) return cached.entries;
+  let fd;
+  try {
+    fd = fs.openSync(filePath, 'r');
+    const tailLength = Math.min(stat.size, 65557), tail = Buffer.alloc(tailLength);
+    fs.readSync(fd, tail, 0, tailLength, stat.size - tailLength);
+    let eocd = -1;
+    for (let i = tail.length - 22; i >= Math.max(0, tail.length - 65557); i--) {
+      if (tail.readUInt32LE(i) === 0x06054b50) { eocd = i; break; }
+    }
+    if (eocd < 0) return [];
+    const count = tail.readUInt16LE(eocd + 10), directorySize = tail.readUInt32LE(eocd + 12), directoryOffset = tail.readUInt32LE(eocd + 16);
+    if (count > 4096 || directorySize > 8 * 1024 * 1024 || directoryOffset + directorySize > stat.size) return [];
+    const directory = Buffer.alloc(directorySize);
+    fs.readSync(fd, directory, 0, directorySize, directoryOffset);
+    const entries = [];
+    for (let at = 0; at + 46 <= directory.length && entries.length < count;) {
+      if (directory.readUInt32LE(at) !== 0x02014b50) break;
+      const flags = directory.readUInt16LE(at + 8), nameLength = directory.readUInt16LE(at + 28);
+      const extraLength = directory.readUInt16LE(at + 30), commentLength = directory.readUInt16LE(at + 32);
+      if (at + 46 + nameLength + extraLength + commentLength > directory.length) break;
+      const bytes = directory.subarray(at + 46, at + 46 + nameLength);
+      entries.push(bytes.toString(flags & 0x800 ? 'utf8' : 'latin1'));
+      at += 46 + nameLength + extraLength + commentLength;
+    }
+    packageEntryCache.set(filePath, { mtimeMs: stat.mtimeMs, size: stat.size, entries });
+    return entries;
+  } catch { return []; }
+  finally { if (fd != null) fs.closeSync(fd); }
+}
+
+function matchPackageTextureSet(asset, sets) {
+  const packedMaps = new Set(kmpEntryNames(asset.path, asset).map(entry => path.basename(entry).toLowerCase()));
+  if (!packedMaps.size) return null;
+  const matches = sets.map(set => ({ set, files: set.files.filter(file => packedMaps.has(path.basename(file.name).toLowerCase())) }))
+    .filter(item => item.files.length >= 2)
+    .sort((a, b) => b.files.length - a.files.length || Number(!!a.set.missing?.length) - Number(!!b.set.missing?.length) || b.set.imported.localeCompare(a.set.imported));
+  const best = matches[0];
+  if (!best || (matches[1] && matches[1].files.length === best.files.length && !best.set.missing?.length && !matches[1].set.missing?.length)) return null;
+  return { id: best.set.id, name: best.set.name, files: best.files.map(file => ({ name: file.name, role: file.role })),
+    missing: best.set.missing || [], materialx: best.set.materialx ? { values: best.set.materialx.values, connections: best.set.materialx.connections } : null };
+}
 
 function listMaterialPackages() {
   if (!fs.existsSync(MATERIAL_PACKAGE_DIR)) return [];
+  const sets = textureSets.listTextureSets();
   return fs.readdirSync(MATERIAL_PACKAGE_DIR, { withFileTypes: true })
     .filter(entry => entry.isFile() && entry.name.toLowerCase().endsWith('.kmp'))
     .map(entry => {
       const filePath = path.join(MATERIAL_PACKAGE_DIR, entry.name);
       const stat = fs.statSync(filePath);
-      return { name: entry.name, path: filePath, size: stat.size, modified: stat.mtime.toISOString() };
+      const asset = { name: entry.name, path: filePath, size: stat.size, modified: stat.mtime.toISOString(), mtimeMs: stat.mtimeMs };
+      return { ...asset, source_texture_set: matchPackageTextureSet(asset, sets) };
     }).sort((a, b) => b.modified.localeCompare(a.modified));
+}
+
+function resolveMaterialContext(raw) {
+  if (raw == null) return null;
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('Invalid material selection. Choose it again from Material Lab.');
+  const kind = String(raw.kind || '');
+  const cleanName = value => {
+    const name = String(value || '').trim();
+    if (!name || name.length > 160 || /[\u0000-\u001f]/.test(name)) throw new Error('Invalid material name in the current selection.');
+    return name;
+  };
+  if (kind === 'texture-set') {
+    const set = textureSets.listTextureSets().find(item => item.id === String(raw.id || ''));
+    if (!set) throw new Error('That texture set is no longer available. Refresh Material Lab and select it again.');
+    return { kind, id: set.id, name: set.name, files: set.files.slice(0, 24).map(file => ({ name: file.name, role: file.role })),
+      missing: set.missing || [], materialx: set.materialx ? { values: set.materialx.values, connections: set.materialx.connections } : null };
+  }
+  if (kind === 'material-package') {
+    const file = path.basename(String(raw.file || ''));
+    const asset = listMaterialPackages().find(item => item.name === file);
+    if (!asset) throw new Error('That saved material package is no longer available. Refresh Material Lab and select it again.');
+    return { kind, name: asset.name.replace(/\.kmp$/i, ''), file: asset.name, source_texture_set: asset.source_texture_set };
+  }
+  if (kind === 'scene-material' || kind === 'library-material') return { kind, name: cleanName(raw.name) };
+  throw new Error('Unknown Material Lab selection. Choose it again from Material Lab.');
 }
 
 // ---- studio lighting state (what we believe is in KeyShot; the bridge keeps the real registry) ----
@@ -521,39 +595,34 @@ const actions = {
     return { summary: `light ${id} updated`, light: lightView(r.light) };
   },
   async list_materials() { const r = await send('materials_list', {}, 15000); return { summary: `${r.materials.length} scene and Director materials${r.editable_target ? `; authorized edit target: ${r.editable_target}` : ''}`, ...r }; },
-  async list_library_materials({ query = '' } = {}) {
-    const r = await send('material_library_list', { query: String(query).slice(0, 100) }, 60000);
-    return { summary: `${r.materials.length} KeyShot library materials${r.query ? ` matching “${r.query}”` : ''}`, ...r };
-  },
-  async copy_library_material({ name }) {
-    assertSceneAvailable(false);
-    const r = await send('material_library_copy', { name: String(name || '') }, 30000);
-    return { summary: `Copied “${r.source}” as “${r.name}” and applied the separate copy to ${r.objects.length} selected part${r.objects.length === 1 ? '' : 's'}. Describe the variation in Material Director; the library original is unchanged.`, ...r };
-  },
+  async list_material_library({ query = '' } = {}) { return send('material_library', { query }, 30000); },
   async list_texture_sets() {
     const sets = textureSets.listTextureSets();
     return { summary: `${sets.length} imported texture set${sets.length === 1 ? '' : 's'}`,
-      sets: sets.map(set => ({ id: set.id, name: set.name, files: set.files.map(file => ({ name: file.name, role: file.role })) })) };
+      sets: sets.map(set => ({ id: set.id, name: set.name, files: set.files.map(file => ({ name: file.name, role: file.role })), missing: set.missing || [] })) };
   },
-  async build_material_from_texture_set({ texture_set_id, name, surface_type = 'auto', projection = 'box' }) {
+  async edit_texture_map({ texture_set_id, filename, operation, amount }) {
+    const set = textureSets.listTextureSets().find(item => item.id === String(texture_set_id || ''));
+    const sourceFile = set?.files.find(file => file.name === filename);
+    if (!set || !sourceFile) throw new Error('Choose a texture from an imported set.');
+    if (operation === 'invert' && sourceFile.role !== 'glossiness') throw new Error('Only a confirmed glossiness map may be inverted; never invert a normal map.');
+    if (operation === 'contrast' && !['roughness','glossiness','bump','displacement'].includes(sourceFile.role)) throw new Error('Contrast edits are limited to grayscale roughness, glossiness, bump or height/displacement maps.');
+    if (['horizontal-grain','vertical-grain'].includes(operation) && !['roughness','glossiness','bump','displacement'].includes(sourceFile.role)) throw new Error('Directional smoothing is limited to grayscale scalar maps, not color or normal maps.');
+    const sourcePath = path.resolve(set.path, filename);
+    if (!sourcePath.startsWith(path.resolve(set.path) + path.sep)) throw new Error('Invalid texture location.');
+    const edited = textureEdit.editTexture({ sourcePath, outputDir: set.path, operation, amount });
+    let imported;
+    try { imported = textureSets.addTextureFile(set.id, path.basename(edited.path), fs.readFileSync(edited.path)); }
+    finally { try { fs.unlinkSync(edited.path); } catch { /* source and registered set files remain intact */ } }
+    return { summary: `Created ${imported.name} as a derived map; the original ${filename} is unchanged. You can now wire it as the ${imported.role} channel.`,
+      ...edited, path: path.join(set.path, imported.name), name: imported.name, role: imported.role };
+  },
+  async build_material_from_texture_set({ texture_set_id, name, allow_partial = false, use_ao = true,
+    use_displacement = true, displacement_height_mm = 0.1, geometry_template, procedural_strength = 0.2 }) {
     assertSceneAvailable(false);
     const set = textureSets.listTextureSets().find(item => item.id === String(texture_set_id || ''));
     if (!set) throw new Error('That texture set is no longer available. Refresh Material Lab and try again.');
-    if (!['auto', 'plastic', 'metal', 'mixed'].includes(surface_type)) throw new Error('Choose Auto, Plastic/Fabric, Metal, or Mixed metal + plastic.');
-    if (!['planar', 'box', 'cylinder', 'sphere', 'uv', 'camera'].includes(projection)) throw new Error('Choose a supported texture projection.');
-    const selection = await send('material_selection', {}, 15000);
-    if (!selection.objects?.length) throw new Error('Select the target part in KeyShot first. The new material will be applied to the current selection.');
-    const fileFor = role => set.files.find(file => file.role === role);
-    const selected = [];
-    for (const role of ['base-color', 'roughness', 'specular', 'metallic', 'displacement']) {
-      const file = fileFor(role); if (file) selected.push({ role, path: path.join(set.path, file.name), filename: file.name });
-    }
-    const normal = fileFor('normal') || fileFor('bump');
-    if (normal) selected.push({ role: fileFor('normal') ? 'normal' : 'bump', path: path.join(set.path, normal.name), filename: normal.name });
-    if (!fileFor('roughness') && fileFor('glossiness')) {
-      const file = fileFor('glossiness'); selected.push({ role: 'glossiness', path: path.join(set.path, file.name), filename: file.name });
-    }
-    if (!selected.length) throw new Error('No supported Base Color, Roughness/Glossiness, Normal/Bump, Specular, Metalness or Displacement maps were found in this set.');
+    if (set.missing?.length && !allow_partial) throw new Error(`This Poliigon set is incomplete. Drop the same folder again to import: ${set.missing.join(', ')}. To build only the available maps, explicitly choose a partial build.`);
     const scene = await send('materials_list', {}, 15000);
     const existing = new Set(scene.materials || []);
     const rawBase = String(name || `Director ${set.name}`).trim();
@@ -565,6 +634,22 @@ const actions = {
       const ending = ` (${suffix++})`;
       materialName = baseName.slice(0, 80 - ending.length).trimEnd() + ending;
     }
+    if (typeof use_ao !== 'boolean' || typeof use_displacement !== 'boolean') throw new Error('AO and displacement selections must be on or off.');
+    const heightMm = Number(displacement_height_mm);
+    if (use_displacement && (!Number.isFinite(heightMm) || heightMm < 0.01 || heightMm > 5))
+      throw new Error('Choose a displacement height from 0.01 to 5 mm.');
+    const reliefStrength = Number(procedural_strength);
+    if (geometry_template && (!Number.isFinite(reliefStrength) || reliefStrength < 0.01 || reliefStrength > 1))
+      throw new Error('Procedural displacement blend strength must be from 0.01 to 1.');
+    const plan = await compileTexturePlan({ name: materialName,
+      files: set.files.filter(file => (use_ao || file.role !== 'ambient-occlusion') &&
+        (use_displacement || file.role !== 'displacement')).map(file => ({ name: file.name, role: file.role })) });
+    const filesByName = new Map(set.files.map(file => [file.name, file]));
+    const selected = plan.maps.map(map => {
+      const file = filesByName.get(map.path);
+      if (!file) throw new Error(`Material recipe referenced a missing texture: ${map.path}`);
+      return { role: map.role, path: path.join(set.path, file.name), filename: file.name };
+    });
     await send('material_create', { name: materialName }, 20000);
     let wiring;
     // Poliigon's common product-surface maps use a 30 cm tile; zero-scale
@@ -578,10 +663,16 @@ const actions = {
     const displacementHeightM = Number.isFinite(sourceDisplacementScale) && sourceDisplacementScale > 0
       ? Math.min(mappingSizeM * sourceDisplacementScale, 0.005) : 0;
     try {
-      wiring = await send('material_texture_apply', { name: materialName,
-        mapping_size_m: mappingSizeM, displacement_height_m: displacementHeightM,
-        metal_mode: metalMode, projection,
+      wiring = await send('material_texture_apply', { name: materialName, model: plan.material.model,
+        displacement_height_mm: heightMm,
         maps: selected.map(({ role, path: filePath }) => ({ role, path: filePath })) }, 30000);
+      if (geometry_template) {
+        if (!use_displacement || !selected.some(map => map.role === 'displacement'))
+          throw new Error('Procedural relief needs the imported displacement map to remain connected.');
+        wiring.procedural_geometry = await send('material_add_geometry_template', {
+          name: materialName, template: String(geometry_template), procedural_strength: reliefStrength
+        }, 30000);
+      }
     } catch (error) {
       try { await send('material_discard', { name: materialName }, 15000); } catch { /* preserve the material if KeyShot says it is no longer safe to discard */ }
       throw new Error(`KeyShot could not build this texture set: ${error.message}`);
@@ -598,16 +689,22 @@ const actions = {
     const wiredRoles = new Set(wiring.maps.map(map => map.role));
     const usedFiles = selected.filter(({ role }) => wiredRoles.has(role)).map(({ role, filename }) => ({ role, name: filename }));
     const usedNames = new Set(usedFiles.map(file => file.name));
-    const skipped = set.files.filter(file => !usedNames.has(file.name)).map(file => ({ name: file.name, role: file.role }));
+    const skipped = set.files.filter(file => !usedNames.has(file.name)).map(file => ({ name: file.name, role: file.role,
+      reason: file.role === 'ambient-occlusion' && !use_ao ? 'AO blend not enabled' :
+        file.role === 'displacement' && !use_displacement ? 'Displacement not enabled' :
+        plan.skipped.find(item => item.name === file.name)?.reason || 'No supported connection' }));
     const channels = wiring.maps.map(map => map.role).join(', ');
-    const targetNames = selection.objects.map(object => `${object.name}${object.material ? ` (was ${object.material})` : ''}`).join(', ');
-    return { summary: `${materialName} built as a ${metalMode} KeyShot graph from ${channels}; saved to the KeyShot ${saved.library_folder || 'Director'} library folder and as a portable KMP.` +
-        (assignment.applied ? ` Applied to ${targetNames || `${assignment.objects.length} selected object(s)`}.` : ' It is saved but was not applied to the current selection.'),
-      name: materialName, path: saved.path, library: saved.library, library_folder: saved.library_folder || 'Director', material: wiring,
-      used_files: usedFiles, skipped_files: skipped, assignment };
+    const reliefSummary = wiring.procedural_geometry ? ' with Advanced Plastic procedural relief blended into the displacement map' : '';
+    return { summary: `${materialName} built as an unassigned ${wiring.model || plan.material.model} material from ${channels}${reliefSummary}; saved to the KeyShot library and as a portable KMP.`,
+      name: materialName, path: saved.path, library: saved.library, material: wiring, used_files: usedFiles, skipped_files: skipped,
+      recipe: plan,
+      assignment: 'Not applied to any product part. Drag it from KeyShot’s Material Library onto the chosen part.' };
   },
   async inspect_material({ name }) { return await send('material_inspect', { name }, 15000); },
   async create_material({ name }) { const r = await send('material_create', { name }, 15000); return { summary: `${name} created but not applied to the product`, ...r }; },
+  async copy_material({ source, object_id, name }) { const r = await send('material_copy', { source, object_id, name }, 30000); return { summary: `Independent copy ${r.name} created on the selected part; source ${source} is unchanged`, ...r }; },
+  async material_library_copy({ source, object_id, name }) { const r = await send('material_library_copy', { source, object_id, name }, 30000); return { summary: `Independent copy ${r.name} created on the selected part; library source ${source} is unchanged`, ...r }; },
+  async set_material_bump({ name, path, role, strength }) { const r = await send('material_bump_set', { name, path, role, strength }, 30000); return { summary: `${name} bump settings updated; original source material is unchanged`, ...r }; },
   async set_material_value({ name, node_id, parameter, value }) { const r = await send('material_set', { name, node_id, parameter, value }, 15000); return { summary: `${name}: ${parameter} updated`, ...r }; },
   async undo_material() { const r = await send('material_undo', {}, 15000); return { summary: `${r.parameter} restored`, ...r }; },
   async save_material({ name }) { const r = await send('material_save', { name }, 30000); return { summary: `Portable material package saved: ${r.path}`, ...r }; },
@@ -663,7 +760,7 @@ const rawBody = (req, limit) => new Promise((resolve, reject) => {
   const chunks = []; let size = 0, tooLarge = false;
   req.on('data', chunk => { size += chunk.length; if (size > limit) { tooLarge = true; chunks.length = 0; } else if (!tooLarge) chunks.push(chunk); });
   req.on('error', reject); req.on('aborted', () => reject(new Error('Upload interrupted.')));
-  req.on('end', () => tooLarge ? reject(Object.assign(new Error('Texture file exceeds the 11 MB per-file limit.'), { status: 413 })) : resolve(Buffer.concat(chunks)));
+  req.on('end', () => tooLarge ? reject(Object.assign(new Error(`Texture file exceeds the ${(limit / 1048576).toFixed(0)} MB per-file limit.`), { status: 413 })) : resolve(Buffer.concat(chunks)));
 });
 const json = (res, code, obj) => { res.writeHead(code, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(obj)); };
 
@@ -820,7 +917,10 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/prompt/reset' && req.method === 'POST') { agent.history.length = 0; return json(res, 200, { ok: true }); }
     if (url.pathname === '/api/material/prompt' && req.method === 'POST') {
       if (materialPromptJob && !materialPromptJob.done) return json(res, 409, { error: 'Material Director is still working.' });
-      const b = await body(req), images = Array.isArray(b.images) ? b.images : [];
+      const b = await body(req), images = Array.isArray(b.images) ? b.images : [], context = resolveMaterialContext(b.context);
+      const aspectChoices = new Set(['original', '1:1', '4:3', '3:2', '16:9', '3:4', '2:3', '9:16']);
+      const imageAspectRatio = String(b.imageAspectRatio || 'original');
+      if (!aspectChoices.has(imageAspectRatio)) return json(res, 400, { error: 'Choose a supported material image aspect ratio.' });
       if (images.length > 8) return json(res, 400, { error: 'A material reference pack can contain up to 8 images.' });
       let imageBytes = 0;
       for (const image of images) {
@@ -832,7 +932,7 @@ const server = http.createServer(async (req, res) => {
       }
       if (imageBytes > 10 * 1024 * 1024) return json(res, 413, { error: 'The complete material reference pack must be under 10 MB.' });
       const job = materialPromptJob = { id: Date.now(), events: [], done: false };
-      agent.run(job, { text: String(b.text || ''), images }, actions, 'material').catch(() => {});
+      agent.run(job, { text: String(b.text || ''), images, context: { ...(context || {}), imageAspectRatio } }, actions, 'material').catch(() => {});
       return json(res, 200, { id: job.id });
     }
     if (url.pathname === '/api/material/prompt' && req.method === 'GET') {
@@ -873,8 +973,9 @@ const server = http.createServer(async (req, res) => {
       const { id } = await body(req); await send('light_remove', { id }, 30000); delete studio.lights[id]; return json(res, 200, { ok: true });
     }
     if (url.pathname === '/api/materials' && req.method === 'GET') return json(res, 200, await send('materials_list', {}, 15000));
-    if (url.pathname === '/api/material/library' && req.method === 'GET') return json(res, 200, await actions.list_library_materials({ query: url.searchParams.get('q') || '' }));
-    if (url.pathname === '/api/material/library-copy' && req.method === 'POST') return json(res, 200, await actions.copy_library_material(await body(req)));
+    if (url.pathname === '/api/material/library' && req.method === 'GET') return json(res, 200, await send('material_library', { query: url.searchParams.get('q') || '' }, 30000));
+    if (url.pathname === '/api/scene/parts' && req.method === 'GET') return json(res, 200, await send('material_scene_objects', {}, 30000));
+    if (url.pathname === '/api/material/targets' && req.method === 'POST') return json(res, 200, await send('material_targets', await body(req), 15000));
     if (url.pathname === '/api/material/assets' && req.method === 'GET') return json(res, 200, { directory: MATERIAL_PACKAGE_DIR, assets: listMaterialPackages() });
     if (url.pathname === '/api/material/texture-sets' && req.method === 'GET') return json(res, 200, { directory: textureSets.ROOT, sets: textureSets.listTextureSets() });
     if (url.pathname === '/api/material/texture-sets' && req.method === 'POST') {
@@ -888,7 +989,14 @@ const server = http.createServer(async (req, res) => {
     }
     if (url.pathname === '/api/material/build-from-texture-set' && req.method === 'POST') {
       const b = await body(req), result = await actions.build_material_from_texture_set({ texture_set_id: b.texture_set_id, name: b.name,
-        surface_type: b.surface_type, projection: b.projection });
+        allow_partial: b.allow_partial === true, use_ao: b.use_ao !== false, use_displacement: b.use_displacement !== false,
+        displacement_height_mm: b.displacement_height_mm ?? 0.1,
+        geometry_template: b.geometry_template,
+        procedural_strength: b.procedural_strength ?? 0.2 });
+      return json(res, 201, result);
+    }
+    if (url.pathname === '/api/material/edit-texture-map' && req.method === 'POST') {
+      const b = await body(req), result = await actions.edit_texture_map(b);
       return json(res, 201, result);
     }
     if (url.pathname === '/api/material/file' && req.method === 'GET') {
@@ -913,6 +1021,9 @@ const server = http.createServer(async (req, res) => {
     }
     if (url.pathname === '/api/material/inspect' && req.method === 'POST') return json(res, 200, await send('material_inspect', await body(req), 15000));
     if (url.pathname === '/api/material/create' && req.method === 'POST') return json(res, 200, await send('material_create', await body(req), 15000));
+    if (url.pathname === '/api/material/copy' && req.method === 'POST') return json(res, 201, await send('material_copy', await body(req), 30000));
+    if (url.pathname === '/api/material/library-copy' && req.method === 'POST') return json(res, 201, await send('material_library_copy', await body(req), 30000));
+    if (url.pathname === '/api/material/bump' && req.method === 'POST') return json(res, 200, await send('material_bump_set', await body(req), 30000));
     if (url.pathname === '/api/material/edit-target' && req.method === 'POST') return json(res, 200, await send('material_edit_target', await body(req), 15000));
     if (url.pathname === '/api/material/set' && req.method === 'POST') return json(res, 200, await send('material_set', await body(req), 15000));
     if (url.pathname === '/api/material/undo' && req.method === 'POST') return json(res, 200, await send('material_undo', {}, 15000));
