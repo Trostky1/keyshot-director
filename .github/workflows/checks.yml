@@ -17,5 +17,5 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Run isolated photo, staging, image and material workflow checks
-        run: node --test tools/test_photo.js tools/test_staging_cli.js tools/test_image_tools.js tools/test_material_textures.js tools/test_texture_edit.js
+      - name: Run isolated agent, photo, staging, image and material workflow checks
+        run: node --test tools/test_agent_lighting_fallback.js tools/test_photo.js tools/test_staging_cli.js tools/test_image_tools.js tools/test_material_textures.js tools/test_texture_edit.js
