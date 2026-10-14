@@ -16,28 +16,32 @@ It does not replace KeyShot: final material assignment, the timeline, scene savi
 - **Node.js 20+** (https://nodejs.org, LTS)
 - A browser. Reference-photo matching needs a signed-in **Codex CLI**, signed-in Claude Code CLI or Anthropic API key. Basic preset controls also work offline. Select the provider in Settings.
 
-## Install (2 minutes)
-1. On GitHub, download the current **release package** from Releases and unpack it in a folder you will keep. The release package includes the prebuilt material compiler; a source checkout instead needs Rust stable and the `wasm32-unknown-unknown` target before Material Lab can build materials.
-2. On Windows, right-click `install.ps1` and choose *Run with PowerShell*. It checks Node, finds KeyShot's Scripts folder, installs the KeyShot launcher, and creates a desktop shortcut for the companion app.
-3. On macOS, open Terminal in the unpacked folder and run `bash install-mac.sh`. It installs a launcher in your user Library without administrator access; add the printed folder to KeyShot's Scripts folders as described below.
+## First run on Windows
+1. Download the [latest release ZIP](https://github.com/Trostky1/keyshot-director/releases/latest) and extract the whole folder somewhere permanent, such as Documents. Do not run it from inside the ZIP or move it after setup.
+2. Double-click **Install KeyShot Director.bat**. It installs the KeyShot script and creates a **KeyShot Director** desktop shortcut. It does not need administrator access. If Node.js is missing, the installer opens the official download page and tells you what to do next.
+3. Double-click the desktop shortcut. Keep its window open; the Director page opens in your browser at `http://localhost:8787`.
+4. Open and save your product scene in KeyShot. In **Window -> Scripting**, select **KeyShot Director** and click **Run**. The page changes to **KeyShot connected** when the live scene is ready.
 
-## Use it
-1. On Windows, double-click the **KeyShot Director** desktop shortcut (or **Start KeyShot Director.bat** in the app folder). On macOS, double-click **Start KeyShot Director.command**. Leave the terminal window open. The page opens at `http://localhost:8787`.
-2. In KeyShot, open your scene and **save it**. Run **Scripts -> KeyShot Director -> Run** from the Scripting window. (If the script is missing, follow the platform-specific setup below.)
-3. The page header shows **KeyShot connected** and the live preview appears.
+If **KeyShot Director** is not in KeyShot's script list, run the installer once more. The page also shows a copy-and-paste connection command as a fallback. Basic lighting and scene controls work without an AI account; reference matching and open-ended prompts need a signed-in Codex/Claude CLI or your own Anthropic API key.
+
+The release ZIP contains the prebuilt material compiler, so users do not need Rust. A source checkout needs Rust stable and the `wasm32-unknown-unknown` target only when rebuilding Material Lab.
+
+See the [2.0 release notes](docs/RELEASE_NOTES_2.0.md) for new features and current limits.
+
+## macOS setup
+1. Download and extract the release ZIP somewhere permanent. Install Node.js 20+ LTS if it is not already installed.
+2. Open Terminal in the extracted folder and run `bash install-mac.sh`. It installs a launcher in your user Library without administrator access.
+3. In KeyShot Studio, open **Preferences -> Folders -> Scripts** and add the exact folder printed by the installer. Reopen the Scripting window if it was already open.
+4. Double-click **Start KeyShot Director.command**, choose **Open** if macOS asks, then open and save your scene in KeyShot and run **KeyShot Director** from the Scripting window.
+
+macOS setup is included but has not yet been verified on a physical Mac; see the [macOS troubleshooting notes](#macos-troubleshooting).
 
 While the bridge runs (up to 4 hours), orbiting and zooming the viewport is fine. **Don't** run other scripts, open dialogs or close panels in KeyShot; that can crash it. Always save first.
 
 To disconnect KeyShot, open Settings and choose **Disconnect KeyShot**; Director now shows whether the bridge acknowledged the stop. **Studio off** removes Director lights but leaves the bridge running. Closing KeyShot also ends its bridge. Use **Quit app** to stop the local companion server.
 
-## macOS setup and first run
-
-1. Run `bash install-mac.sh` from the extracted project folder. It creates a launcher under `~/Library/Application Support/KeyShot Director/Scripts` and checks that Node.js 20+ is installed.
-2. In KeyShot Studio, open **Preferences -> Folders -> Scripts** and add that exact folder. KeyShot stores its resource files in a system Library location on macOS; using a user folder avoids requiring administrator access. Reopen the Scripting window if it was already open.
-3. Double-click `Start KeyShot Director.command`. If macOS asks for confirmation the first time, choose **Open**. The companion app opens in your browser and keeps a Terminal window running.
-4. Open and save your scene, then run **KeyShot Director** from the Scripting window. The page should show **KeyShot connected**.
-
-If your KeyShot edition does not expose the Scripting window, this integration cannot control that installation. KeyShot's documentation describes scripting as a Pro feature and locates the Scripts tab folders in the Scripting window. A Mac has not yet been used to verify this project end to end; please report the KeyShot version, macOS version and any script-console error when trying it.
+## macOS troubleshooting
+If your KeyShot edition does not expose the Scripting window, this integration cannot control that installation. KeyShot's documentation describes scripting as a Pro feature and locates the Scripts tab folders in the Scripting window. If the Mac setup fails, note the KeyShot version, macOS version and any script-console error. A physical Mac has not yet been used to verify this project end to end.
 
 ## Studio and Material Lab
 

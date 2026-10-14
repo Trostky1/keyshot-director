@@ -127,6 +127,11 @@ details.fold > summary::after { content:"⌄"; color:var(--dim); font-size:18px;
 details.fold[open] > summary::after { content:"⌃"; transform:translateY(2px); }
 .connectline { max-width:100%; }
 .cline { color:var(--fg); background:#f6f6f8; border:1px solid var(--line); border-radius:8px; font-size:11px; }
+.first-run-guide { max-width:640px; margin:0 auto 10px; text-align:left; text-transform:none; letter-spacing:0; }
+.first-run-guide summary { width:max-content; margin:0 auto; color:var(--blue); font-size:12px; font-weight:600; cursor:pointer; }
+.first-run-guide ol { margin:9px 0 0; padding-left:22px; color:var(--fg); text-align:left; font-size:12px; line-height:1.55; }
+.first-run-guide li + li { margin-top:4px; }
+.first-run-guide p { margin:8px 0 0; color:var(--dim); font-size:11.5px; line-height:1.5; }
 .drop { display:block; width:100%; margin-top:12px; border-color:#aeb0ba; border-radius:10px; background:#f8f8fa; font-size:12px; letter-spacing:0; text-transform:none; }
 .drop:hover, .drop.over { background:#eaf3ff; color:var(--fg); }
 .drop:hover .dim, .drop.over .dim { color:var(--dim); }
