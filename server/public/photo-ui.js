@@ -1,6 +1,6 @@
 (() => {
   const byId = id => document.getElementById(id);
-  let image = null, currentId = null, lastPhase = '', pending = false;
+  let image = null, currentId = null, lastPhase = '', pending = false, launching = false;
   const phase = { idle: 'Ready for a reference', inspecting: 'Inspecting your scene', planning: 'Reading the reference', lighting: 'Building the light', refining: 'Checking the real render', restoring: 'Restoring your scene', complete: 'Look applied', failed: 'Match needs attention', canceled: 'Match canceled', restored: 'Previous look restored' };
   const message = t => { byId('photoProgress').textContent = t; };
   async function request(url, data) {
@@ -16,7 +16,9 @@
       const canvas = document.createElement('canvas'); canvas.width = Math.round(img.width * scale); canvas.height = Math.round(img.height * scale);
       const ctx = canvas.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
       image = canvas.toDataURL('image/png'); byId('photoRef').src = image; byId('photoRef').hidden = false; byId('photoDropText').textContent = 'Change reference';
-      byId('photoMatch').disabled = pending; message('Reference ready. Your current product angle is retained unless you choose “Match framing too”.');
+      byId('referenceSelection').textContent = file.name || 'Reference image selected'; byId('clearPhoto').hidden = false; byId('referenceUseLabel').hidden = false;
+      byId('directorResult').hidden = false;
+      updateMode(); message('Reference ready. Your current product angle stays unless you choose to match framing.');
     } finally { URL.revokeObjectURL(url); }
   }
   const drop = byId('photoDrop'); drop.onclick = () => byId('photoFile').click();
@@ -24,21 +26,55 @@
   drop.ondragover = e => { e.preventDefault(); drop.classList.add('dragover'); };
   drop.ondragleave = () => drop.classList.remove('dragover');
   drop.ondrop = e => { e.preventDefault(); drop.classList.remove('dragover'); choose(e.dataTransfer.files[0]).catch(e => message(e.message)); };
-  drop.addEventListener('referencepaste', e => choose(e.detail).catch(err => message(err.message)));
-  byId('photoMatch').onclick = async () => {
-    pending = true; byId('photoMatch').disabled = true;
-    try { await request('/api/photo', { image, brief: byId('photoBrief').value, framing: byId('photoFraming').checked, quality: byId('photoQuality').value }); await poll(); }
-    catch (e) { pending = false; byId('photoMatch').disabled = !image; message(e.message); }
+  byId('studioWorkspace').addEventListener('paste', e => {
+    if (e.target.closest('.promptbar, #styleLibraryFold, input, textarea')) return;
+    const file = [...e.clipboardData.files].find(file => /^image\/(png|jpeg|webp)$/.test(file.type));
+    if (file) { e.preventDefault(); choose(file).catch(error => message(error.message)); }
+  });
+  function updateMode() {
+    const matching = !!image && byId('referenceUse').value === 'match';
+    byId('directorMatchOptions').hidden = !matching;
+    byId('directorPrivacy').hidden = !image;
+    byId('directorPrivacy').textContent = matching
+      ? 'For lighting matches, your reference and KeyShot previews go to the selected AI provider. Materials stay untouched. Save your scene in KeyShot to keep the result.'
+      : 'This reference image goes to the selected AI provider with your Director request.';
+  }
+  byId('referenceUse').onchange = updateMode;
+  byId('clearPhoto').onclick = () => {
+    if (pending) return;
+    image = null; byId('photoRef').removeAttribute('src'); byId('photoRef').hidden = true;
+    byId('photoDropText').innerHTML = 'Add a reference image<span>Choose or drop · PNG, JPG, WebP</span>';
+    byId('referenceSelection').textContent = 'No reference image selected.';
+    byId('clearPhoto').hidden = true; byId('referenceUseLabel').hidden = true; byId('photoFile').value = '';
+    updateMode(); if (byId('photoUndo').disabled && byId('photoComparison').hidden) byId('directorResult').hidden = true;
   };
-  byId('photoStop').onclick = () => request('/api/photo/stop', {}).then(r => message(r.note)).catch(e => message(e.message));
+  const stop = () => request('/api/photo/stop', {}).then(r => message(r.note)).catch(e => message(e.message));
+  byId('photoStop').onclick = stop;
+  async function start({ brief = '', framing = false, quality = 'refined' } = {}) {
+    if (!image) throw new Error('Add a reference image first.');
+    pending = true; launching = true; byId('photoDrop').disabled = true; byId('clearPhoto').disabled = true;
+    try {
+      await request('/api/photo', { image, brief, framing, quality });
+      launching = false;
+      for (;;) {
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        const status = await poll();
+        if (status && !status.running) {
+          if (status.phase === 'failed') throw new Error(status.error || 'The lighting match needs attention.');
+          return status;
+        }
+      }
+    } finally { launching = false; pending = false; byId('clearPhoto').disabled = false; await poll(); }
+  }
   byId('photoUndo').onclick = async () => { byId('photoUndo').disabled = true;
     try { await request('/api/photo/undo', {}); byId('photoComparison').hidden = true; await syncPose(); await loadStudio(); await poll(); }
     catch (e) { message(e.message); } };
   async function poll() {
     try {
-      const s = await request('/api/photo'); pending = s.running;
-      byId('photoMatch').disabled = pending || !image; byId('photoStop').disabled = !pending; byId('photoUndo').disabled = pending || !s.canUndo;
+      const s = await request('/api/photo'); pending = launching || s.running;
+      byId('photoStop').disabled = !pending; byId('photoUndo').disabled = pending || !s.canUndo;
       byId('photoDrop').disabled = pending; byId('photoPhase').textContent = phase[s.phase] || s.phase;
+      byId('directorResult').hidden = !image && !s.running && !s.canUndo && !s.result;
       if (lastPhase !== s.phase) { lastPhase = s.phase; message(s.error || s.log?.at(-1) || '');
         if (['restored','canceled','failed'].includes(s.phase)) { byId('photoComparison').hidden = true; await syncPose(); await loadStudio(); }
       }
@@ -50,12 +86,21 @@
         for (const text of [s.result.title, ...(s.result.observations || []), ...(s.result.limitations || [])]) { const p = document.createElement('p'); p.textContent = text; box.appendChild(p); }
         byId('stage').style.aspectRatio = String(s.result.aspect); await syncPose(); await loadStudio();
       }
-    } catch (e) { if (pending) message('Connection interrupted. Reconnecting to the photo job…'); }
+      return s;
+    } catch (e) { if (pending) message('Connection interrupted. Reconnecting to the photo job…'); return null; }
   }
   document.querySelectorAll('[data-frame]').forEach(button => { button.onclick = async () => {
     const kind = button.dataset.frame, aspect = Number(byId('frameAspect').value); button.disabled = true;
-    try { await request('/api/frame', { kind: kind === 'hero' ? 'hero' : 'detail', fill: kind === 'hero' ? 0.75 : 1.5, focus: kind === 'upper' ? [0,0.3,0] : [0,0,0], fov: 35, aspect });
-      byId('stage').style.aspectRatio = String(aspect); await syncPose(); message('Framing updated. Materials and viewing angle were preserved.'); }
+    try {
+      let useSelectedPart = false;
+      if (kind === 'detail') {
+        const context = await request('/api/scene-context');
+        const selection = context.target?.selection || [];
+        if (selection.length > 1) throw new Error('Select one part in KeyShot for a part close-up, or clear the selection to frame the product.');
+        useSelectedPart = selection.length === 1;
+      }
+      const result = await request('/api/frame', { kind: kind === 'hero' ? 'hero' : 'detail', fill: kind === 'hero' ? 0.75 : 1.5, focus: kind === 'upper' ? [0,0.3,0] : [0,0,0], fov: 35, aspect, ...(useSelectedPart ? { use_selected_part: true } : {}) });
+      byId('stage').style.aspectRatio = String(aspect); await syncPose(); message(useSelectedPart ? `Framed ${result.target_part || 'the selected part'}. Materials and viewing angle were preserved.` : 'Framing updated. Materials and viewing angle were preserved.'); }
     catch (e) { message(e.message); } finally { button.disabled = false; }
   }; });
   byId('environmentFold').ontoggle = async e => { if (!e.target.open) return;
@@ -68,5 +113,6 @@
     try { await request('/api/environment', { background: rgb, ground_shadows: byId('envShadows').checked, ground_reflections: byId('envReflections').checked }); await loadStudio(); message('Background and ground updated.'); }
     catch (e) { message(e.message); }
   };
+  window.directorPhoto = { get image() { return image; }, get running() { return pending; }, start, stop };
   setInterval(poll, 1800); poll();
 })();

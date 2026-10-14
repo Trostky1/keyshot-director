@@ -70,8 +70,31 @@ $batLines = @(
 $stopBat = "@echo off`r`ntitle Stop KeyShot Director`r`ncd /d `"%~dp0`"`r`npowershell -NoProfile -ExecutionPolicy Bypass -File `"%~dp0tools\stop.ps1`"`r`nping -n 3 127.0.0.1 >nul`r`n"
 [IO.File]::WriteAllText((Join-Path $home_ 'Stop KeyShot Director.bat'), $stopBat, (New-Object System.Text.ASCIIEncoding))
 
+# 5) desktop shortcut. Preserve any unrelated shortcut with the same display name.
+$desktop = [Environment]::GetFolderPath('DesktopDirectory')
+$startBat = Join-Path $home_ 'Start KeyShot Director.bat'
+$shortcutShell = New-Object -ComObject WScript.Shell
+$shortcutPath = Join-Path $desktop 'KeyShot Director.lnk'
+$suffix = Split-Path -Leaf $home_
+$index = 1
+while (Test-Path $shortcutPath) {
+  $existing = $shortcutShell.CreateShortcut($shortcutPath)
+  $alreadyOurs = $false
+  try { $alreadyOurs = $existing.TargetPath -and [IO.Path]::GetFullPath($existing.TargetPath).Equals([IO.Path]::GetFullPath($startBat), [StringComparison]::OrdinalIgnoreCase) } catch { }
+  if ($alreadyOurs) { break }
+  $label = if ($index -eq 1) { "KeyShot Director - $suffix" } else { "KeyShot Director - $suffix ($index)" }
+  $shortcutPath = Join-Path $desktop ($label + '.lnk')
+  $index++
+}
+$shortcut = $shortcutShell.CreateShortcut($shortcutPath)
+$shortcut.TargetPath = $startBat
+$shortcut.WorkingDirectory = $home_
+$shortcut.Description = 'Start KeyShot Director'
+$shortcut.Save()
+Write-Host "Desktop shortcut created: $shortcutPath"
+
 Write-Host "`nDone. To use it:" -ForegroundColor White
-Write-Host "  1. Double-click  'Start KeyShot Director.bat'   (leave its window open; the page opens in your browser)"
+Write-Host "  1. Double-click the KeyShot Director desktop shortcut (leave its window open; the page opens in your browser)"
 Write-Host "  2. In KeyShot: open your scene, SAVE IT, then Scripts tab -> 'KeyShot Director' -> Run"
 Write-Host "  3. The page header turns to 'KeyShot connected'. Drag the preview to orbit; pick a lighting rig; or type a prompt."
 Write-Host "  Prompts with an AI model: open Settings in the page and paste your own Anthropic API key (optional)."

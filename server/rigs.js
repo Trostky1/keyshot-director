@@ -86,6 +86,16 @@ const RIGS = {
       L('top', 'top', 0, 80, 2.5, 1.8, 1.8, 0.0009, 3400),
     ],
   },
+  color_drama: {
+    label: 'Color drama', metric: 'p95', target: 0.68,
+    blurb: 'A cyan soft key, magenta edge and restrained amber accent on a deep blue-black stage. Adjust each light’s RGB tint to fit the product.',
+    env: { hdri: HDRI.allBlack, bg: [6, 9, 20], brightness: 1, ground_shadows: true },
+    lights: [
+      L('key', 'key', -48, 28, 3.0, 2.0, 2.5, 0.0036, 5600, { rgb: [0.12, 0.60, 1.0] }),
+      L('edge', 'rim', 132, 12, 2.9, 0.30, 3.0, 0.0009, 5600, { rgb: [0.82, 0.12, 0.72] }),
+      L('warm_kick', 'kicker', 34, 3, 3.5, 0.75, 1.5, 0.00032, 5600, { rgb: [1.0, 0.31, 0.09] }),
+    ],
+  },
 };
 
 // Environment-only looks (KeyShot's own studio HDRIs): fast, no extra geometry.
@@ -118,6 +128,7 @@ function buildRig(name, subject, { frameAz = 0, exposure = 1, mirror = false } =
     const pos = toPos(center, frameAz, l, span), dist = l.d * span;
     return {
       id: l.id, role: l.role, az: l.az, el: l.el, d: l.d, w: l.w, h: l.h, E: l.E, kelvin: l.kelvin,
+      ...(Array.isArray(l.rgb) ? { rgb: l.rgb.slice(0, 3) } : {}),
       pos, target: center, size: [l.w * span, l.h * span],
       power: +(l.E * dist * dist * exposure).toFixed(2),
       visible_refl: l.refl, visible_eye: l.eye,

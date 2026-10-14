@@ -1,14 +1,15 @@
 ---
 name: KeyShot Director
-description: A calm, scene-first creative workspace for KeyShot
+description: A premium, scene-first workbench for directing KeyShot
 colors:
-  bg: "#f5f5f7"
-  fg: "#1d1d1f"
-  dim: "#59595f"
-  line: "#dedee3"
+  bg: "#f1f2f4"
+  fg: "#20242a"
+  dim: "#68707a"
+  line: "#d9dde2"
   surface: "#fff"
-  blue: "#0066cc"
-  blue-hover: "#0054a8"
+  blue: "#2767d8"
+  blue-hover: "#1c56bd"
+  graphite: "#1d2631"
 typography:
   headline:
     fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif'
@@ -49,7 +50,7 @@ components:
     typography: "{typography.label}"
     rounded: "{rounded.control}"
     padding: "8px 11px"
-    height: "36px"
+    height: "38px"
   button-primary-hover:
     backgroundColor: "{colors.blue-hover}"
     textColor: "{colors.surface}"
@@ -59,7 +60,7 @@ components:
     typography: "{typography.label}"
     rounded: "{rounded.control}"
     padding: "8px 11px"
-    height: "36px"
+    height: "38px"
   input:
     backgroundColor: "{colors.surface}"
     textColor: "{colors.fg}"
@@ -77,14 +78,14 @@ components:
 
 **Creative North Star: "The Scene-First Creative Instrument"**
 
-A real KeyShot render anchors a calm workspace. Soft silver surrounds white work surfaces; graphite text and restrained blue actions keep the interface legible without competing with the product image. The page uses system typography, rounded controls, fine dividers and selective ambient depth. This is the current built direction requested in PRODUCT.md, expressed by the later-loaded `server/public/director.css`.
+A real KeyShot render anchors a premium workbench. A deep graphite navigation rail sits above a soft silver workspace; bright white cards, graphite type and restrained blue actions keep the interface legible without competing with the product image. The page uses system typography, rounded controls, fine dividers and selective ambient depth. This direction is expressed by the later-loaded `server/public/director.css`.
 
-The operating hierarchy follows the direction contract in the first body comment of `server/public/index.html`: see the scene, adjust the look, then refine through conversation. This document records reusable visual rules. The page-specific order and workflow remain in the surface brief.
+The operating hierarchy follows the direction contract in the first body comment of `server/public/index.html`: see the live scene, set light or material intent, then refine through conversation. Studio and Materials share one navigation and move the same live preview between workspaces. Material inspection reflects the live KeyShot graph and only exposes controls the bridge can safely edit. This document records reusable visual rules. The page-specific order and workflow remain in the surface brief.
 
 **Key Characteristics:**
 
 - The user's actual KeyShot scene carries the visual emphasis.
-- Silver canvas, white surfaces, graphite type and blue actions.
+- Graphite navigation, silver canvas, white surfaces, graphite type and blue actions.
 - Rounded controls and panels with quiet borders.
 - Readable task guidance and distinct focus, disabled and connected states.
 
@@ -119,7 +120,7 @@ A small green dot signals a connected KeyShot bridge. The reference drop zone ha
 ### Hierarchy
 
 - **Studio headline:** the headline token leads the main canvas; it becomes (26px) on narrow phones.
-- **Inspector title:** the title token marks the reference task; other inspector section headings are smaller (16px).
+- **Inspector title:** the title token marks the active lighting or material panel; other tool headings stay smaller (16px).
 - **Conversation heading:** medium heading (18px) between the scene and prompt.
 - **Body:** the body token serves the shell and explanatory copy; assistant messages are (13px).
 - **Labels:** the label token serves fields and secondary control information.
@@ -129,11 +130,11 @@ A small green dot signals a connected KeyShot bridge. The reference drop zone ha
 
 ## Layout
 
-A wide canvas and focused inspector form the desktop workspace. The main grid has an elastic scene column and a (390px) inspector, with a (18px) gap, (24px) outer padding and a (1900px) maximum width. At (1100px), the inspector narrows to (350px) and outer padding to (18px). At (800px), content becomes a single sequence: scene heading, live scene, reference matching, conversation, then remaining inspector tools. The scene moves from (16:9) to (16:10), then to (4:3) below (600px). The reference task is a separate card on narrow screens. Desktop inspector content can scroll independently while its shell stays visible.
+A wide scene and focused inspector form Studio. The main grid has an elastic scene column and a (390px) inspector, with an (18px) gap and a (1900px) maximum width. Lighting controls lead the inspector; framing, connection and secondary workflows follow. Materials uses the same shell: the live scene and Material Director share the primary column, while the actual scene material inspector stays alongside them. Texture sets, KeyShot library and saved materials sit in a compact tab rail below. At (980px), both workspaces stack; at phone width, controls use larger targets and the live scene moves to (4:3).
 
-Inspector sections share a white surface and fine horizontal rules, with (21px 22px) padding on wide screens. Conversation stays directly under the scene. The photo input is one column in the current inspector. At phone width, the header wraps and buttons/selects use a (44px) minimum target height.
+Inspector sections share a white surface and fine horizontal rules, with about (20px) padding on wide screens. The Director brief stays directly under the scene. At phone width, the header wraps and interactive controls target at least (44px).
 
-**The Scene-First Rule.** The live render leads the visual hierarchy; reference matching remains immediately available beside it on desktop and directly after it on mobile.
+**The Scene-First Rule.** The live render leads the visual hierarchy; reference matching remains in the unified Director composer directly beneath it.
 
 ## Elevation & Depth
 
@@ -156,19 +157,19 @@ Corners are gently rounded: controls use the control radius, the reference picke
 
 ### Buttons
 
-Primary actions use Director Blue with white text; hover deepens to Director Blue Hover. Secondary actions use white surfaces and a cool gray border, shifting to a pale gray hover. Buttons use the control radius, sentence-case labels and a (36px) baseline minimum height; narrow phones raise general buttons to (44px). Disabled actions retain their context with reduced opacity (.45). A visible blue focus outline is (3px) with a (2px) offset. State changes use short (.16s) transitions, which collapse under reduced-motion preferences.
+Primary actions use Director Blue with white text; hover deepens to Director Blue Hover. Secondary actions use white surfaces and a cool gray border, shifting to a pale gray hover. Buttons use the control radius, sentence-case labels and a (38px) baseline minimum height; narrow phones raise interactive targets to (44px). Disabled actions retain their context with reduced opacity (.45). A visible blue focus outline is (3px) with a (2px) offset. State changes use short (.16s) transitions, which collapse under reduced-motion preferences.
 
 ### Inputs / Fields
 
-Fields are white, softly bordered and rounded. Textareas have generous internal padding (11px 12px) and allow vertical resizing. The photo brief is at least (68px) tall. Checkboxes and range controls use Director Blue. Placeholder and helper copy use muted neutrals; focus uses the shared blue outline.
+Fields are white, softly bordered and rounded. Textareas have generous internal padding (11px 12px) and allow vertical resizing. The Director brief is at least (68px) tall. Checkboxes and range controls use Director Blue. Placeholder and helper copy use muted neutrals; focus uses the shared blue outline.
 
 ### Navigation
 
-The white header carries a circular connection dot, product name, connection pill, provider and Settings action. It is operating chrome, not a route menu. The connected dot turns green with a faint halo. The header wraps on narrow phones and moves the connection text to its own row.
+The graphite header carries a compact brand mark, Studio/Materials navigation, bridge state, optional provider status and Settings. The connected dot turns green with a faint halo. The header wraps on narrow phones and keeps the connection state legible.
 
 ### Cards / Containers
 
-The rounded white inspector holds separate tool sections divided by fine rules. The scene has its own rounded white frame. The conversation log and prompt form a joined card with rounded top and bottom edges. On mobile, the reference task and subsequent tools become a readable vertical sequence.
+The rounded white Studio inspector leads with active lighting controls and groups secondary tools with fine dividers. The scene has its own rounded white frame. The conversation log and Director brief form a joined card with rounded top and bottom edges. Materials pairs its live scene with the connected scene material inspector; exposed values and graph inputs stay factual and read-only where required. Texture, library and saved-material tools use a compact tab row.
 
 ### Reference Picker and Status
 

@@ -8,7 +8,7 @@ Polls bridge\\cmd\\*.json, runs ops defined in bridge\\cc_ops.py (reloaded whene
 file changes), writes bridge\\resp\\<id>.json. Ends on op 'stop' or after RUN_SECONDS.
 Never calls lux.getAnimations() (known native crash).
 """
-import lux, luxmath, os, json, time, shutil, traceback, math
+import lux, luxmath, os, json, time, shutil, traceback, math, uuid
 
 _user32 = None
 _msg = None
@@ -52,6 +52,7 @@ def pump():
 
 
 RUN_SECONDS = 14400
+SESSION_ID = uuid.uuid4().hex
 try:
     BASE = os.path.join(KD_HOME, "bridge")          # KD_HOME is set by the launcher script that install.ps1 writes
 except NameError:
@@ -70,16 +71,17 @@ for d in (CMD, RESP, SHOTS):
 def heartbeat(state, extra=None):
     with open(os.path.join(BASE, "heartbeat.json"), "w") as f:
         json.dump({"t": time.time(), "state": state, "ops_loaded": _STATE["ops_mtime"],
-                   "err": _STATE["err"], "pid": os.getpid()}, f)
+                   "err": _STATE["err"], "pid": os.getpid(), "session": SESSION_ID}, f)
 
 
 def another_bridge_alive():
-    """True when a bridge in a DIFFERENT KeyShot window is already running on this folder (two bridges would answer
-    commands at random, possibly lighting the wrong scene)."""
+    """True when another bridge instance is already using this folder. Two instances can answer a command at random."""
     try:
         with open(os.path.join(BASE, "heartbeat.json"), "r") as f:
             h = json.load(f)
-        return h.get("state") == "running" and time.time() - h.get("t", 0) < 6 and h.get("pid") not in (None, os.getpid())
+        fresh = 0 <= time.time() - h.get("t", 0) < 6
+        other_instance = h.get("session") != SESSION_ID if h.get("session") else True
+        return h.get("state") == "running" and fresh and other_instance
     except Exception:
         return False
 

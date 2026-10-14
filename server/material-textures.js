@@ -6,19 +6,21 @@ const crypto = require('crypto');
 
 const ROOT = path.resolve(__dirname, '..', 'materials', 'texture-sets');
 const MAX_FILES = 24;
-const MAX_SET_BYTES = 80 * 1024 * 1024;
-const MAX_FILE_BYTES = MAX_SET_BYTES;
+const MAX_SET_BYTES = 512 * 1024 * 1024;
+const MAX_FILE_BYTES = 80 * 1024 * 1024;
+const MAX_HEADER_BYTES = 1024 * 1024;
+const METADATA_CACHE = new Map();
 const EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.webp', '.tif', '.tiff', '.exr', '.hdr', '.mtlx']);
 const ROLES = [
   ['ambient-occlusion', /(?:^|[_ .-])(?:ambient.?occlusion|ao)(?:[_ .-]|$)/i],
   ['base-color', /(?:^|[_ .-])(?:base.?color|albedo|diffuse|color|col)(?:[_ .-]|$)/i],
-  ['displacement', /(?:^|[_ .-])(?:displacement|height|disp)(?:[_ .-]|$)/i],
+  ['displacement', /(?:^|[_ .-])(?:displacement|height|disp(?:16)?)(?:[_ .-]|$)/i],
   ['metallic', /(?:^|[_ .-])(?:metallic|metalness|metal)(?:[_ .-]|$)/i],
-  ['normal', /(?:^|[_ .-])(?:normal|normalgl|normaldx|nrm)(?:[_ .-]|$)/i],
+  ['normal', /(?:^|[_ .-])(?:normal|normalgl|normaldx|nrm(?:16)?)(?:[_ .-]|$)/i],
   ['roughness', /(?:^|[_ .-])(?:roughness|rough)(?:[_ .-]|$)/i],
   ['specular', /(?:^|[_ .-])(?:specular|spec)(?:[_ .-]|$)/i],
   ['glossiness', /(?:^|[_ .-])(?:glossiness|gloss)(?:[_ .-]|$)/i],
-  ['bump', /(?:^|[_ .-])(?:bump)(?:[_ .-]|$)/i],
+  ['bump', /(?:^|[_ .-])(?:bump(?:16)?)(?:[_ .-]|$)/i],
 ];
 
 function roleFor(name) {
@@ -64,17 +66,140 @@ function safeFilename(value) {
   if (!EXTENSIONS.has(path.extname(name).toLowerCase())) throw new Error(`Unsupported texture file: ${name}`);
   return name;
 }
-function listTextureSets() {
+function cstring(buffer, offset, limit = buffer.length) {
+  if (offset < 0 || offset >= limit || limit > buffer.length) return null;
+  const end = buffer.indexOf(0, offset);
+  if (end < 0 || end >= limit) return null;
+  return buffer.toString('utf8', offset, end);
+}
+function textureMetadata(buffer, extension) {
+  try {
+    if (extension === '.png' && buffer.length >= 26 && buffer.subarray(0, 8).equals(Buffer.from([137,80,78,71,13,10,26,10]))) {
+      const type = buffer[25], channels = ({0:1,2:3,3:1,4:2,6:4})[type];
+      if (!channels) return null;
+      return { width: buffer.readUInt32BE(16), height: buffer.readUInt32BE(20), bit_depth: buffer[24], channels };
+    }
+    if ((extension === '.jpg' || extension === '.jpeg') && buffer.length >= 4 && buffer[0] === 0xff && buffer[1] === 0xd8) {
+      const sof = new Set([0xc0,0xc1,0xc2,0xc3,0xc5,0xc6,0xc7,0xc9,0xca,0xcb,0xcd,0xce,0xcf]);
+      let offset = 2;
+      while (offset + 4 <= buffer.length) {
+        if (buffer[offset++] !== 0xff) continue;
+        while (offset < buffer.length && buffer[offset] === 0xff) offset++;
+        if (offset >= buffer.length) break;
+        const marker = buffer[offset++];
+        if (marker === 0xd9 || marker === 0xda) break;
+        if (marker >= 0xd0 && marker <= 0xd7 || marker === 0x01) continue;
+        if (offset + 2 > buffer.length) break;
+        const length = buffer.readUInt16BE(offset);
+        if (length < 2 || offset + length > buffer.length) break;
+        if (sof.has(marker) && length >= 8) return { width: buffer.readUInt16BE(offset + 5), height: buffer.readUInt16BE(offset + 3), bit_depth: buffer[offset + 2], channels: buffer[offset + 7] };
+        offset += length;
+      }
+      return null;
+    }
+    if ((extension === '.tif' || extension === '.tiff') && buffer.length >= 8) {
+      const little = buffer.toString('ascii', 0, 2) === 'II';
+      if (!little && buffer.toString('ascii', 0, 2) !== 'MM') return null;
+      const u16 = o => little ? buffer.readUInt16LE(o) : buffer.readUInt16BE(o);
+      const u32 = o => little ? buffer.readUInt32LE(o) : buffer.readUInt32BE(o);
+      if (u16(2) !== 42) return null;
+      const ifd = u32(4);
+      if (ifd + 2 > buffer.length) return null;
+      const count = Math.min(u16(ifd), 4096), tags = new Map();
+      const typeSize = {1:1,2:1,3:2,4:4,5:8,6:1,7:1,8:2,9:4,10:8,11:4,12:8};
+      for (let i = 0; i < count; i++) {
+        const entry = ifd + 2 + i * 12;
+        if (entry + 12 > buffer.length) break;
+        const tag = u16(entry), type = u16(entry + 2), n = u32(entry + 4), size = typeSize[type];
+        if (!size || n > 65536) continue;
+        const byteLength = n * size, data = byteLength <= 4 ? entry + 8 : u32(entry + 8);
+        if (data < 0 || data + byteLength > buffer.length) continue;
+        const read = position => type === 3 ? u16(position) : type === 4 ? u32(position) : null;
+        const values = [];
+        for (let j = 0; j < n && values.length < 16; j++) values.push(read(data + j * size));
+        tags.set(tag, values.filter(Number.isFinite));
+      }
+      const width = tags.get(256)?.[0], height = tags.get(257)?.[0];
+      if (!width || !height) return null;
+      const bits = tags.get(258) || [], samples = tags.get(277)?.[0] || bits.length || 1, format = tags.get(339)?.[0] || 1;
+      return { width, height, bit_depth: bits.length ? Math.max(...bits) : null, channels: samples,
+        sample_format: format === 3 ? 'float' : format === 2 ? 'signed integer' : 'unsigned integer' };
+    }
+    if (extension === '.exr' && buffer.length >= 16 && buffer.readUInt32LE(0) === 20000630) {
+      let offset = 8, width = null, height = null, channels = [], headerLimit = Math.min(buffer.length, 1024 * 1024);
+      while (offset < headerLimit) {
+        const name = cstring(buffer, offset, headerLimit);
+        if (name === null) return null;
+        offset += Buffer.byteLength(name, 'utf8') + 1;
+        if (!name) break;
+        const kind = cstring(buffer, offset, headerLimit);
+        if (kind === null) return null;
+        offset += Buffer.byteLength(kind, 'utf8') + 1;
+        if (offset + 4 > headerLimit) return null;
+        const size = buffer.readUInt32LE(offset); offset += 4;
+        if (size > headerLimit - offset) return null;
+        const end = offset + size;
+        if (name === 'dataWindow' && kind === 'box2i' && size >= 16) {
+          const x0 = buffer.readInt32LE(offset), y0 = buffer.readInt32LE(offset + 4), x1 = buffer.readInt32LE(offset + 8), y1 = buffer.readInt32LE(offset + 12);
+          width = x1 - x0 + 1; height = y1 - y0 + 1;
+        }
+        if (name === 'channels' && kind === 'chlist') {
+          let p = offset;
+          while (p < end) {
+            const channel = cstring(buffer, p, end);
+            if (channel === null) break;
+            p += Buffer.byteLength(channel, 'utf8') + 1;
+            if (!channel) break;
+            if (p + 16 > end) break;
+            const pixelType = buffer.readInt32LE(p); p += 16;
+            channels.push({ name: channel, bit_depth: pixelType === 1 ? 16 : 32, sample_format: pixelType === 1 ? 'half float' : pixelType === 2 ? 'float' : 'unsigned integer' });
+          }
+        }
+        offset = end;
+      }
+      if (!width || !height) return null;
+      return { width, height, bit_depth: channels.length ? Math.max(...channels.map(channel => channel.bit_depth)) : null,
+        channels: channels.length, channel_names: channels.map(channel => channel.name), sample_format: channels[0]?.sample_format || null };
+    }
+    if (extension === '.hdr' || extension === '.pic') {
+      const header = buffer.subarray(0, Math.min(buffer.length, 4096)).toString('ascii');
+      const match = header.match(/\n-?Y\s+(\d+)\s+\+?X\s+(\d+)/);
+      return match ? { width: Number(match[2]), height: Number(match[1]), bit_depth: 32, channels: 3, sample_format: 'float' } : null;
+    }
+  } catch { return null; }
+  return null;
+}
+function textureMetadataForPath(filePath, extension) {
+  try {
+    const stat = fs.statSync(filePath);
+    const key = `${filePath}|${stat.size}|${stat.mtimeMs}`;
+    if (METADATA_CACHE.has(key)) return METADATA_CACHE.get(key);
+    const fd = fs.openSync(filePath, 'r');
+    const header = Buffer.alloc(Math.min(stat.size, MAX_HEADER_BYTES));
+    let read = 0;
+    try { read = fs.readSync(fd, header, 0, header.length, 0); }
+    finally { fs.closeSync(fd); }
+    const metadata = textureMetadata(header.subarray(0, read), extension);
+    METADATA_CACHE.set(key, metadata);
+    if (METADATA_CACHE.size > 2048) METADATA_CACHE.delete(METADATA_CACHE.keys().next().value);
+    return metadata;
+  } catch { return null; }
+}
+function listTextureSets({ includeMetadata = false } = {}) {
   if (!fs.existsSync(ROOT)) return [];
   return fs.readdirSync(ROOT, { withFileTypes: true }).filter(e => e.isDirectory()).map(entry => {
     const dir = path.join(ROOT, entry.name), manifestFile = path.join(dir, 'director-texture-set.json');
     try {
       const manifest = JSON.parse(fs.readFileSync(manifestFile, 'utf8'));
-      const files = manifest.files.filter(f => fs.existsSync(path.join(dir, f.name)));
+      const files = manifest.files.filter(f => fs.existsSync(path.join(dir, f.name))).map(file => {
+        const metadata = file.metadata || (includeMetadata ? textureMetadataForPath(path.join(dir, file.name), path.extname(file.name).toLowerCase()) : null);
+        return { ...file, metadata };
+      });
       const derivedDir = path.join(dir, 'derived');
       if (fs.existsSync(derivedDir)) for (const name of fs.readdirSync(derivedDir)) {
         if (path.extname(name).toLowerCase() === '.png' && fs.statSync(path.join(derivedDir, name)).isFile())
-          files.push({ name: `derived/${name}`, role: roleFor(name.replace(/__(invert|contrast|tile-offset|horizontal-grain|vertical-grain).*$/i, '.png')), bytes: fs.statSync(path.join(derivedDir, name)).size, derived: true });
+          files.push({ name: `derived/${name}`, role: roleFor(name.replace(/__(invert|contrast|tile-offset|horizontal-grain|vertical-grain).*$/i, '.png')), bytes: fs.statSync(path.join(derivedDir, name)).size, derived: true,
+            metadata: includeMetadata ? textureMetadataForPath(path.join(derivedDir, name), '.png') : null });
       }
       const present = new Set(files.map(file => path.basename(file.name).toLowerCase()));
       const missing = (manifest.materialx?.imageNodes || []).map(node => path.basename(String(node.file || '').replace(/\\/g, '/')))
@@ -110,7 +235,9 @@ function addTextureFile(id, originalName, data) {
   const materialx = path.extname(name).toLowerCase() === '.mtlx' ? materialXSummary(bytes.toString('utf8')) : null;
   const filePath = path.join(setDir, name);
   fs.writeFileSync(filePath, bytes, { flag: 'wx' });
-  const file = { name, role: roleFor(name), bytes: bytes.length };
+  const role = roleFor(name);
+  const metadata = role === 'MaterialX metadata (reference only)' ? null : textureMetadata(bytes, path.extname(name).toLowerCase());
+  const file = { name, role, bytes: bytes.length, metadata };
   manifest.files.push(file);
   if (materialx) manifest.materialx = materialx;
   try { fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2)); }
@@ -118,4 +245,4 @@ function addTextureFile(id, originalName, data) {
   return file;
 }
 
-module.exports = { ROOT, MAX_FILES, MAX_FILE_BYTES, MAX_SET_BYTES, createTextureSet, addTextureFile, listTextureSets, roleFor, materialXSummary };
+module.exports = { ROOT, MAX_FILES, MAX_FILE_BYTES, MAX_SET_BYTES, createTextureSet, addTextureFile, listTextureSets, roleFor, materialXSummary, textureMetadata, textureMetadataForPath };

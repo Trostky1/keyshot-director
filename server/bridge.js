@@ -10,6 +10,7 @@ const SHOTS = path.join(BASE, 'shots');
 for (const d of [CMD, RESP, SHOTS]) fs.mkdirSync(d, { recursive: true });
 
 let seq = 0;
+const stoppedSessions = new Set();
 
 // Send one op and wait for its response. Written to .tmp then renamed so the bridge never reads a partial file.
 function send(op, payload = {}, timeoutMs = 8000) {
@@ -45,8 +46,30 @@ function heartbeat() {
   try {
     const h = JSON.parse(fs.readFileSync(path.join(BASE, 'heartbeat.json'), 'utf8'));
     const age = Date.now() / 1000 - h.t;
-    return { state: h.state, age, alive: h.state === 'running' && age >= 0 && age < 5, err: h.err };
+    const fresh = age >= 0 && age < 5;
+    let processAlive = null;
+    if (h.pid != null) {
+      if (!Number.isSafeInteger(h.pid) || h.pid <= 0) processAlive = false;
+      else {
+        try { process.kill(h.pid, 0); processAlive = true; }
+        catch (error) { processAlive = error.code === 'EPERM'; }
+      }
+    }
+    // A KeyShot close can prevent the embedded bridge's finally block from
+    // writing state="stopped". Don't trust a fresh-looking heartbeat once its
+    // own host process has exited. Older heartbeat files without a PID retain
+    // the freshness-only fallback.
+    const stopped = typeof h.session === 'string' && stoppedSessions.has(h.session);
+    const status = { state: h.state, age, alive: h.state === 'running' && fresh && processAlive !== false && !stopped, err: h.err };
+    Object.defineProperty(status, 'instance', { value: h.session || null }); // internal stop correlation; omit from HTTP JSON
+    return status;
   } catch { return { state: 'missing', age: null, alive: false }; }
 }
 
-module.exports = { send, heartbeat, BASE, SHOTS };
+function markStopped(instance) {
+  if (typeof instance !== 'string' || !instance) return;
+  stoppedSessions.add(instance);
+  while (stoppedSessions.size > 16) stoppedSessions.delete(stoppedSessions.values().next().value);
+}
+
+module.exports = { send, heartbeat, markStopped, BASE, SHOTS };

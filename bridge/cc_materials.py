@@ -14,6 +14,9 @@ try:
 except Exception:
     MATERIAL_COPIES = set()
 MATERIAL_EDIT_TARGET = None
+DISPLACEMENT_HEIGHT_MIN_MM = 0.001
+DISPLACEMENT_HEIGHT_DEFAULT_MM = 0.01
+DISPLACEMENT_HEIGHT_MAX_MM = 0.1
 
 
 def _save_created_registry():
@@ -38,6 +41,14 @@ def _material_graph(name):
     if name not in _material_names():
         raise ValueError("Material is not in the current scene")
     return lux.getMaterialGraph(name)
+
+
+def _material_node_type(node):
+    try:
+        type_info = node.getType()
+        return str(type_info.get("name") if isinstance(type_info, dict) else type_info)
+    except Exception:
+        return ""
 
 
 def _parameter_value(p):
@@ -73,8 +84,6 @@ def op_material_scene_objects(c):
         try:
             if node.isDeleted() or node.isHidden() or node.isLocked() or node.isCamera() or node.isAnimation():
                 continue
-            if not node.isObject():
-                continue
             if node.getID() not in geometry_ids:
                 continue
             parent = node.getParent()
@@ -108,7 +117,7 @@ def op_material_library_copy(c):
     if not label.startswith("Director ") or len(label) > 80 or len(label) < 12:
         raise ValueError("Use a descriptive copy label beginning with 'Director ' (12–80 characters)")
     node = next((n for n in lux.getSceneTree().find("") if n.getID() == object_id), None)
-    if node is None or node.isDeleted() or not node.isObject() or node.getID() not in set(lux.getObjects()) or node.isLocked() or node.isHidden():
+    if node is None or node.isDeleted() or node.getID() not in set(lux.getObjects()) or node.isLocked() or node.isHidden():
         raise ValueError("Choose an unlocked scene object")
     parent = node.getParent()
     root_id = lux.getSceneTree().getID()
@@ -160,10 +169,20 @@ def op_material_targets(c):
     source = str(c.get("source", ""))
     if source not in [str(x) for x in lux.getSceneMaterials() if x]:
         return {"objects": []}
+    geometry_ids = set(lux.getObjects())
     out = []
     for node in lux.getSceneTree().find(""):
         try:
-            if node.isDeleted() or not node.isObject() or node.isLocked() or node.isHidden():
+            if node.isDeleted() or node.getID() not in geometry_ids or node.isLocked() or node.isHidden():
+                continue
+            parent = node.getParent()
+            blocked = False
+            while parent and parent.getID() != lux.getSceneTree().getID():
+                if parent.isLocked() or parent.isHidden():
+                    blocked = True
+                    break
+                parent = parent.getParent()
+            if blocked:
                 continue
             material = lux.getObjectMaterial(node.getID())
             material = material[0] if isinstance(material, (list, tuple)) and material else material
@@ -267,8 +286,14 @@ def op_material_copy(c):
     if not name.startswith("Director ") or len(name) > 80 or len(name) < 12:
         raise ValueError("Use a descriptive copy label beginning with 'Director ' (12–80 characters)")
     node = next((n for n in lux.getSceneTree().find("") if n.getID() == object_id), None)
-    if node is None or node.isDeleted() or not node.isObject():
+    if node is None or node.isDeleted() or node.getID() not in set(lux.getObjects()) or node.isLocked() or node.isHidden():
         raise ValueError("Choose a valid scene object that uses this material")
+    parent = node.getParent()
+    root_id = lux.getSceneTree().getID()
+    while parent and parent.getID() != root_id:
+        if parent.isLocked() or parent.isHidden():
+            raise ValueError("The selected part belongs to a hidden or locked assembly")
+        parent = parent.getParent()
     current = lux.getObjectMaterial(object_id)
     current = current[0] if isinstance(current, (list, tuple)) and current else current
     if str(current) != source:
@@ -432,8 +457,9 @@ def op_material_selection(c):
     return {'objects': objects}
 
 
-def op_material_apply_selection(c):
-    name = str(c.get('name', ''))
+def op_material_texture_apply(c):
+    """Wire imported texture maps into a new Director material graph."""
+    name = str(c.get("name", ""))
     if name not in MATERIAL_CREATED:
         raise ValueError("Texture maps can only be wired to a Director-created material")
     root_dir = os.path.realpath(os.path.join(BASE, "..", "materials", "texture-sets"))
@@ -443,209 +469,188 @@ def op_material_apply_selection(c):
     model = str(c.get("model", "Plastic"))
     if model not in ("Plastic", "Generic"):
         raise ValueError("The selected graph profile is not supported yet")
-    targets = {"base-color": "diffuse", "ambient-occlusion": "ao-composite",
-               "roughness": "roughness", "metallic": "metallic", "normal": "bumpmap",
-               "bump": "bumpmap", "specular": "specular", "displacement": "geometry"}
-    height_mm = c.get("displacement_height_mm", 0.1)
-    if isinstance(height_mm, bool) or not isinstance(height_mm, (int, float)) or not math.isfinite(height_mm) or not 0.01 <= height_mm <= 5:
-        raise ValueError("Displacement height must be between 0.01 and 5 mm")
-    clean = []
-    seen = set()
-    seen_targets = set()
-    for item in requested:
-        role = str(item.get('role', ''))
-        if role not in supported or role in seen:
-            raise ValueError('Unsupported or duplicate map role: ' + role)
-        file_path = os.path.realpath(str(item.get('path', '')))
-        if os.path.commonpath((root_dir, file_path)) != root_dir or not os.path.isfile(file_path):
-            raise ValueError('Texture map must be an existing file inside Director imported texture sets')
-        seen.add(role)
-        clean.append((role, file_path))
-    if 'normal' in seen and 'bump' in seen:
-        clean = [(role, file_path) for role, file_path in clean if role != 'bump']
-        seen.remove('bump')
-    if metal_mode == 'mixed' and 'metallic' not in seen:
-        raise ValueError('Mixed metal mode requires a Metallic map to drive the Plastic label')
-    # A metallic map is a mask for mixed metal/dielectric surfaces. For an
-    # all-plastic/fabric or all-metal surface, choose the physical shader
-    # directly instead of wrapping the Metal shader in a needless label.
-    if metal_mode != 'mixed' and 'metallic' in seen:
-        clean = [(role, file_path) for role, file_path in clean if role != 'metallic']
-        seen.remove('metallic')
-    # Never displace geometry unless the source MaterialX graph explicitly asks
-    # for a non-zero scale. An unscaled height map must not deform the model.
-    if 'displacement' in seen and displacement_height <= 0.0:
-        clean = [(role, file_path) for role, file_path in clean if role != 'displacement']
-        seen.remove('displacement')
+    height_mm = c.get("displacement_height_mm", DISPLACEMENT_HEIGHT_DEFAULT_MM)
+    if isinstance(height_mm, bool) or not isinstance(height_mm, (int, float)) or not math.isfinite(height_mm) or not DISPLACEMENT_HEIGHT_MIN_MM <= height_mm <= DISPLACEMENT_HEIGHT_MAX_MM:
+        raise ValueError("Displacement height must be between 0.001 and 0.1 mm")
+    midpoint_neutral = c.get("midpoint_neutral", False)
+    if not isinstance(midpoint_neutral, bool):
+        raise ValueError("Displacement midpoint selection must be true or false")
 
-    g = _material_graph(name)
-    root = g.getRoot()
-    if "displacement" in seen:
-        try:
-            existing_geometry = root.getInputEdge("geometry")
-        except Exception:
-            existing_geometry = None
-        if existing_geometry is not None:
-            raise ValueError("This material already has a geometry node")
-    if "ambient-occlusion" in seen and "base-color" not in seen:
-        raise ValueError("AO needs a Base Color map for its Multiply composite")
-    surface_edge = root.getInputEdge("surface")
-    if surface_edge is None:
-        raise ValueError('Director material has no surface shader')
-    original_shader = surface_edge.getSourceNode()
-    made = []
-    replace_diffuse = False
-    if original_shader.getType().get("name") == lux.SHADER_TYPE_DIFFUSE:
-        if original_shader.getInputEdges():
-            raise ValueError("Only an empty Director Diffuse material can be upgraded; create a fresh material")
-        shader_type = lux.SHADER_TYPE_GENERIC if model == "Generic" else lux.SHADER_TYPE_PLASTIC
-        shader = g.newNode(shader_type)
-        if shader is None:
-            raise RuntimeError("KeyShot could not create the requested material graph node")
-        made.append(shader)
-        replace_diffuse = True
-    parameters = dict((p.getName(), p) for p in shader.getParameters())
-    aliases = {"diffuse": ("diffuse", "base_color", "basecolor"),
+    supported = {"base-color", "ambient-occlusion", "roughness", "metallic", "normal", "bump", "displacement"}
+    targets = {"base-color": ("diffuse", "base_color", "basecolor"),
                "roughness": ("roughness", "specular_roughness"),
                "metallic": ("metallic", "metalness"),
-               "bumpmap": ("bumpmap", "bump"), "specular": ("specular",)}
-    resolved_targets = {}
-    for role in seen - {"ambient-occlusion", "displacement"}:
-        requested_target = targets[role]
-        target = next((candidate for candidate in aliases.get(requested_target, (requested_target,)) if candidate in parameters), None)
-        if target is None:
-            for node in reversed(made):
-                try: g.removeNode(node)
-                except Exception: pass
-            raise ValueError("This material shader does not support the '" + role + "' input")
-        resolved_targets[role] = target
+               "normal": ("bumpmap", "bump"), "bump": ("bumpmap", "bump")}
+    clean = []
+    roles = set()
+    for item in requested:
+        if not isinstance(item, dict):
+            raise ValueError("Each texture map must include a supported role and imported file path")
+        role = str(item.get("role", ""))
+        if role not in supported or role in roles:
+            raise ValueError("Unsupported or duplicate map role: " + role)
+        file_path = os.path.realpath(str(item.get("path", "")))
+        try:
+            inside = os.path.commonpath((root_dir, file_path)) == root_dir
+        except ValueError:
+            inside = False
+        if not inside or not os.path.isfile(file_path):
+            raise ValueError("Texture map must be an existing file inside Director imported texture sets")
+        roles.add(role)
+        clean.append((role, file_path))
+    if "normal" in roles and "bump" in roles:
+        clean = [(role, file_path) for role, file_path in clean if role != "bump"]
+        roles.remove("bump")
+    if "metallic" in roles and model != "Generic":
+        raise ValueError("Metallic maps require the Generic material profile")
+    if "ambient-occlusion" in roles and "base-color" not in roles:
+        raise ValueError("AO needs a Base Color map for its Multiply composite")
 
-    existing_targets = set()
-    for edge in shader.getInputEdges():
-        for target_name in set(resolved_targets.values()):
-            try:
-                if shader.getInputEdge(target_name).getID() == edge.getID():
-                    existing_targets.add(target_name)
-            except Exception:
-                pass
-    if any(resolved_targets[role] in existing_targets for role, _ in clean if role in resolved_targets):
-        raise ValueError("This material already has a map on one of those inputs; create a fresh Director material to avoid replacing it")
+    graph = _material_graph(name)
+    root = graph.getRoot()
+    surface_edge = root.getInputEdge("surface")
+    if surface_edge is None:
+        raise ValueError("Director material has no surface shader")
+    original_shader = surface_edge.getSourceNode()
+    type_info = original_shader.getType()
+    original_type = type_info.get("name") if isinstance(type_info, dict) else str(type_info)
+    if original_type != str(getattr(lux, "SHADER_TYPE_DIFFUSE", "")) or original_shader.getInputEdges():
+        raise ValueError("Only a fresh, empty Director Diffuse material can receive an imported texture set")
+    if "displacement" in roles:
+        try:
+            if root.getInputEdge("geometry") is not None:
+                raise ValueError("This Director material already has a geometry node")
+        except ValueError:
+            raise
+        except Exception:
+            pass
 
+    shader_constant = getattr(lux, "SHADER_TYPE_GENERIC" if model == "Generic" else "SHADER_TYPE_PLASTIC", None)
+    if shader_constant is None:
+        raise ValueError("KeyShot does not expose the requested " + model + " material node")
+    shader = graph.newNode(shader_constant)
+    if shader is None:
+        raise RuntimeError("KeyShot could not create the requested material graph node")
+    made = [shader]
     linked = []
+    surface_switched = False
     try:
-        mapping = g.newNode(lux.SHADER_TYPE_MAPPING_2D)
-        if mapping is None:
-            raise RuntimeError('KeyShot could not create a Mapping 2D node')
-        made.append(mapping)
-        mapping_params = dict((p.getName(), p) for p in mapping.getParameters())
-        projection_param = mapping_params.get('uv_mapping')
-        if projection_param is None:
-            raise RuntimeError('KeyShot Mapping 2D node has no projection setting')
-        projection_param.setValue(projection_values[projection_name])
-        for axis in ('uv_scale_u', 'uv_scale_v'):
-            if axis in mapping_params:
-                mapping_params[axis].setValue(mapping_size)
-        use_metal_layer = metal_mode == 'mixed' and 'metallic' in seen
-        primary_is_metal = metal_mode in ('metal', 'mixed')
-        primary = g.newNode(lux.SHADER_TYPE_METAL if primary_is_metal else lux.SHADER_TYPE_ADVANCED)
-        if primary is None:
-            raise RuntimeError('KeyShot could not create the Advanced/Metal shader node')
-        made.append(primary)
-        plastic = None
-        if use_metal_layer:
-            plastic = g.newNode(lux.SHADER_TYPE_PLASTIC)
-            if plastic is None:
-                raise RuntimeError('KeyShot could not create the Plastic label shader for the Metalness map')
-            made.append(plastic)
+        parameters = {parameter.getName(): parameter for parameter in shader.getParameters()}
+        resolved = {}
+        for role in roles - {"ambient-occlusion", "displacement"}:
+            target = next((candidate for candidate in targets[role] if candidate in parameters), None)
+            if target is None:
+                raise ValueError("The " + model + " shader does not expose a " + role + " input")
+            resolved[role] = target
 
         map_nodes = {}
         for role, file_path in clean:
-            node = g.newNode(lux.SHADER_TYPE_TEXTURE_MAP)
+            node = graph.newNode(lux.SHADER_TYPE_TEXTURE_MAP)
             if node is None:
-                raise RuntimeError('KeyShot could not create a Texture Map node')
+                raise RuntimeError("KeyShot could not create a Texture Map node")
             made.append(node)
-            params = dict((p.getName(), p) for p in node.getParameters())
-            if "texture" not in params:
+            map_nodes[role] = node
+            params = {parameter.getName(): parameter for parameter in node.getParameters()}
+            texture = params.get("texture")
+            if texture is None:
                 raise RuntimeError("KeyShot Texture Map has no image-file input")
-            params["texture"].setValue(file_path)
+            texture.setValue(file_path)
             if "normal" in params:
                 params["normal"].setValue(role == "normal")
             if "texture_use_srgb" in params:
                 params["texture_use_srgb"].setValue(role == "base-color")
-            if role in ("roughness", "metallic", "specular", "normal", "bump", "ambient-occlusion", "displacement") and "texture_use_profile" in params:
+            if role != "base-color" and "texture_use_profile" in params:
                 params["texture_use_profile"].setValue(False)
             if role == "normal" and "bump_height" in params:
                 params["bump_height"].setValue(1.0)
-            map_nodes.append(node)
-        map_by_role = {role: node for (role, _file_path), node in zip(clean, map_nodes)}
-        if "ambient-occlusion" in seen:
-            composite = g.newNode(lux.SHADER_TYPE_COLOR_COMPOSITE)
+
+        if "ambient-occlusion" in roles:
+            composite = graph.newNode(lux.SHADER_TYPE_COLOR_COMPOSITE)
             if composite is None:
                 raise RuntimeError("KeyShot could not create a Color Composite node for AO")
             made.append(composite)
-            composite_params = {p.getName(): p for p in composite.getParameters()}
+            composite_params = {parameter.getName(): parameter for parameter in composite.getParameters()}
             if not all(key in composite_params for key in ("source", "background", "blend_mode")):
                 raise RuntimeError("KeyShot Color Composite lacks the inputs needed for AO")
-            composite_params["blend_mode"].setValue(1)  # KeyShot Color Composite: Normal=0, Multiply=1.
-            g.newEdge(map_by_role["base-color"], composite, "background")
-            g.newEdge(map_by_role["ambient-occlusion"], composite, "source")
-            g.newEdge(composite, shader, resolved_targets["base-color"])
+            composite_params["blend_mode"].setValue(1)  # Normal=0, Multiply=1 in KeyShot's Color Composite node.
+            graph.newEdge(map_nodes["base-color"], composite, "background")
+            graph.newEdge(map_nodes["ambient-occlusion"], composite, "source")
+            graph.newEdge(composite, shader, resolved["base-color"])
             linked.append({"role": "ambient-occlusion", "target": "diffuse via Color Composite Multiply",
-                           "node_id": map_by_role["ambient-occlusion"].getID(), "utility_node_id": composite.getID()})
-        if "displacement" in seen:
-            displace = g.newNode(lux.SHADER_TYPE_DISPLACE)
+                           "node_id": map_nodes["ambient-occlusion"].getID(), "utility_node_id": composite.getID()})
+
+        if "displacement" in roles:
+            displace = graph.newNode(lux.SHADER_TYPE_DISPLACE)
             if displace is None:
                 raise RuntimeError("KeyShot could not create a Displace geometry node")
             made.append(displace)
-            displace_params = {p.getName(): p for p in displace.getParameters()}
-            for key in ("displace", "displacement height", "resolution", "max triangles (millions)"):
-                if key not in displace_params:
-                    raise RuntimeError("KeyShot Displace node lacks the " + key + " input")
-            displace_params["displacement height"].setValue(float(height_mm) / 1000.0)
+            displace_params = {parameter.getName(): parameter for parameter in displace.getParameters()}
+            required = ("displace", "displacement height", "resolution", "max triangles (millions)")
+            if any(key not in displace_params for key in required):
+                raise RuntimeError("KeyShot Displace node is missing a required input")
+            height_m = float(height_mm) / 1000.0
+            displace_params["displacement height"].setValue(height_m)
             displace_params["resolution"].setValue(0.0002)
             displace_params["max triangles (millions)"].setValue(1.0)
-            g.newEdge(map_by_role["displacement"], displace, "displace")
-            g.newEdge(displace, root, "geometry")
-            linked.append({"role": "displacement", "target": "root geometry",
-                           "node_id": map_by_role["displacement"].getID(), "utility_node_id": displace.getID(),
-                           "height_mm": height_mm, "executed": False})
-        for (role, _file_path), node in zip(clean, map_nodes):
-            if role in ("ambient-occlusion", "displacement"):
-                continue
-            if role == "base-color" and "ambient-occlusion" in seen:
+            if midpoint_neutral:
+                # REA confirms the graph parameter key is "offset"; the visible label is localized separately.
+                zero_height = displace_params.get("offset")
+                if zero_height is None:
+                    raise RuntimeError("KeyShot does not expose the Displace node's zero-height offset needed for a mid-gray-neutral map")
+                # The control defines the input value that should remain at zero height.
+                # Poliigon defines 0.5 as its flat point; confirm on a controlled render.
+                zero_height.setValue(0.5)
+            graph.newEdge(map_nodes["displacement"], displace, "displace")
+            graph.newEdge(displace, root, "geometry")
+            linked.append({"role": "displacement", "target": "root geometry", "node_id": map_nodes["displacement"].getID(),
+                           "utility_node_id": displace.getID(), "height_mm": height_mm,
+                           "midpoint_neutral": midpoint_neutral, "executed": False})
+
+        for role in roles - {"ambient-occlusion", "displacement"}:
+            node = map_nodes[role]
+            if role == "base-color" and "ambient-occlusion" in roles:
                 linked.append({"role": role, "target": "diffuse via Color Composite Multiply", "node_id": node.getID()})
                 continue
             if role == "roughness":
-                utility = g.newNode(lux.SHADER_TYPE_COLOR_TO_NUMBER)
+                utility = graph.newNode(lux.SHADER_TYPE_COLOR_TO_NUMBER)
                 if utility is None:
-                    raise RuntimeError('KeyShot could not create Color To Number for roughness')
+                    raise RuntimeError("KeyShot could not create Color To Number for Roughness")
                 made.append(utility)
-                utility_params = dict((p.getName(), p) for p in utility.getParameters())
+                utility_params = {parameter.getName(): parameter for parameter in utility.getParameters()}
                 if "input" not in utility_params:
                     raise RuntimeError("KeyShot Color To Number has no color input")
-                g.newEdge(node, utility, "input")
-                g.newEdge(utility, shader, resolved_targets[role])
-                linked.append({"role": role, "target": resolved_targets[role], "node_id": node.getID(),
+                graph.newEdge(node, utility, "input")
+                graph.newEdge(utility, shader, resolved[role])
+                linked.append({"role": role, "target": resolved[role], "node_id": node.getID(),
                                "utility_node_id": utility.getID(), "utility": "Color To Number"})
             else:
-                g.newEdge(node, shader, resolved_targets[role])
-                linked.append({"role": role, "target": resolved_targets[role], "node_id": node.getID()})
-        if replace_diffuse:
-            g.removeEdge(surface_edge)
+                graph.newEdge(node, shader, resolved[role])
+                linked.append({"role": role, "target": resolved[role], "node_id": node.getID()})
+
+        graph.removeEdge(surface_edge)
+        try:
+            graph.newEdge(shader, root, "surface")
+            surface_switched = True
+        except Exception:
+            graph.newEdge(original_shader, root, "surface")
+            raise
+        lux.sync()
+        try:
+            graph.removeNode(original_shader)
+        except Exception:
+            pass
+    except Exception:
+        if surface_switched:
             try:
-                g.newEdge(shader, root, "surface")
-            except Exception:
-                g.newEdge(original_shader, root, "surface")
-                raise
-            try:
-                g.removeNode(original_shader)
+                current_surface = root.getInputEdge("surface")
+                if current_surface is not None:
+                    graph.removeEdge(current_surface)
+                graph.newEdge(original_shader, root, "surface")
             except Exception:
                 pass
-        lux.sync()
-    except Exception:
         for node in reversed(made):
             try:
-                g.removeNode(node)
+                graph.removeNode(node)
             except Exception:
                 pass
         try:
@@ -653,8 +658,83 @@ def op_material_apply_selection(c):
         except Exception:
             pass
         raise
-    return {"name": name, "model": model, "maps": linked, "note": "Material is still unassigned; original product materials were not changed."}
+    return {"name": name, "model": model, "maps": linked,
+            "note": "Material is unassigned; source maps and product parts remain unchanged."}
 
+
+def op_material_execute_geometry(c):
+    """Execute the KeyShot geometry graph for a material after it is assigned."""
+    name = str(c.get("name", ""))
+    if not name.startswith("Director "):
+        raise ValueError("Geometry execution is limited to Director-created materials")
+    graph = _material_graph(name)
+    nodes = graph.getNodes()
+    root = graph.getRoot()
+    geometry_edge = root.getInputEdge("geometry")
+    if geometry_edge is None:
+        raise ValueError("This material has no node connected to root Geometry. Label bump/opacity and surface bump maps are not geometric displacement.")
+    geometry_node = geometry_edge.getSourceNode()
+    if "displace" not in _material_node_type(geometry_node).lower():
+        raise ValueError("Root Geometry must be driven by a Displace node; label, opacity, normal, and surface bump branches do not qualify.")
+    displacement_input = geometry_node.getInputEdge("displace")
+    if displacement_input is None:
+        raise ValueError("The root Geometry Displace node has no connected height input.")
+    displacement_nodes = [node for node in nodes if "displace" in _material_node_type(node).lower()]
+    if len(displacement_nodes) != 1 or displacement_nodes[0].getID() != geometry_node.getID():
+        raise ValueError("This material must have exactly one Displace node, connected directly to root Geometry, before Director can execute it safely.")
+    parameters = {parameter.getName(): parameter for parameter in geometry_node.getParameters()}
+    height_parameter = parameters.get("displacement height")
+    try:
+        height_native = float(height_parameter.getValue()) if height_parameter is not None else None
+    except Exception:
+        height_native = None
+    if height_native is None or not math.isfinite(height_native):
+        raise ValueError("Could not read a finite Displacement Height from the connected geometry node.")
+    height_mm = height_native * 1000.0
+    if abs(height_mm) > DISPLACEMENT_HEIGHT_MAX_MM + 1e-9:
+        raise ValueError("This material's displacement exceeds the safe 0.1 mm limit. Lower its Displacement Height before executing geometry.")
+
+    assigned = []
+    geometry_ids = set(lux.getObjects())
+    scene_root_id = lux.getSceneTree().getID()
+    for node in lux.getSceneTree().find(""):
+        try:
+            object_id = node.getID()
+            if object_id not in geometry_ids or node.isDeleted():
+                continue
+            current = lux.getObjectMaterial(object_id)
+            current = current[0] if isinstance(current, (list, tuple)) and current else current
+            if str(current) == name:
+                ancestor_hidden = False
+                ancestor_locked = False
+                parent = node.getParent()
+                while parent and parent.getID() != scene_root_id:
+                    ancestor_hidden = ancestor_hidden or bool(parent.isHidden())
+                    ancestor_locked = ancestor_locked or bool(parent.isLocked())
+                    if ancestor_hidden and ancestor_locked:
+                        break
+                    parent = parent.getParent()
+                assigned.append({"object_id": object_id, "name": node.getName()[:160],
+                                 "hidden": bool(node.isHidden() or ancestor_hidden),
+                                 "locked": bool(node.isLocked() or ancestor_locked)})
+        except Exception:
+            continue
+    if not assigned:
+        raise ValueError("Assign this material to the intended product part in KeyShot first, then ask Director to execute its geometry.")
+    if len(assigned) != 1:
+        names = ", ".join(item["name"] for item in assigned[:8])
+        raise ValueError("This material is assigned to multiple scene parts (" + names + "). Make a separate material copy for one intended part before executing geometry.")
+    if assigned[0]["hidden"] or assigned[0]["locked"]:
+        raise ValueError("The assigned product part must be visible and unlocked before its geometry can be executed.")
+    execute = getattr(graph, "executeGeometryNodes", None)
+    if not callable(execute):
+        raise RuntimeError("This KeyShot scripting build does not expose MaterialGraph.executeGeometryNodes")
+    execute()
+    lux.sync()
+    return {"name": name, "executed": True, "displacement_nodes": len(displacement_nodes),
+            "displacement_height_mm": height_mm, "geometry_node_id": geometry_node.getID(),
+            "assigned_objects": assigned,
+            "note": "Preflight verified one Displace node connected to root Geometry; label, opacity, and surface bump branches were not used as geometry inputs."}
 
 def _material_input_name(node, edge):
     for param in node.getParameters():
@@ -919,7 +999,9 @@ MATERIAL_OPS = {"materials_list": op_materials_list, "material_inspect": op_mate
                 "material_create": op_material_create, "material_edit_target": op_material_edit_target,
                 "material_set": op_material_set,
                 "material_undo": op_material_undo, "material_save": op_material_save,
-                "material_discard": op_material_discard, "material_texture_apply": op_material_texture_apply,
+                "material_discard": op_material_discard,
+                "material_texture_apply": op_material_texture_apply,
+                "material_execute_geometry": op_material_execute_geometry,
                 "material_add_geometry_template": op_material_add_geometry_template}
 MATERIAL_OPS["material_copy"] = op_material_copy
 MATERIAL_OPS["material_bump_set"] = op_material_bump_set

@@ -4,7 +4,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-const { send, heartbeat, BASE, SHOTS } = require('./bridge');
+const { send, heartbeat, markStopped, BASE, SHOTS } = require('./bridge');
 const { poseToEye, eyeToPose, sample, presets } = require('./shots');
 const agent = require('./agent');
 const { execFile } = require('child_process');
@@ -13,12 +13,15 @@ const textureSets = require('./material-textures');
 const textureEdit = require('./texture-edit');
 const { compileTexturePlan } = require('./material-core');
 const { RIGS, ENV_RIGS, buildRig, toPos } = require('./rigs');
+const lightingPlaybooks = require('./lighting-playbooks');
 const { decode, productStats } = require('./png');
 const style = require('./style');
+const { createLightingLab } = require('./lighting-lab');
 const video = require('./video');
 const janitor = require('./janitor');
 const photo = require('./photo');
 const sleep = ms => new Promise(r => setTimeout(r, ms));
+const lightingLab = createLightingLab({ send, heartbeat, SHOTS });
 const MATERIAL_PACKAGE_DIR = path.resolve(__dirname, '..', 'materials');
 const packageEntryCache = new Map();
 
@@ -106,14 +109,19 @@ function resolveMaterialContext(raw) {
 }
 
 // ---- studio lighting state (what we believe is in KeyShot; the bridge keeps the real registry) ----
-const studio = { rig: null, exposure: 1, frameAz: 0, mirror: false, subject: null, env: null, lights: {}, target: null, envScales: false, lastAuto: null };
+const studio = { rig: null, exposure: 1, frameAz: 0, mirror: false, subject: null, rigSubject: null, env: null, envBaseBrightness: null, envMultiplier: 1, lights: {}, target: null, envScales: false, lastAuto: null };
 let stagingBusy = false;
 
 // Measure the product's own brightness in the live viewport (see png.js productStats).
-async function measure(settleMs = 2500) {
+async function measure(settleMs = 2500, { subject = null, pose = null } = {}) {
   await sleep(Math.min(settleMs, 400));                       // (the capture is a render now; it converges on its own)
   const r = await send('screenshot', { name: 'measure', width: 640, secs: 1.5 }, 30000);
-  return productStats(decode(fs.readFileSync(r.path)));
+  const image = decode(fs.readFileSync(r.path));
+  const region = subject && pose ? photo.projectBounds(subject, pose, image.w / image.h) : null;
+  const stats = productStats(image, region || undefined);
+  const scope = region ? (stats.fallback ? 'selected-bounds crop; product mask uncertain' : 'selected-part projected bounds')
+    : subject ? 'whole-product fallback (selected crop unavailable)' : 'whole-product region';
+  return { ...stats, measurement_scope: scope };
 }
 // Score the live viewport against a style folder's looks; returns the closest look, its distance, and per-feature deltas.
 async function scoreLive(name, settleMs = 2500) {
@@ -141,12 +149,11 @@ async function matchStyle(name, { look, rounds = 3, settle = 2200 } = {}) {
       if (!target) target = prof.looks.map(l => ({ l, s: style.score(f, l.profile).distance })).sort((a, b) => a.s - b.s)[0].l;
       return style.score(f, target.profile);
     };
-    const baseEnv = studio.rig && RIGS[studio.rig] ? RIGS[studio.rig].env.brightness : 1;
-    let envMul = studio.envMul ?? 1;
-    const setEnv = async m => { envMul = m; studio.envMul = m; await send('env_set', { brightness: +(baseEnv * m).toFixed(3) }, 30000); };
+    let envMul = studio.envMultiplier ?? 1;
+    const setEnv = async m => { envMul = m; await setEnvironmentMultiplier(m); };
     const params = [];
     if (studio.rig && !studio.rig.startsWith('hdri_')) {
-      params.push({ id: 'env', get: () => envMul, set: v => setEnv(v), min: 0.1, max: 3, step: 1.5, mul: true });
+      params.push({ id: 'env', get: () => envMul, set: v => setEnv(v), min: 0, max: 2, step: 1.5, seed: 0.1, mul: true });
       for (const id of Object.keys(studio.lights)) params.push({ id: id + '.gain', get: () => studio.lights[id].gain ?? 1, set: v => editLight(id, { gain: v }), min: 0.05, max: 5, step: 1.6, mul: true });
       const key = Object.keys(studio.lights).find(i => studio.lights[i].role === 'key');
       if (key) params.push({ id: key + '.az', get: () => studio.lights[key].az, set: v => editLight(key, { az: v }), min: -80, max: 80, step: 18, mul: false });
@@ -158,8 +165,8 @@ async function matchStyle(name, { look, rounds = 3, settle = 2200 } = {}) {
       for (const p of params) {
         const cur = p.get();
         for (const dir of [1, -1]) {
-          const cand = p.mul ? cur * Math.pow(p.step, dir) : cur + dir * p.step;
-          if (cand < p.min || cand > p.max) continue;
+          const cand = p.mul ? (cur === 0 ? (dir > 0 ? (p.seed ?? 0.1) : 0) : cur * Math.pow(p.step, dir)) : cur + dir * p.step;
+          if (cand === cur || cand < p.min || cand > p.max) continue;
           await p.set(cand); const s = await evalNow();
           if (s.distance < best.distance - 0.004) { say(`round ${round}: ${p.id} ${(+cur).toFixed(2)} -> ${(+cand).toFixed(2)}   distance ${best.distance} -> ${s.distance}`); best = s; improved = true; break; }
           await p.set(cur);                                                  // revert and try the other direction
@@ -176,19 +183,40 @@ async function matchStyle(name, { look, rounds = 3, settle = 2200 } = {}) {
 }
 async function setExposure(x) {
   studio.exposure = Math.max(0.05, Math.min(12, x));
-  if (studio.envScales && studio.rig && RIGS[studio.rig]) studio.env = await send('env_set', { brightness: +(RIGS[studio.rig].env.brightness * studio.exposure).toFixed(3) }, 30000);
+  if (studio.envScales && Number.isFinite(studio.envBaseBrightness)) await applyEnvironmentMultiplier();
   for (const id of Object.keys(studio.lights)) await editLight(id, {});
+}
+async function applyEnvironmentMultiplier() {
+  const base = Number.isFinite(studio.envBaseBrightness) ? studio.envBaseBrightness : 1;
+  const exposure = studio.envScales ? studio.exposure : 1;
+  const multiplier = Number.isFinite(studio.envMultiplier) ? studio.envMultiplier : 1;
+  const brightness = Math.max(0.000001, Math.min(5, base * multiplier * exposure));
+  studio.env = await send('env_set', { brightness: +brightness.toFixed(6) }, 30000);
+  return studio.env;
+}
+async function setEnvironmentMultiplier(value) {
+  if (!Number.isFinite(value) || value < 0 || value > 2) throw new Error('Environment fill must be between 0× and 2×.');
+  if (!Number.isFinite(studio.envBaseBrightness)) {
+    const current = await send('env_info', {}, 15000);
+    studio.env = current;
+    studio.envBaseBrightness = Math.max(0.000001, Number(current.brightness) || 1);
+  }
+  studio.envMultiplier = value;
+  await applyEnvironmentMultiplier();
+  return { multiplier: studio.envMultiplier, brightness: studio.env?.brightness, environment: studio.env };
 }
 // Closed loop: measure -> compare with the rig's target tone -> scale exposure -> repeat.
 // Which statistic to meter: dark rigs meter the HIGHLIGHT level (p95) like a photographer would, because the median is
 // dominated by shadowed glass/liquid that barely responds to light; white rigs meter the median.
 async function autoExpose({ target, metric, iterations = 4 } = {}) {
   target = target ?? studio.target ?? 0.3; metric = metric ?? studio.metric ?? 'p50';
+  const selectedSubject = studio.rigSubject;
+  const measurementPose = selectedSubject ? await readPose().catch(() => null) : null;
   const steps = []; let prev = null;
   for (let i = 0; i < iterations; i++) {
-    const m = await measure();
+    const m = await measure(2500, { subject: selectedSubject, pose: measurementPose });
     const v = m[metric];
-    steps.push({ exposure: +studio.exposure.toFixed(3), p50: +m.p50.toFixed(3), p95: +m.p95.toFixed(3), clip: +(m.clipFrac * 100).toFixed(1) });
+    steps.push({ exposure: +studio.exposure.toFixed(3), p50: +m.p50.toFixed(3), p95: +m.p95.toFixed(3), clip: +(m.clipFrac * 100).toFixed(1), measurement_scope: m.measurement_scope });
     // guard: if the metric barely moved although exposure changed a lot, more exposure will not help - go back and stop
     if (prev && Math.abs(Math.log(studio.exposure / prev.exposure)) > Math.log(1.8) && Math.abs(Math.log(v / Math.max(0.01, prev.v))) < 0.12) {
       await setExposure(prev.exposure); steps.push({ note: 'flat response - reverted to exposure ' + prev.exposure.toFixed(2) }); break;
@@ -198,7 +226,7 @@ async function autoExpose({ target, metric, iterations = 4 } = {}) {
     prev = { exposure: studio.exposure, v };
     await setExposure(studio.exposure * Math.pow(Math.max(0.4, Math.min(2.5, ratio)), 1.7));
   }
-  return (studio.lastAuto = { target, metric, exposure: +studio.exposure.toFixed(3), steps });
+  return (studio.lastAuto = { target, metric, exposure: +studio.exposure.toFixed(3), measurement_scope: steps.at(-1)?.measurement_scope || 'whole-product region', steps });
 }
 
 async function ensureSubject(force = false) {
@@ -213,23 +241,62 @@ async function ensureSubject(force = false) {
   }
   return studio.subject;
 }
-function lightSpec(l) {                       // stage-frame light -> concrete bridge spec
-  const s = studio.subject, dist = l.d * s.span;
-  return {
-    id: l.id, pos: toPos(s.center, studio.frameAz, l, s.span), target: s.center, size: [l.w * s.span, l.h * s.span],
-    power: +(l.E * (l.gain ?? 1) * dist * dist * studio.exposure).toFixed(2),
-    kelvin: l.kelvin, roll: l.roll || 0, visible_refl: l.refl, visible_eye: l.eye, visible_shadows: l.shadows ?? true,
+function selectedSubjectFromContext(context, product) {
+  const selected = context?.target?.selection || [];
+  if (selected.length !== 1) throw new Error('Select exactly one part in KeyShot before framing that selected part.');
+  if (selected[0].hidden) throw new Error('The selected part is hidden in KeyShot, so it cannot be framed as a visible close-up.');
+  const bounds = selected[0].bounds;
+  if (!Array.isArray(bounds) || bounds.length !== 2 || !bounds.every(point => Array.isArray(point) && point.length === 3 && point.every(Number.isFinite)))
+    throw new Error('KeyShot did not provide usable bounds for the selected part.');
+  const min = bounds[0].slice(0, 3), max = bounds[1].slice(0, 3);
+  const size = min.map((value, axis) => max[axis] - value);
+  const span = Math.max(...size);
+  if (!(span > 0) || span > 5000 || !min.every(Number.isFinite) || !max.every(Number.isFinite))
+    throw new Error('The selected part bounds are zero-sized or outside the supported scene range.');
+  return { ...product, models: [selected[0].name || selected[0].path?.join(' / ') || 'Selected part'], min, max,
+    size, span, center: min.map((value, axis) => (value + max[axis]) / 2) };
+}
+function lightSpec(l, context = {}) {          // stage-frame light -> concrete bridge spec
+  const s = context.subject || studio.rigSubject || studio.subject;
+  const target = Array.isArray(context.target) ? context.target : s.center;
+  const scale = Number.isFinite(context.sourceScale) ? context.sourceScale : 1;
+  const d = l.d * scale, dist = d * s.span;
+  const scaled = { ...l, d };
+  const type = ['area', 'point', 'ies', 'spotlight'].includes(l.type) ? l.type : 'area';
+  const spec = {
+    id: l.id, type, pos: toPos(target, studio.frameAz, scaled, s.span), target,
+    size: [l.w * scale * s.span, l.h * scale * s.span],
+    ...(type !== 'ies' || Number.isFinite(l.kelvin) ? { kelvin: l.kelvin } : {}),
+    ...(Array.isArray(l.rgb) ? { rgb: l.rgb } : {}),
+    radius: Number.isFinite(l.radius) ? l.radius : 0,
+    angle: Number.isFinite(l.angle) ? l.angle : 45,
+    falloff: Number.isFinite(l.falloff) ? l.falloff : 0.5,
+    constant_output: l.constant_output !== false,
+    roll: l.roll || 0, visible_refl: l.refl, visible_eye: l.eye, visible_shadows: l.shadows ?? true,
   };
+  if (type === 'ies') {
+    spec.multiplier = +((Number.isFinite(l.multiplier) ? l.multiplier : (l.gain ?? 1)) * studio.exposure).toFixed(4);
+    spec.ies_asset_id = l.ies_asset_id;
+    if (Number.isInteger(l.axis)) spec.axis = l.axis;
+  } else {
+    spec.power = +(l.E * (l.gain ?? 1) * dist * dist * studio.exposure).toFixed(2);
+  }
+  return spec;
 }
 // Coalesce rapid edits to one light (slider drags): at most one bridge call in flight per light, latest values win.
 const lightJobs = new Map();
 function editLight(id, patch) {
   if (!/^[a-zA-Z0-9_-]{1,64}$/.test(id || '')) return Promise.reject(new Error('Use a short light name with letters, numbers or underscores.'));
-  const limits = { az: [-360,360], el: [-85,85], d: [0.2,20], w: [0.01,20], h: [0.01,20], gain: [0,30], kelvin: [1500,12000], roll: [-360,360], E: [0,0.02] };
+  if (Object.prototype.hasOwnProperty.call(patch, 'kelvin') && Object.prototype.hasOwnProperty.call(patch, 'rgb')) return Promise.reject(new Error('Choose either color temperature or RGB tint for this light, not both.'));
+  const limits = { az: [-360,360], el: [-85,85], d: [0.2,20], w: [0.01,20], h: [0.01,20], gain: [0,30], kelvin: [1500,12000], roll: [-360,360], E: [0,0.02], radius: [0,10000], angle: [1,120], falloff: [0,1], multiplier: [0.001,1000000] };
   for (const [k, v] of Object.entries(patch)) {
+    if (k === 'rgb' && (!Array.isArray(v) || v.length !== 3 || v.some(channel => !Number.isFinite(channel) || channel < 0 || channel > 1))) return Promise.reject(new Error('RGB tint must be three values from 0 to 1.'));
+    if (k === 'type' && !['area','point','ies','spotlight'].includes(v)) return Promise.reject(new Error('Choose Area, Point, IES, or Spotlight.'));
+    if (k === 'ies_asset_id' && (typeof v !== 'string' || !v.startsWith('Light/IES Light/') || v.includes('..'))) return Promise.reject(new Error('Choose an installed IES profile from the light catalog.'));
+    if (k === 'axis' && (!Number.isInteger(v) || v < 0 || v > 5)) return Promise.reject(new Error('IES axis must be an integer from 0 to 5.'));
     if (limits[k] && (!Number.isFinite(v) || v < limits[k][0] || v > limits[k][1])) return Promise.reject(new Error('Invalid light ' + k));
-    if (!limits[k] && !['refl','eye','shadows','role'].includes(k)) return Promise.reject(new Error('Unknown light setting: ' + k));
-    if (['refl','eye','shadows'].includes(k) && typeof v !== 'boolean') return Promise.reject(new Error('Expected a yes/no light setting: ' + k));
+    if (!limits[k] && !['rgb','refl','eye','shadows','role','type','constant_output','ies_asset_id','axis'].includes(k)) return Promise.reject(new Error('Unknown light setting: ' + k));
+    if (['refl','eye','shadows','constant_output'].includes(k) && typeof v !== 'boolean') return Promise.reject(new Error('Expected a yes/no light setting: ' + k));
   }
   const job = lightJobs.get(id) || { running: false, dirty: false, patch: {}, waiters: [] };
   lightJobs.set(id, job);
@@ -244,8 +311,26 @@ function editLight(id, patch) {
         job.dirty = false;
         const p = job.patch, ws = job.waiters; job.patch = {}; job.waiters = [];
         try {
-          const l = { ...(studio.lights[id] || { id, role: 'custom', az: -40, el: 30, d: 3, w: 1.5, h: 1.5, E: 0.0008, kelvin: 5600, refl: true, eye: false, gain: 1 }), ...p, id };
+          const existing = studio.lights[id];
+          const l = { ...(existing || { id, role: 'custom', type: 'area', az: -40, el: 30, d: 3, w: 1.5, h: 1.5, E: 0.0008, kelvin: 5600, radius: 0, angle: 45, falloff: 0.5, constant_output: true, refl: true, eye: false, gain: 1 }), ...p, id };
+          if (l.type === 'ies' && (!existing || (p.type === 'ies' && existing.type !== 'ies'))) {
+            delete l.kelvin; delete l.rgb;
+            if (Object.prototype.hasOwnProperty.call(p, 'kelvin')) l.kelvin = p.kelvin;
+            if (Object.prototype.hasOwnProperty.call(p, 'rgb')) l.rgb = p.rgb.slice();
+          }
+          if (l.type === 'ies') {
+            if (Object.prototype.hasOwnProperty.call(p, 'gain')) l.multiplier = l.gain;
+            else if (Object.prototype.hasOwnProperty.call(p, 'multiplier')) l.gain = l.multiplier;
+            else if (!Number.isFinite(l.multiplier)) l.multiplier = l.gain ?? 1;
+          }
+          if (Object.prototype.hasOwnProperty.call(p, 'kelvin') && !Object.prototype.hasOwnProperty.call(p, 'rgb')) delete l.rgb;
+          if (Object.prototype.hasOwnProperty.call(p, 'rgb')) { delete l.kelvin; l.rgb = p.rgb.slice(); }
           const r = await send('light_set', lightSpec(l), 30000);
+          if (l.type === 'ies') {
+            if (Array.isArray(r.profile_native_color)) l.profile_rgb = r.profile_native_color.slice(0, 3);
+            const cct = String(l.ies_asset_id || '').match(/(?<!\d)(\d{4})\s*K\b/i);
+            if (cct) l.profile_kelvin_hint = Number(cct[1]);
+          }
           studio.lights[id] = l;
           ws.forEach(w => w.resolve({ light: l, bridge: r }));
         } catch (e) { ws.forEach(w => w.reject(e)); }
@@ -267,9 +352,13 @@ async function syncFromKeyShot() {
       const sp = l[id].spec || {};
       if (sp.pos && sp.size) {
         const v = [sp.pos[0] - s.center[0], sp.pos[1] - s.center[1], sp.pos[2] - s.center[2]], r = Math.hypot(...v) || 1;
-        studio.lights[id] = { id, role: 'restored', az: Math.atan2(v[0], v[2]) * 180 / Math.PI, el: Math.asin(v[1] / r) * 180 / Math.PI, d: r / s.span, w: sp.size[0] / s.span, h: sp.size[1] / s.span,
-          E: (sp.power || 100) / (r * r), kelvin: sp.kelvin || 5600, refl: sp.visible_refl !== false, eye: !!sp.visible_eye, gain: 1 };
-      } else studio.lights[id] = { id, role: 'unknown', az: -40, el: 30, d: 3, w: 1.5, h: 1.5, E: 0.003, kelvin: 5600, refl: true, eye: false, gain: 1 };
+        const type = sp.type || 'area', readback = l[id].readback || {};
+        const cct = String(sp.ies_asset_id || '').match(/(?<!\d)(\d{4})\s*K\b/i);
+        studio.lights[id] = { id, role: 'restored', type, az: Math.atan2(v[0], v[2]) * 180 / Math.PI, el: Math.asin(v[1] / r) * 180 / Math.PI, d: r / s.span, w: sp.size[0] / s.span, h: sp.size[1] / s.span,
+          E: (sp.power || 100) / (r * r), ...(Number.isFinite(sp.kelvin) ? { kelvin: sp.kelvin } : type === 'ies' ? {} : { kelvin: 5600 }), radius: sp.radius || 0, angle: sp.angle || 45, falloff: sp.falloff ?? 0.5, constant_output: sp.constant_output !== false, ...(Number.isFinite(sp.multiplier) ? { multiplier: sp.multiplier } : {}), ies_asset_id: sp.ies_asset_id,
+          ...(Array.isArray(sp.rgb) ? { rgb: sp.rgb.slice(0, 3) } : {}), ...(type === 'ies' && Array.isArray(l[id].profile_native_color || readback.color) ? { profile_rgb: (l[id].profile_native_color || readback.color).slice(0, 3) } : {}), ...(type === 'ies' && cct ? { profile_kelvin_hint: Number(cct[1]) } : {}),
+          refl: sp.visible_refl !== false, eye: !!sp.visible_eye, gain: 1 };
+      } else studio.lights[id] = { id, role: 'unknown', type: 'area', az: -40, el: 30, d: 3, w: 1.5, h: 1.5, E: 0.003, kelvin: 5600, radius: 0, angle: 45, falloff: 0.5, constant_output: true, refl: true, eye: false, gain: 1 };
     }
     studio.rig = studio.rig || 'restored';
   } catch { synced = false; }          // bridge not ready yet - try again on the next status check
@@ -277,22 +366,28 @@ async function syncFromKeyShot() {
 async function clearLights() { await send('lights_clear', {}, 60000); studio.lights = {}; }
 async function applyRig(name, opts = {}) {
   if (!RIGS[name] && !ENV_RIGS[name]) throw new Error('Unknown lighting rig.');
-  await clearLights();                    // measure the product only after our own lights are gone
-  await ensureSubject(true);
+  const product = await ensureSubject(true);
+  const subject = opts.useSelectedPart === true
+    ? selectedSubjectFromContext(await send('scene_context', {}, 15000), product)
+    : product;
+  await clearLights();                    // validate the requested target before removing the old rig
+  studio.rigSubject = opts.useSelectedPart === true ? subject : null;
   if (ENV_RIGS[name]) {
-    studio.rig = name; studio.env = await send('env_set', { hdri: ENV_RIGS[name].hdri, brightness: 1, ground_shadows: true }, 30000);
+    studio.rig = name; studio.envBaseBrightness = 1; studio.envMultiplier = 1; studio.envScales = false;
+    studio.env = await send('env_set', { hdri: ENV_RIGS[name].hdri, brightness: 1, ground_shadows: true }, 30000);
     return { rig: name, lights: [], env: studio.env };
   }
   studio.exposure = opts.exposure ?? 1;
   studio.mirror = !!opts.mirror;
   studio.frameAz = opts.frameAz ?? (cur ? cur.az : (base ? base.az : 0));
-  const rig = buildRig(name, studio.subject, { frameAz: studio.frameAz, exposure: studio.exposure, mirror: studio.mirror });
-  studio.rig = name; studio.target = rig.target; studio.metric = rig.metric; studio.envScales = rig.envScales; studio.envMul = 1;
+  const rig = buildRig(name, subject, { frameAz: studio.frameAz, exposure: studio.exposure, mirror: studio.mirror });
+  studio.rig = name; studio.target = rig.target; studio.metric = rig.metric; studio.envScales = rig.envScales;
+  studio.envBaseBrightness = RIGS[name].env.brightness; studio.envMultiplier = 1;
   studio.env = await send('env_set', rig.env, 30000);
   const placed = [];
   for (const l of rig.lights) {
-    studio.lights[l.id] = { id: l.id, role: l.role, az: l.az, el: l.el, d: l.d, w: l.w, h: l.h, E: l.E, kelvin: l.kelvin, refl: l.visible_refl, eye: l.visible_eye, gain: 1 };
-    const r = await send('light_set', lightSpec(studio.lights[l.id]), 30000);
+    studio.lights[l.id] = { id: l.id, role: l.role, az: l.az, el: l.el, d: l.d, w: l.w, h: l.h, E: l.E, kelvin: l.kelvin, ...(Array.isArray(l.rgb) ? { rgb: l.rgb.slice(0, 3) } : {}), refl: l.visible_refl, eye: l.visible_eye, gain: 1 };
+    const r = await send('light_set', lightSpec(studio.lights[l.id], { subject }), 30000);
     placed.push({ id: l.id, placement_err_mm: r.placement_err_mm });
   }
   const out = { rig: name, label: rig.label, lights: placed, env: studio.env };
@@ -333,10 +428,25 @@ const photoDirector = photo.createDirector({
   async snapshot() {
     await syncFromKeyShot();
     const subject = await ensureSubject(true), camera = await readPose();
+    let scene_context = null;
+    try { scene_context = await send('scene_context', {}, 15000); } catch { /* Keep photo matching usable if optional context is unavailable. */ }
     const lights = await send('lights_list');
     const checkpoint = await send('camera_checkpoint', {}, 30000);
-    currentPhotoSnapshot = { subject, camera, checkpoint, environment: await send('env_info'), selectOnly: true, lights, createdIds: [], studio: JSON.parse(JSON.stringify(studio)) };
+    currentPhotoSnapshot = { subject, camera, scene_context, checkpoint, environment: await send('env_info'), selectOnly: true, lights, createdIds: [], studio: JSON.parse(JSON.stringify(studio)) };
     return currentPhotoSnapshot;
+  },
+  async lightProfiles() {
+    const r = await send('lighting_ies_assets', { limit: 40 }, 30000);
+    return r.installed_files?.assets || [];
+  },
+  async lightingEvidence(previousRunId = null) {
+    const record = previousRunId
+      ? await lightingLab.replay({ run_id: previousRunId })
+      : await lightingLab.run({ operation_id: 'lighting.capture_diagnostic_passes', inputs: {
+        passes: ['clown', 'direct', 'reflection', 'shadow'], width: 640, height: 400, secs: 2, render_engine: 'current'
+      } });
+    if (record.status === 'failed') throw new Error(record.error || 'KeyShot diagnostic capture failed.');
+    return record;
   },
   async restore(s) {
     // Original lights stay in the scene with their actual transforms/materials. Only this run's creations are removed.
@@ -349,18 +459,27 @@ const photoDirector = photo.createDirector({
   },
   async apply(plan, opts) {
     const subject = await ensureSubject(true), camera = await readPose();
+    const lightFrame = photo.lightingFrame(subject, camera, plan.shot, opts.aspect, { frameCamera: !!opts.framing });
     const ids = plan.lights.map(l => 'photo_' + opts.id + '_' + l.id);
     const existing = await send('lights_list');
     await send('light_visibility', { ids: Object.keys(existing).filter(id => !ids.includes(id)), visible: false }, 30000);
     studio.lights = {};
-    Object.assign(studio, { rig: 'reference_photo', exposure: 1, frameAz: camera.az, mirror: false, subject, envScales: false });
+    Object.assign(studio, { rig: 'reference_photo', exposure: 1, frameAz: camera.az, mirror: false, subject, rigSubject: subject, envScales: false, envMultiplier: 1 });
     const { background, ...environment } = plan.environment;
+    studio.envBaseBrightness = Math.max(0.000001, Number(environment.brightness) || 1);
     studio.env = await send('env_set', { ...environment, director_name: 'CC_Photo_' + opts.id, bg: background.map(v => Math.round(255 * Math.pow(v / 255, 2.2))) }, 30000);
     for (const [i, source] of plan.lights.entries()) {
-      const l = { ...source, id: ids[i] }; if (!currentPhotoSnapshot.createdIds.includes(l.id)) currentPhotoSnapshot.createdIds.push(l.id);
-      await send('light_set', lightSpec(l), 30000); await send('light_visibility', { ids: [l.id], visible: true }, 30000); studio.lights[l.id] = l;
+      const l = { ...source, id: ids[i], radius: source.radius * subject.span * lightFrame.sourceScale };
+      if (!currentPhotoSnapshot.createdIds.includes(l.id)) currentPhotoSnapshot.createdIds.push(l.id);
+      const prior = existing[l.id];
+      if (prior && (prior.spec?.type || 'area') !== l.type) await send('light_remove', { id: l.id }, 30000);
+      await send('light_set', lightSpec(l, { subject, target: lightFrame.target, sourceScale: lightFrame.sourceScale }), 30000);
+      await send('light_visibility', { ids: [l.id], visible: true }, 30000); studio.lights[l.id] = l;
     }
-    if (opts.framing) await applyPose(photo.frame(subject, camera, plan.shot, opts.aspect));
+    if (opts.framing) await applyPose(lightFrame.pose);
+    return { lighting_frame: { aim_point_mm: lightFrame.target, source_scale: lightFrame.sourceScale,
+      view_distance_mm: lightFrame.viewDistance, full_product_fit_distance_mm: lightFrame.fullProductDistance,
+      camera_framed: !!opts.framing } };
   },
   async capture(file, aspect, secs) {
     const width = Math.round(Math.min(960, 960 * aspect) / 2) * 2, height = Math.round(width / aspect / 2) * 2;
@@ -438,12 +557,17 @@ async function matchVideo({ frames, duration, lighting = true, camera = true, ro
     const fr = frames.map(f => { const m = /^data:image\/png;base64,(.+)$/.exec(f.png || ''); if (!m) throw new Error('frames must be PNG data URLs'); return { t: +f.t || 0, png: Buffer.from(m[1], 'base64') }; });
     duration = Math.max(0.5, +duration || fr[fr.length - 1].t);
     say(`${fr.length} frames, ${duration.toFixed(1)}s - analysing`);
-    const a = await video.analyze(fr, duration, { log: say });
+    let sceneContext = null;
+    if (heartbeat().alive) {
+      try { sceneContext = await actions.scene_context(); }
+      catch (error) { say('scene context unavailable; analysing the clip without it'); }
+    }
+    const a = await video.analyze(fr, duration, { log: say, sceneContext });
     const plan = a.plan; stopIf();
     say(`${a.engine === 'claude' ? 'AI' : 'offline'} plan: ${plan.summary}`);
     say(`lighting: ${plan.lighting.rig}${plan.lighting.mirror ? ' (mirrored)' : ''}${plan.lighting.notes ? ' - ' + plan.lighting.notes : ''}`);
     say('camera keys: ' + plan.keys.map(k => `${k.t.toFixed(1)}s az ${Math.round(k.azimuth)} el ${Math.round(k.elevation)} fill ${k.fill.toFixed(2)}${k.cut ? ' CUT' : ''}`).join(' | '));
-    const out = { plan, engine: a.engine, aspect: a.aspect, duration, recipe: null };
+    const out = { plan, engine: a.engine, aspect: a.aspect, duration, scene_context: sceneContext, recipe: null };
     if (!heartbeat().alive) { say('KeyShot is not connected - plan only. Connect KeyShot and run it again to build it.'); videoJob.result = out; return; }
     if (!base) base = await readPose();
     const front = { ...(cur || base) };                       // the user's current view = the video's opening view
@@ -520,13 +644,14 @@ let materialPromptJob = null;
 const run = (file, args) => new Promise((res, rej) => execFile(file, args, { windowsHide: true, maxBuffer: 1 << 26 }, (e, so, se) => e ? rej(new Error(se || e.message)) : res(so)));
 const R2 = n => (typeof n === 'number' ? +n.toFixed(2) : n);
 const camState = () => { const p = cur || base; return p ? { azimuth: R2(p.az), elevation: R2(p.el), distance_mm: R2(p.dist), fov: R2(p.fov) } : null; };
-const lightView = l => ({ id: l.id, role: l.role, azimuth: R2(l.az), elevation: R2(l.el), distance: R2(l.d), width: R2(l.w), height: R2(l.h), brightness: R2(l.gain ?? 1), kelvin: Math.round(l.kelvin) });
+const lightView = l => ({ id: l.id, role: l.role, type: l.type || 'area', azimuth: R2(l.az), elevation: R2(l.el), distance: R2(l.d), width: R2(l.w), height: R2(l.h), brightness: R2(l.gain ?? 1), ...(Number.isFinite(l.kelvin) ? { kelvin: Math.round(l.kelvin) } : {}), radius: R2(l.radius || 0), angle: R2(l.angle ?? 45), falloff: R2(l.falloff ?? 0.5), constant_output: l.constant_output !== false, multiplier: R2(l.multiplier ?? 1), ies_asset_id: l.ies_asset_id || null, ...(Array.isArray(l.rgb) ? { rgb: l.rgb.slice(0, 3) } : {}), ...(Array.isArray(l.profile_rgb) ? { profile_rgb: l.profile_rgb.slice(0, 3) } : {}), ...(Number.isFinite(l.profile_kelvin_hint) ? { profile_kelvin_hint: l.profile_kelvin_hint } : {}) });
 
 const NOT_CONNECTED = 'KeyShot is not connected. In KeyShot, run Scripts > KeyShot Director, wait for "KeyShot connected" at the top of this page, then try again.';
 const needsBridge = fn => async (...a) => { if (!heartbeat().alive) throw new Error(NOT_CONNECTED); return fn(...a); };   // fail in 1 ms, not after a 60 s timeout
 
 const actions = {
   setAttachments(a) { attachments = a || []; },
+  async scene_context() { return send('scene_context', {}, 15000); },
   async scene_objects(input = {}) { return send('scene_objects', input, 30000); },
   async move_object(input) {
     const result = await stagingOperation('stage_transform', input);
@@ -551,10 +676,14 @@ const actions = {
     if (r.error) throw new Error(r.error);
     return { summary: r.result.title, ...r.result };
   },
-  async frame_product({ kind, focus, fill, fov, aspect }) {
-    const subject = await ensureSubject(true), pose = await readPose();
-    await applyPose(photo.frame(subject, pose, { kind, focus, fill, fov }, aspect));
-    return { summary: 'Product framing updated', camera: camState() };
+  async frame_product({ kind, focus, fill, fov, aspect, use_selected_part }) {
+    const product = await ensureSubject(true), pose = await readPose();
+    const selectedTarget = use_selected_part === true;
+    const subject = selectedTarget ? selectedSubjectFromContext(await actions.scene_context(), product) : product;
+    const framing = photo.frame(subject, pose, { kind, focus: selectedTarget && focus == null ? [0, 0, 0] : focus, fill, fov }, aspect);
+    await applyPose(framing);
+    return { summary: selectedTarget ? `Close-up framed around ${subject.models[0]}` : 'Product framing updated', camera: camState(),
+      ...(selectedTarget ? { target_part: subject.models[0], target_bounds: { min: subject.min, max: subject.max } } : {}) };
   },
   async set_environment({ brightness, rotation, background, ground_shadows, ground_reflections }) {
     const p = {};
@@ -563,13 +692,20 @@ const actions = {
     if (background != null) { if (!Array.isArray(background) || background.length !== 3 || !background.every(v => Number.isFinite(v) && v >= 0 && v <= 255)) throw new Error('Background needs RGB values 0–255.'); p.bg = background.map(v => Math.round(255 * Math.pow(v / 255, 2.2))); }
     if (typeof ground_shadows === 'boolean') p.ground_shadows = ground_shadows;
     if (typeof ground_reflections === 'boolean') p.ground_reflections = ground_reflections;
-    studio.env = await send('env_set', p, 30000); return { summary: 'Environment updated', environment: studio.env };
+    studio.env = await send('env_set', p, 30000);
+    if (brightness != null) {
+      // This action requests an absolute native brightness, so make it the new rig baseline.
+      studio.envMultiplier = 1;
+      const exposure = studio.envScales ? studio.exposure : 1;
+      studio.envBaseBrightness = Math.max(0.000001, brightness / Math.max(0.000001, exposure));
+    }
+    return { summary: 'Environment updated', environment: studio.env };
   },
   async get_state() {
     if (!base) base = await readPose();
     const sub = studio.subject || await ensureSubject().catch(() => null);
     return { summary: `rig ${studio.rig || 'none'}, ${Object.keys(studio.lights).length} lights`, rig: studio.rig, exposure: R2(studio.exposure), lights: Object.values(studio.lights).map(lightView),
-      camera: camState(), product_size_mm: sub ? sub.size.map(R2) : null, styles: style.listStyles().filter(s => !s.name.startsWith('_')).map(s => ({ name: s.name, images: s.images, analyzed: s.analyzed, looks: s.looks })), bridge_alive: heartbeat().alive };
+      camera: camState(), product_size_mm: sub ? sub.size.map(R2) : null, environment_brightness_multiplier: R2(studio.envMultiplier), styles: style.listStyles().filter(s => !s.name.startsWith('_')).map(s => ({ name: s.name, images: s.images, analyzed: s.analyzed, looks: s.looks })), bridge_alive: heartbeat().alive };
   },
   async look() {
     await sleep(1800);
@@ -580,26 +716,58 @@ const actions = {
     return { summary: 'viewport captured', imageBase64: b64, imageDataUrl: 'data:image/jpeg;base64,' + b64,
       product_brightness: { median: R2(m.p50), highlights: R2(m.p95), clipped_pct: R2(m.clipFrac * 100) }, backdrop_brightness: R2(m.bg) };
   },
-  async apply_rig({ name, mirror, auto_exposure }) {
+  async apply_rig({ name, mirror, auto_exposure, use_selected_part }) {
     if (!RIGS[name]) throw new Error('unknown rig ' + name);
-    const r = await applyRig(name, { mirror: !!mirror, auto: auto_exposure !== false });
-    return { summary: `${RIGS[name].label}: ${r.lights.length} lights` + (r.auto ? `, exposure ${r.auto.exposure}` : ''), rig: name, lights: Object.values(studio.lights).map(lightView), exposure: studio.exposure };
+    const r = await applyRig(name, { mirror: !!mirror, auto: auto_exposure !== false, useSelectedPart: use_selected_part === true });
+    const targetLabel = use_selected_part === true ? ` on ${studio.rigSubject.models[0]}` : '';
+    return { summary: `${RIGS[name].label}${targetLabel}: ${r.lights.length} lights` + (r.auto ? `, exposure ${r.auto.exposure}` : ''), rig: name, lights: Object.values(studio.lights).map(lightView), exposure: studio.exposure,
+      ...(r.auto ? { auto_exposure: r.auto } : {}),
+      ...(use_selected_part === true ? { target_part: studio.rigSubject.models[0], target_bounds: { min: studio.rigSubject.min, max: studio.rigSubject.max } } : {}) };
   },
-  async set_light({ id, azimuth, elevation, distance, width, height, brightness, kelvin, in_reflections, visible_to_camera, in_shadows }) {
+  async set_light({ id, type, azimuth, elevation, distance, width, height, brightness, kelvin, rgb, in_reflections, visible_to_camera, in_shadows, radius, angle, falloff, constant_output, multiplier, ies_asset_id, axis }) {
     await ensureSubject();
-    const p = {}; if (azimuth != null) p.az = azimuth; if (elevation != null) p.el = elevation; if (distance != null) p.d = distance; if (width != null) p.w = width; if (height != null) p.h = height;
-    if (brightness != null) p.gain = brightness; if (kelvin != null) p.kelvin = kelvin; if (in_reflections != null) p.refl = in_reflections;
+    const p = {}; if (type != null) p.type = type; if (azimuth != null) p.az = azimuth; if (elevation != null) p.el = elevation; if (distance != null) p.d = distance; if (width != null) p.w = width; if (height != null) p.h = height;
+    if (brightness != null) p.gain = brightness; if (kelvin != null) p.kelvin = kelvin; if (rgb != null) p.rgb = rgb; if (in_reflections != null) p.refl = in_reflections;
     if (visible_to_camera != null) p.eye = visible_to_camera; if (in_shadows != null) p.shadows = in_shadows;
+    if (radius != null) p.radius = radius; if (angle != null) p.angle = angle; if (falloff != null) p.falloff = falloff;
+    if (constant_output != null) p.constant_output = constant_output; if (multiplier != null) p.multiplier = multiplier;
+    if (ies_asset_id != null) p.ies_asset_id = ies_asset_id; if (axis != null) p.axis = axis;
     if (!studio.lights[id] && !studio.rig) studio.rig = 'custom';
     const r = await editLight(id, p);
     return { summary: `light ${id} updated`, light: lightView(r.light) };
   },
+  async set_light_brightness({ light, brightness, relative_percent }) {
+    const selector = String(light || '').trim().toLowerCase().replace(/[\s-]+/g, '_');
+    if (!selector) throw new Error('Name the existing light ID or role, such as key or fill.');
+    if (brightness != null && relative_percent != null) throw new Error('Provide either an absolute brightness or a relative percentage change, not both.');
+    if (relative_percent != null && (!Number.isFinite(relative_percent) || relative_percent < -100 || relative_percent > 500)) throw new Error('Relative light brightness change must be between -100% and +500%.');
+    const tracked = Object.values(studio.lights);
+    const exactId = tracked.filter(item => String(item.id).toLowerCase().replace(/[\s-]+/g, '_') === selector);
+    const matches = exactId.length ? exactId : tracked.filter(item => String(item.role || '').toLowerCase().replace(/[\s-]+/g, '_') === selector);
+    if (!matches.length) throw new Error(`No Director light matches “${light}”. Check the current light IDs in Studio.`);
+    if (matches.length > 1) throw new Error(`“${light}” matches multiple lights (${matches.map(item => item.id).join(', ')}). Name one exact light ID.`);
+    if (relative_percent != null && ['restored', 'unknown'].includes(String(matches[0].role || '').toLowerCase())) throw new Error('This restored light has no known current brightness multiplier. Set an absolute value, such as 0.8×.');
+    const target = relative_percent != null
+      ? Math.max(0.05, Math.min(4, Number(matches[0].gain ?? 1) * (1 + relative_percent / 100)))
+      : brightness;
+    if (!Number.isFinite(target) || target < 0.05 || target > 4) throw new Error('Light brightness must be between 0.05× and 4×.');
+    return actions.set_light({ id: matches[0].id, brightness: target });
+  },
+  async list_light_profiles() {
+    const r = await send('lighting_ies_assets', { limit: 40 }, 30000);
+    const assets = r.installed_files?.assets || [];
+    const withPhotometry = assets.filter(asset => asset.profile_exists && asset.photometry?.status === 'parsed').length;
+    return { summary: `${assets.filter(asset => asset.profile_exists).length} installed IES profiles are available; ${withPhotometry} include parsed lumen and distribution data.`, assets };
+  },
   async list_materials() { const r = await send('materials_list', {}, 15000); return { summary: `${r.materials.length} scene and Director materials${r.editable_target ? `; authorized edit target: ${r.editable_target}` : ''}`, ...r }; },
   async list_material_library({ query = '' } = {}) { return send('material_library', { query }, 30000); },
   async list_texture_sets() {
-    const sets = textureSets.listTextureSets();
+    const sets = textureSets.listTextureSets({ includeMetadata: true });
     return { summary: `${sets.length} imported texture set${sets.length === 1 ? '' : 's'}`,
-      sets: sets.map(set => ({ id: set.id, name: set.name, files: set.files.map(file => ({ name: file.name, role: file.role })), missing: set.missing || [] })) };
+      sets: sets.map(set => ({ id: set.id, name: set.name, files: set.files.map(file => ({ name: file.name, role: file.role,
+        metadata: file.metadata || null,
+        expected_color_space: /^Poliigon_/i.test(file.name) ? (file.role === 'base-color' ? 'sRGB' : ['displacement','roughness','metallic','normal','bump','ambient-occlusion'].includes(file.role) ? 'Raw / linear data' : null) : null
+      })), missing: set.missing || [] })) };
   },
   async edit_texture_map({ texture_set_id, filename, operation, amount }) {
     const set = textureSets.listTextureSets().find(item => item.id === String(texture_set_id || ''));
@@ -618,7 +786,7 @@ const actions = {
       ...edited, path: path.join(set.path, imported.name), name: imported.name, role: imported.role };
   },
   async build_material_from_texture_set({ texture_set_id, name, allow_partial = false, use_ao = true,
-    use_displacement = true, displacement_height_mm = 0.1, geometry_template, procedural_strength = 0.2 }) {
+    use_displacement = true, displacement_height_mm = 0.01, geometry_template, procedural_strength = 0.2 }) {
     assertSceneAvailable(false);
     const set = textureSets.listTextureSets().find(item => item.id === String(texture_set_id || ''));
     if (!set) throw new Error('That texture set is no longer available. Refresh Material Lab and try again.');
@@ -636,8 +804,8 @@ const actions = {
     }
     if (typeof use_ao !== 'boolean' || typeof use_displacement !== 'boolean') throw new Error('AO and displacement selections must be on or off.');
     const heightMm = Number(displacement_height_mm);
-    if (use_displacement && (!Number.isFinite(heightMm) || heightMm < 0.01 || heightMm > 5))
-      throw new Error('Choose a displacement height from 0.01 to 5 mm.');
+    if (use_displacement && (!Number.isFinite(heightMm) || heightMm < 0.001 || heightMm > 0.1))
+      throw new Error('Choose a displacement height from 0.001 to 0.1 mm.');
     const reliefStrength = Number(procedural_strength);
     if (geometry_template && (!Number.isFinite(reliefStrength) || reliefStrength < 0.01 || reliefStrength > 1))
       throw new Error('Procedural displacement blend strength must be from 0.01 to 1.');
@@ -648,23 +816,19 @@ const actions = {
     const selected = plan.maps.map(map => {
       const file = filesByName.get(map.path);
       if (!file) throw new Error(`Material recipe referenced a missing texture: ${map.path}`);
-      return { role: map.role, path: path.join(set.path, file.name), filename: file.name };
+      return { role: map.role, path: path.join(set.path, file.name), filename: file.name, metadata: file.metadata || null };
     });
     await send('material_create', { name: materialName }, 20000);
     let wiring;
-    // Poliigon's common product-surface maps use a 30 cm tile; zero-scale
-    // displacement maps remain excluded from the geometry graph.
-    const mappingSizeM = 0.3;
-    const normalizedSetName = set.name.replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase().replace(/[^a-z0-9]+/g, ' ');
-    const mixedMetalName = /\b(rust|rusted|oxidized|oxidised|corrosion|corroded|patina)\b/.test(normalizedSetName) || /spottydiscoloration/i.test(set.name);
-    const metalName = /\b(metal|steel|aluminum|aluminium|copper|brass|iron|chrome)\b/.test(normalizedSetName);
-    const metalMode = surface_type === 'auto' ? (mixedMetalName ? 'mixed' : metalName ? 'metal' : 'plastic') : surface_type;
-    const sourceDisplacementScale = Number(set.materialx?.values?.displacementScale);
-    const displacementHeightM = Number.isFinite(sourceDisplacementScale) && sourceDisplacementScale > 0
-      ? Math.min(mappingSizeM * sourceDisplacementScale, 0.005) : 0;
+    // Poliigon's height maps use mid-gray as their flat point. Keep that signed
+    // interpretation for its named exports; other folders retain KeyShot's
+    // black-at-zero convention unless their source says otherwise.
+    const displacementSource = selected.find(map => map.role === 'displacement');
+    const midpointNeutral = !!displacementSource &&
+      (/^Poliigon_/i.test(displacementSource.filename) || /(?:^|_)DISP16(?:_|\.|$)/i.test(displacementSource.filename));
     try {
       wiring = await send('material_texture_apply', { name: materialName, model: plan.material.model,
-        displacement_height_mm: heightMm,
+        displacement_height_mm: heightMm, midpoint_neutral: midpointNeutral,
         maps: selected.map(({ role, path: filePath }) => ({ role, path: filePath })) }, 30000);
       if (geometry_template) {
         if (!use_displacement || !selected.some(map => map.role === 'displacement'))
@@ -683,11 +847,8 @@ const actions = {
       try { await send('material_discard', { name: materialName }, 15000); } catch { /* keep the scene material if KeyShot cannot safely discard it */ }
       throw new Error(`KeyShot could not save the material package: ${error.message}`);
     }
-    let assignment;
-    try { assignment = await send('material_apply_selection', { name: materialName }, 20000); }
-    catch (error) { assignment = { applied: false, error: error.message, objects: selection.objects }; }
     const wiredRoles = new Set(wiring.maps.map(map => map.role));
-    const usedFiles = selected.filter(({ role }) => wiredRoles.has(role)).map(({ role, filename }) => ({ role, name: filename }));
+    const usedFiles = selected.filter(({ role }) => wiredRoles.has(role)).map(({ role, filename, metadata }) => ({ role, name: filename, metadata }));
     const usedNames = new Set(usedFiles.map(file => file.name));
     const skipped = set.files.filter(file => !usedNames.has(file.name)).map(file => ({ name: file.name, role: file.role,
       reason: file.role === 'ambient-occlusion' && !use_ao ? 'AO blend not enabled' :
@@ -695,10 +856,16 @@ const actions = {
         plan.skipped.find(item => item.name === file.name)?.reason || 'No supported connection' }));
     const channels = wiring.maps.map(map => map.role).join(', ');
     const reliefSummary = wiring.procedural_geometry ? ' with Advanced Plastic procedural relief blended into the displacement map' : '';
-    return { summary: `${materialName} built as an unassigned ${wiring.model || plan.material.model} material from ${channels}${reliefSummary}; saved to the KeyShot library and as a portable KMP.`,
+    const geometrySummary = wiring.maps.some(map => map.role === 'displacement')
+      ? ` Geometric displacement is wired at ${heightMm} mm${midpointNeutral ? ' with Poliigon mid-gray as the provisional zero-height value' : ''}; assign this material to one visible, unlocked part, then ask Director to execute its geometry nodes.` : '';
+    return { summary: `${materialName} built as an unassigned ${wiring.model || plan.material.model} material from ${channels}${reliefSummary}; saved to the KeyShot library and as a portable KMP.${geometrySummary}`,
       name: materialName, path: saved.path, library: saved.library, material: wiring, used_files: usedFiles, skipped_files: skipped,
       recipe: plan,
       assignment: 'Not applied to any product part. Drag it from KeyShot’s Material Library onto the chosen part.' };
+  },
+  async execute_material_geometry({ name }) {
+    const result = await send('material_execute_geometry', { name: cleanName(name) }, 60000);
+    return { summary: `Executed geometric displacement for ${result.assigned_objects.length} assigned part${result.assigned_objects.length === 1 ? '' : 's'}.`, ...result };
   },
   async inspect_material({ name }) { return await send('material_inspect', { name }, 15000); },
   async create_material({ name }) { const r = await send('material_create', { name }, 15000); return { summary: `${name} created but not applied to the product`, ...r }; },
@@ -709,9 +876,25 @@ const actions = {
   async undo_material() { const r = await send('material_undo', {}, 15000); return { summary: `${r.parameter} restored`, ...r }; },
   async save_material({ name }) { const r = await send('material_save', { name }, 30000); return { summary: `Portable material package saved: ${r.path}`, ...r }; },
   async remove_light({ id }) { await send('light_remove', { id }, 30000); delete studio.lights[id]; return { summary: `removed ${id}` }; },
-  async set_exposure({ value }) { await ensureSubject(); await setExposure(+value); return { summary: `exposure ${R2(studio.exposure)}x`, exposure: studio.exposure }; },
+  async set_exposure({ value, relative_stops }) {
+    await ensureSubject();
+    if (value != null && relative_stops != null) throw new Error('Provide either an absolute exposure value or a relative stop change, not both.');
+    if (relative_stops != null && (!Number.isFinite(relative_stops) || relative_stops < -8 || relative_stops > 8)) throw new Error('Relative exposure change must be between -8 and +8 stops.');
+    if (relative_stops == null && !Number.isFinite(value)) throw new Error('Exposure must be a finite multiplier.');
+    const target = relative_stops != null ? studio.exposure * Math.pow(2, relative_stops) : +value;
+    await setExposure(target);
+    return { summary: `exposure ${R2(studio.exposure)}x`, exposure: studio.exposure };
+  },
+  async set_environment_brightness({ multiplier, relative_percent }) {
+    if (multiplier != null && relative_percent != null) throw new Error('Provide either an absolute multiplier or a relative percentage change, not both.');
+    if (relative_percent != null && (!Number.isFinite(relative_percent) || relative_percent < -100 || relative_percent > 500)) throw new Error('Relative environment brightness change must be between -100% and +500%.');
+    const current = Number.isFinite(studio.envMultiplier) ? studio.envMultiplier : 1;
+    const target = relative_percent != null ? Math.max(0, Math.min(2, current * (1 + relative_percent / 100))) : +multiplier;
+    const result = await setEnvironmentMultiplier(target);
+    return { summary: `environment fill ${Number(result.multiplier).toFixed(2)}×`, ...result };
+  },
   async auto_expose() { await ensureSubject(); const a = await autoExpose({}); return { summary: `exposure ${a.exposure}`, ...a }; },
-  async studio_off() { const r = await send('studio_off', {}, 60000); studio.lights = {}; studio.rig = null; studio.env = null; return { summary: 'lights removed, original environment restored', ...r }; },
+  async studio_off() { const r = await send('studio_off', {}, 60000); studio.lights = {}; studio.rig = null; studio.rigSubject = null; studio.env = null; studio.envBaseBrightness = null; studio.envMultiplier = 1; studio.envScales = false; return { summary: 'lights removed, original environment restored', ...r }; },
   async set_camera({ azimuth, elevation, distance, fov, relative }) {
     if (!base) base = await readPose();
     const c = { ...(cur || base) };
@@ -744,7 +927,7 @@ const actions = {
   },
 };
 
-for (const k of ['scene_objects', 'move_object', 'duplicate_object', 'create_set_piece', 'undo_staging', 'look', 'apply_rig', 'set_light', 'remove_light', 'set_exposure', 'auto_expose', 'studio_off', 'set_camera', 'play_motion', 'match_style']) actions[k] = needsBridge(actions[k]);
+for (const k of ['scene_context', 'scene_objects', 'move_object', 'duplicate_object', 'create_set_piece', 'undo_staging', 'look', 'frame_product', 'apply_rig', 'set_light', 'set_light_brightness', 'list_light_profiles', 'remove_light', 'set_exposure', 'set_environment_brightness', 'auto_expose', 'studio_off', 'set_camera', 'play_motion', 'match_style']) actions[k] = needsBridge(actions[k]);
 { const gs = actions.get_state; actions.get_state = async () => (heartbeat().alive ? gs() : { summary: 'KeyShot is not connected', bridge_alive: false, styles: style.listStyles().filter(s => !s.name.startsWith('_')).map(s => ({ name: s.name, images: s.images, analyzed: s.analyzed })) }); }
 
 let promptJob = null;
@@ -769,7 +952,7 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'POST' && url.pathname !== '/api/preview') janitor.touch();
   // anything that can change the picture schedules ONE refresh shortly after the last change (debounced), so the page's
   // preview follows your edits without constant rendering
-  if (req.method === 'POST' && !/^\/api\/(preview|quit|tidy|config|bridge|video\/stop|render\/stop|stop|prompt\/stop|prompt\/reset|styles)/.test(url.pathname)) {
+  if (req.method === 'POST' && !/^\/api\/(preview|quit|tidy|config|bridge|lighting-lab|video\/stop|render\/stop|stop|prompt\/stop|prompt\/reset|styles)/.test(url.pathname)) {
     clearTimeout(previewTimer); previewTimer = setTimeout(() => { preview.wanted = true; }, 1500);
   }
   try {
@@ -778,6 +961,27 @@ const server = http.createServer(async (req, res) => {
       if (origin.host !== req.headers.host) throw Object.assign(new Error('Cross-site scene commands are blocked.'), { status: 403 });
     }
     if (req.method === 'POST' && /^\/api\/(pose|rebase|play|rig|light|exposure|autoexpose|env|studio\/off|style\/match|video$|render$|prompt$|views\/goto)/.test(url.pathname)) assertSceneAvailable();
+    if (url.pathname === '/api/lighting-lab' && req.method === 'GET') return json(res, 200, { ...lightingLab.catalog(), bridge: heartbeat() });
+    if (url.pathname === '/api/lighting-lab/runs' && req.method === 'GET') return json(res, 200, { runs: lightingLab.listRuns() });
+    if (url.pathname === '/api/lighting-lab/run' && req.method === 'POST') {
+      assertSceneAvailable();
+      const b = await body(req);
+      return json(res, 201, await lightingLab.run({ operation_id: b.operation_id, inputs: b.inputs }));
+    }
+    if (url.pathname === '/api/lighting-lab/replay' && req.method === 'POST') {
+      assertSceneAvailable();
+      const b = await body(req);
+      return json(res, 201, await lightingLab.replay({ run_id: b.run_id, inputs: b.inputs }));
+    }
+    if (url.pathname === '/api/lighting-lab/file' && req.method === 'GET') {
+      const file = lightingLab.outputFile(url.searchParams.get('run_id'), url.searchParams.get('name'));
+      const contentType = file.extension === '.png' ? 'image/png' : file.extension === '.jpg' || file.extension === '.jpeg' ? 'image/jpeg' : 'application/octet-stream';
+      res.writeHead(200, { 'Content-Type': contentType, 'Content-Length': file.bytes,
+        'Content-Disposition': contentType.startsWith('image/') ? 'inline' : 'attachment', 'Cache-Control': 'no-store' });
+      return fs.createReadStream(file.path).pipe(res);
+    }
+    const lightingRun = /^\/api\/lighting-lab\/runs\/([0-9a-f-]{36})$/i.exec(url.pathname);
+    if (lightingRun && req.method === 'GET') return json(res, 200, lightingLab.getRun(lightingRun[1]));
     if (url.pathname === '/api/photo' && req.method === 'GET') return json(res, 200, photoDirector.status());
     if (url.pathname === '/api/photo' && req.method === 'POST') { const b = await body(req); assertSceneAvailable(); return json(res, 202, await photoDirector.start(b)); }
     if (url.pathname === '/api/photo/stop' && req.method === 'POST') { photoDirector.stop(); return json(res, 200, { stopping: true, note: 'The current KeyShot render finishes before restoration.' }); }
@@ -814,6 +1018,10 @@ const server = http.createServer(async (req, res) => {
       if (!heartbeat().alive) preview.firstTried = false;
       return json(res, 200, { bridge: heartbeat(), ips: lanIPs(), port: PORT, playing: !!playing, base });
     }
+    if (url.pathname === '/api/scene-context' && req.method === 'GET') {
+      assertSceneAvailable();
+      return json(res, 200, await actions.scene_context());
+    }
     if (url.pathname === '/api/preview.jpg' || url.pathname === '/api/preview.png') {
       lastClient = Date.now();
       if (!latestShot) { res.writeHead(204); return res.end(); }
@@ -835,8 +1043,11 @@ const server = http.createServer(async (req, res) => {
     }
     if (url.pathname === '/api/bridge/stop' && req.method === 'POST') {
       if (!heartbeat().alive) return json(res, 200, { ok: true, note: 'the bridge was not running' });
-      try { await send('stop', {}, 15000); } catch { /* it exits right after answering */ }
-      return json(res, 200, { ok: true });
+      const current = heartbeat();
+      let acknowledged = false;
+      try { await send('stop', {}, 15000); acknowledged = true; } catch { /* report an unconfirmed stop instead of claiming success */ }
+      if (acknowledged) markStopped(current.instance);
+      return json(res, 200, { ok: acknowledged, note: acknowledged ? 'Bridge stopped. In KeyShot, run its launcher again to reconnect.' : 'The stop was not acknowledged. The bridge may still be busy; check its status before sending another request.' });
     }
     if (url.pathname === '/api/tidy' && req.method === 'POST') return json(res, 200, await janitor.run(tidyOpts, 'manual'));
     if (url.pathname === '/api/preview' && req.method === 'GET') return json(res, 200, { live: preview.live, used: preview.used, budget: preview.budget });
@@ -906,7 +1117,17 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/prompt' && req.method === 'POST') {
       if (promptJob && !promptJob.done) return json(res, 409, { error: 'still working on the last request' });
       const b = await body(req); const job = promptJob = { id: Date.now(), events: [], done: false };
-      agent.run(job, { text: String(b.text || ''), images: Array.isArray(b.images) ? b.images.slice(0, 8) : [] }, actions).catch(() => {});
+      const lightingFocus = lightingPlaybooks.FOCUS.some(item => item.id === b.lighting_focus) ? b.lighting_focus : 'auto';
+      // agent.run normally records its own errors and marks the job done in its
+      // finally block. Keep a server-side terminal path too, so an unexpected
+      // rejection during setup cannot leave the UI polling forever or block the
+      // next prompt with a stale "still working" job.
+      agent.run(job, { text: String(b.text || ''), images: Array.isArray(b.images) ? b.images.slice(0, 8) : [], lightingFocus }, actions).catch(error => {
+        if (job.done) return;
+        job.events.push({ type: 'error', message: error && error.message ? error.message : 'Director request failed unexpectedly.', t: Date.now() });
+        job.done = true;
+        job.events.push({ type: 'done', t: Date.now() });
+      });
       return json(res, 200, { id: job.id });
     }
     if (url.pathname === '/api/prompt' && req.method === 'GET') {
@@ -932,7 +1153,12 @@ const server = http.createServer(async (req, res) => {
       }
       if (imageBytes > 10 * 1024 * 1024) return json(res, 413, { error: 'The complete material reference pack must be under 10 MB.' });
       const job = materialPromptJob = { id: Date.now(), events: [], done: false };
-      agent.run(job, { text: String(b.text || ''), images, context: { ...(context || {}), imageAspectRatio } }, actions, 'material').catch(() => {});
+      agent.run(job, { text: String(b.text || ''), images, context: { ...(context || {}), imageAspectRatio } }, actions, 'material').catch(error => {
+        if (job.done) return;
+        job.events.push({ type: 'error', message: error && error.message ? error.message : 'Material Director request failed unexpectedly.', t: Date.now() });
+        job.done = true;
+        job.events.push({ type: 'done', t: Date.now() });
+      });
       return json(res, 200, { id: job.id });
     }
     if (url.pathname === '/api/material/prompt' && req.method === 'GET') {
@@ -960,6 +1186,7 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, {
         studio,
         rigs: Object.entries(RIGS).map(([id, r]) => ({ id, label: r.label, blurb: r.blurb })),
+        lightingPlaybooks: lightingPlaybooks.list(),
         envRigs: Object.entries(ENV_RIGS).map(([id, r]) => ({ id, label: r.label })),
       });
     }
@@ -990,7 +1217,7 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/material/build-from-texture-set' && req.method === 'POST') {
       const b = await body(req), result = await actions.build_material_from_texture_set({ texture_set_id: b.texture_set_id, name: b.name,
         allow_partial: b.allow_partial === true, use_ao: b.use_ao !== false, use_displacement: b.use_displacement !== false,
-        displacement_height_mm: b.displacement_height_mm ?? 0.1,
+        displacement_height_mm: b.displacement_height_mm ?? 0.01,
         geometry_template: b.geometry_template,
         procedural_strength: b.procedural_strength ?? 0.2 });
       return json(res, 201, result);
@@ -1033,11 +1260,16 @@ const server = http.createServer(async (req, res) => {
       const { value } = await body(req); await ensureSubject(); await setExposure(+value);
       return json(res, 200, { exposure: studio.exposure });
     }
+    if (url.pathname === '/api/environment-fill' && req.method === 'POST') {
+      const { multiplier } = await body(req);
+      assertSceneAvailable();
+      return json(res, 200, await setEnvironmentMultiplier(+multiplier));
+    }
     if (url.pathname === '/api/autoexpose' && req.method === 'POST') { const b = await body(req); await ensureSubject(); return json(res, 200, await autoExpose(b)); }
     if (url.pathname === '/api/measure' && req.method === 'GET') { const m = await measure(+(url.searchParams.get('settle') ?? 1500)); return json(res, 200, m); }
-    if (url.pathname === '/api/env' && req.method === 'POST') { const b = await body(req); studio.env = await send('env_set', b, 30000); return json(res, 200, studio.env); }
+    if (url.pathname === '/api/env' && req.method === 'POST') { const b = await body(req); studio.env = await send('env_set', b, 30000); if (Number.isFinite(b.brightness)) { studio.envMultiplier = 1; const exposure = studio.envScales ? studio.exposure : 1; studio.envBaseBrightness = Math.max(0.000001, b.brightness / Math.max(0.000001, exposure)); } return json(res, 200, studio.env); }
     if (url.pathname === '/api/studio/off' && req.method === 'POST') {
-      const r = await send('studio_off', {}, 60000); studio.lights = {}; studio.rig = null; studio.env = null; return json(res, 200, r);
+      const r = await send('studio_off', {}, 60000); studio.lights = {}; studio.rig = null; studio.rigSubject = null; studio.env = null; studio.envBaseBrightness = null; studio.envMultiplier = 1; studio.envScales = false; return json(res, 200, r);
     }
     if (url.pathname === '/api/views' && req.method === 'GET') return json(res, 200, loadViews());
     if (url.pathname === '/api/views' && req.method === 'POST') {

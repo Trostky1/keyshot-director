@@ -91,50 +91,51 @@
 <link rel="stylesheet" href="/director.css">
 </head>
 <body>
-<!-- THESIS: A calm creative instrument for shaping a real KeyShot scene. OWN-WORLD: System typography, soft silver surfaces, precise blue actions, and the user's live render as the hero. STORY: See the scene, adjust the look, then refine through conversation. FIRST VIEWPORT: Full live scene with reference matching one glance away. FORM: Wide canvas and focused inspector. FINISH: Crisp controls, quiet depth, complete states, and responsive touch targets. -->
-<header>
-  <span class="dot" id="dot"></span><h1>KeyShot Director</h1><span id="status">connecting</span>
-  <nav class="workspace-nav" aria-label="Workspaces"><button type="button" data-workspace="studio" aria-current="page">Studio</button><button type="button" data-workspace="references">References</button><button type="button" data-workspace="materials">Materials</button></nav>
-  <span class="sp"></span><span class="dim" id="mode"></span>
-  <button class="sm" id="settingsBtn">Settings</button>
+<!-- THESIS: A premium workbench for directing the live KeyShot scene. OWN-WORLD: Graphite navigation, warm silver surfaces, precise blue actions, and the user's live render as the hero. STORY: Shape the light, state the intent, then refine from evidence. FIRST VIEWPORT: Scene, unified Director brief, and lighting controls in one glance. FORM: Wide render with focused native controls; Materials pairs the same live render with the real inspector. FINISH: Clear hierarchy, responsive touch targets, explicit scene state, and no simulated controls. -->
+<header class="app-header">
+  <div class="brand-lockup"><span class="brand-mark" aria-hidden="true">K</span><h1>KeyShot Director</h1></div>
+  <nav class="workspace-nav" aria-label="Workspaces"><button type="button" data-workspace="studio" aria-current="page">Studio</button><button type="button" data-workspace="materials">Materials</button></nav>
+  <div class="header-actions"><div class="connection-status"><span class="dot" id="dot"></span><span id="status">connecting</span></div><span class="dim" id="mode"></span>
+    <button class="sm solid" id="connectQuick" data-copy disabled hidden title="Copy the KeyShot console command. In KeyShot, open Window → Scripting, paste it into the console, and press Enter." aria-label="Copy KeyShot hookup command">Copy hookup</button>
+    <button class="sm" id="settingsBtn">Settings</button>
+  </div>
 </header>
 <main id="studioWorkspace">
   <section class="col">
     <div class="stage-heading"><div><h2>Studio</h2><p>Shape your product in KeyShot, right from here.</p></div><span class="scene-tag">Live scene</span></div>
-    <div class="stage" id="stage"><img id="shot" alt="" draggable="false"><div class="empty" id="empty"><b>Waiting for KeyShot</b><br><br>Save your scene, then in KeyShot open <b>Window &rarr; Scripting</b>, click the console, paste this and press Enter:<div class="connectline"><code class="cline">...</code><button class="solid" data-copy>Copy</button></div><span class="dim">It keeps running in the background. Leave it alone while it runs (no other scripts or dialogs).</span></div><div class="livebar"><label><input type="checkbox" id="live"> live preview</label><button class="sm" id="refresh">Refresh</button></div><div class="hint">drag orbit &middot; right-drag / shift-drag pan &middot; wheel zoom &middot; touch: 1 finger orbit, 2 pan + pinch</div></div>
-    <div class="conversation-heading"><h2>Ask Director</h2><span>Lighting, framing, scene layout, and motion</span></div>
+    <div id="studioStageHome" class="studio-stage-host"><div class="stage" id="stage"><img id="shot" alt="" draggable="false"><div class="empty" id="empty"><b>Waiting for KeyShot</b><br><br>Save your scene, then in KeyShot open <b>Window &rarr; Scripting</b>, click the console, paste this and press Enter:<div class="connectline"><code class="cline">...</code><button class="solid" data-copy>Copy</button></div><span class="dim">It keeps running in the background. Leave it alone while it runs (no other scripts or dialogs).</span></div><div class="livebar"><label><input type="checkbox" id="live"> live preview</label><button class="sm" id="refresh">Refresh</button></div><div class="hint">drag orbit &middot; right-drag / shift-drag pan &middot; wheel zoom &middot; touch: 1 finger orbit, 2 pan + pinch</div></div></div>
+      <div class="conversation-heading"><h2>Ask Director</h2><span>Describe a look, choose a shot goal, or add a reference.</span></div>
     <div id="log"></div>
     <div class="promptbar">
+      <div class="director-context">
+        <label for="lightingFocus">Scene goal
+        <select id="lightingFocus"><option value="auto">Auto from request</option><option value="catalog_studio">Clean catalog studio</option><option value="hero_product">Soft hero product</option><option value="macro_detail">Close-up / macro detail</option><option value="low_key_moody">Low-key / moody</option><option value="dramatic_color">Dramatic colored light</option><option value="glass_transparency">Glass / transparent</option><option value="reflective_metal">Reflective metal</option></select></label>
+        <label for="directorStyle">Saved style
+          <select id="directorStyle"><option value="">None selected</option></select></label>
+      </div>
+      <div class="director-reference-row">
+        <button class="photo-drop" id="photoDrop" type="button"><img id="photoRef" alt="Selected reference" hidden><span id="photoDropText">Add a reference image<span>Choose or drop · PNG, JPG, WebP</span></span></button>
+        <input id="photoFile" type="file" accept="image/png,image/jpeg,image/webp" hidden>
+        <div class="director-reference-details"><p id="referenceSelection">No reference image selected.</p><button id="clearPhoto" type="button" hidden>Remove image</button><label for="referenceUse" id="referenceUseLabel" hidden>Use image for<select id="referenceUse"><option value="match">Match lighting and mood</option><option value="context">Director context only</option></select></label></div>
+      </div>
       <div class="thumbs" id="thumbs"></div>
-      <textarea id="prompt" rows="3" placeholder="Describe a look, ask for a close-up, or arrange your product…"></textarea>
+      <textarea id="prompt" rows="3" placeholder="Describe the look, shot, or change you want…"></textarea>
+      <div class="director-match-options" id="directorMatchOptions" hidden><label><input id="photoFraming" type="checkbox"> Match reference framing too</label><label for="photoQuality">Refinement <select id="photoQuality"><option value="refined">Visual refinement</option><option value="quick">Quick first look</option></select></label></div>
       <div class="row" style="margin-top:6px">
-        <button id="send" class="solid">Send</button>
+        <button id="send" class="solid">Send to Director</button>
         <button id="stopBtn" disabled>Stop</button>
-        <button id="attach">Attach images</button><input type="file" id="file" accept="image/*" multiple hidden>
+        <button id="attach">More images</button><input type="file" id="file" accept="image/*" multiple hidden>
         <button id="newchat" title="Forget this conversation">New chat</button>
         <span class="dim" id="busy"></span>
       </div>
       <div id="examples" style="margin-top:6px"></div>
+      <p class="director-privacy" id="directorPrivacy" hidden>For lighting matches, the reference and KeyShot previews go to your selected AI provider. Materials remain untouched. Save your scene in KeyShot to keep the result.</p>
     </div>
+    <section class="director-result" id="directorResult" aria-label="Lighting match result" hidden><div class="director-result-heading"><span class="photo-phase" id="photoPhase">Ready for a reference</span><div id="photoProgress" role="status" aria-live="polite"></div></div><div class="row director-result-actions"><button id="photoStop" disabled>Stop &amp; restore</button><button id="photoUndo" disabled>Undo look</button></div><details id="photoEvidence" hidden><summary>Lighting decisions &amp; limits</summary><div id="photoDecisions"></div></details><div id="photoComparison" hidden><div class="photo-compare"><figure><img id="photoBefore" alt="KeyShot render before matching"><figcaption>Before</figcaption></figure><figure><img id="photoAfter" alt="Actual KeyShot render after matching"><figcaption>Matched lighting</figcaption></figure></div><div class="row"><a id="photoDownload" download>Download preview</a><a id="photoRecipe" download>Download lighting recipe</a><span class="dim">Preview quality · use KeyShot for final output</span></div></div></section>
   </section>
 
   <aside>
-    <section class="photo-workspace" aria-labelledby="photoTitle">
-      <div class="photo-heading"><div><h2 id="photoTitle">Match a look</h2><p>Bring the lighting and mood of a photo to your own product.</p></div><span class="photo-phase" id="photoPhase">Ready</span></div>
-      <div class="photo-inputs">
-        <button class="photo-drop" id="photoDrop" type="button"><img id="photoRef" alt="Selected reference" hidden><span id="photoDropText">Add a reference photo<span>Choose or drop · PNG, JPG, WebP</span></span></button>
-        <input id="photoFile" type="file" accept="image/png,image/jpeg,image/webp" hidden>
-        <div class="photo-brief"><label for="photoBrief">What should we borrow?</label><textarea id="photoBrief" rows="2" placeholder="Soft side light, crisp edge reflections, a warm background…"></textarea>
-          <div class="photo-options"><label><input id="photoFraming" type="checkbox"> Match framing too</label><label for="photoQuality">Refinement <select id="photoQuality"><option value="refined">Visual refinement</option><option value="quick">Quick first look</option></select></label></div>
-          <div class="row"><button class="solid" id="photoMatch" disabled>Match this look</button><button id="photoStop" disabled>Stop &amp; restore</button><button id="photoUndo" disabled>Undo look</button></div>
-        </div>
-      </div>
-      <p class="photo-note">Reference and preview images are shared with your selected AI provider and saved locally. Your materials stay untouched. A rollback camera lets you undo a match; save your scene in KeyShot to keep the result.</p>
-      <div id="photoProgress" role="status" aria-live="polite"></div>
-      <details id="photoEvidence" hidden><summary>Lighting decisions &amp; limits</summary><div id="photoDecisions"></div></details>
-      <div id="photoComparison" hidden><div class="photo-compare"><figure><img id="photoBefore" alt="KeyShot render before matching"><figcaption>Before</figcaption></figure><figure><img id="photoAfter" alt="Actual KeyShot render after matching"><figcaption>Matched lighting</figcaption></figure></div><div class="row"><a id="photoDownload" download>Download preview</a><a id="photoRecipe" download>Download lighting recipe</a><span class="dim">Preview quality · use KeyShot for final output</span></div></div>
-    </section>
-    <section class="panel" aria-labelledby="frameTitle"><h2 id="frameTitle">Frame &amp; background</h2><p class="blurb">Choose what fills the frame. Keep your viewing angle.</p>
+    <section class="panel" aria-labelledby="frameTitle"><h2 id="frameTitle">Frame &amp; background</h2><p class="blurb">Choose what fills the frame. Detail close-up uses one selected KeyShot part when available.</p>
       <div class="row"><button data-frame="hero">Full product</button><button data-frame="detail">Detail close-up</button><button data-frame="upper">Upper detail</button></div>
       <label for="frameAspect">Output shape</label><select id="frameAspect"><option value="1.7777777778">Landscape · 16:9</option><option value="1">Square · 1:1</option><option value="0.8">Portrait · 4:5</option></select>
       <details class="fold" id="environmentFold"><summary>Background &amp; ground</summary><label for="envColor">Backdrop color <input id="envColor" type="color" value="#f5f5f5"></label><label><input id="envShadows" type="checkbox" checked> Ground shadows</label><label><input id="envReflections" type="checkbox"> Ground reflections</label><button id="environmentApply">Apply background</button></details>
@@ -147,8 +148,17 @@
     </div>
 
     <div class="panel">
+      <details class="fold" id="sceneContextFold">
+        <summary>What Director sees</summary>
+        <p class="blurb">A read-only snapshot of the open scene. Refresh when you change selection or materials.</p>
+        <div class="row scene-context-actions"><button id="sceneContextRefresh" type="button" disabled>Refresh scene facts</button><span id="sceneContextStatus" role="status" aria-live="polite">Connect KeyShot to inspect</span></div>
+        <div id="sceneContextOutput" class="scene-context-output"><p class="scene-context-empty">Check what KeyShot is exposing before you ask for a focused change.</p></div>
+      </details>
+    </div>
+
+    <div class="panel">
       <details class="fold"><summary>Reference video &amp; animation</summary>
-      <div class="drop" id="vdrop">Drop a product video here<br><span class="dim">or click to choose &middot; mp4 / mov / webm</span></div>
+      <button class="drop" id="vdrop" type="button" aria-label="Choose a product video or drop it here">Drop a product video here<br><span class="dim">or click to choose &middot; mp4 / mov / webm</span></button>
       <input type="file" id="vfile" accept="video/*" hidden>
       <div class="chk2"><label><input type="checkbox" id="vlight" checked> match lighting</label><label><input type="checkbox" id="vcam" checked> match camera</label></div>
       <div class="blurb">Point the camera at the <b>front of your product</b> first: that view becomes the video's opening shot.</div>
@@ -163,22 +173,56 @@
     </div>
 
     <div class="panel" id="studioPanel">
-      <h2>Studio lighting</h2>
+      <h2>Lighting setup</h2>
+      <div class="lighting-section-heading"><b>Studio rig</b><span>Lighting recipe</span></div>
       <div class="row" id="rigs"></div>
       <div class="blurb" id="rigBlurb"></div>
-      <label>Exposure <span id="vexp">1.00&times;</span></label><input type="range" id="exp" min="-2" max="2" step="0.05" value="0">
-      <label style="justify-content:flex-start;gap:6px;align-items:center"><input type="checkbox" id="mirror"> mirror left / right</label>
+      <label class="rig-target-toggle"><input id="rigSelectedTarget" type="checkbox"> Target this rig at one selected part</label>
+      <p class="blurb rig-target-note">Select one visible part in KeyShot first. Exposure meters its visible bounds when possible; environment fill remains global.</p>
+      <label for="envFill">Environment brightness <span id="venvfill" aria-live="polite">1.00&times;</span></label><input type="range" id="envFill" min="0" max="2" step="0.01" value="1" aria-label="Environment brightness">
+      <div class="range-captions" aria-hidden="true"><span>Deeper shadows</span><span>Brighter fill</span></div>
+      <p class="blurb environment-fill-help">Adjust the scene fill from the KeyShot environment. Added lights and the visible background stay independent.</p>
+      <details class="secondary-control"><summary>Exposure &amp; orientation</summary>
+        <label>Exposure <span id="vexp">1.00&times;</span></label><input type="range" id="exp" min="-2" max="2" step="0.05" value="0">
+        <label class="mirror-control"><input type="checkbox" id="mirror"> mirror left / right</label>
+      </details>
+      <div class="lighting-section-heading lights-heading"><b>Lights</b><span>Native KeyShot lights</span></div>
       <canvas id="stagecv" width="300" height="270" title="Top-down stage. Camera is at the bottom. Drag a light to move it."></canvas>
-      <p class="blurb stage-help">Drag a light, or open it below to adjust position and brightness with sliders.</p>
+      <p class="blurb stage-help">Drag a light, or open it below to adjust position, brightness and tint. RGB tint and color temperature are alternate color modes.</p>
       <div id="lightlist"></div>
       <p class="blurb">Light behavior controls whether a Director light appears to the camera, in reflections, or in shadows while it continues lighting the scene. KeyShot's native per-part Light Layers are not exposed by its scripting bridge; set those in KeyShot's Light Layers panel.</p>
       <div class="row" style="margin-top:8px"><button id="addlight">Add light</button><button id="studiooff" title="Remove every light this app made and restore your original environment">Studio off</button></div>
       <div id="lightStatus" class="blurb"></div>
+      <details class="fold" id="lightingApiLab" style="margin-top:12px">
+        <summary>Lighting capability lab</summary>
+        <p class="blurb">Scene snapshots and graph inspection are read-only. Pass capture makes one bounded preview render and saves diagnostic files locally; it does not edit or save the scene. Capture once, adjust the lighting, then capture again to compare product and non-product pixels.</p>
+        <div class="row" style="margin-top:8px"><button id="lightingLabSnapshot" type="button">Snapshot scene state</button></div>
+        <div class="row" style="margin-top:8px"><button id="lightingLabSurface" type="button">Inspect lighting control API</button></div>
+        <div class="row" style="margin-top:8px">
+          <select id="lightingLabType" aria-label="Light type to inspect"><option value="area">Area</option><option value="point">Point</option><option value="ies">IES</option><option value="spotlight">Spotlight</option></select>
+          <button id="lightingLabInspect" type="button">Inspect</button>
+          <button id="lightingLabReplay" type="button" disabled>Replay with selected type</button>
+        </div>
+        <div class="chk2" id="lightingLabPasses" aria-label="Diagnostic render passes">
+          <label><input type="checkbox" value="clown" checked> Clown mask</label>
+          <label><input type="checkbox" value="reflection" checked> Reflection</label>
+          <label><input type="checkbox" value="shadow" checked> Shadow</label>
+          <label><input type="checkbox" value="direct"> Direct</label>
+          <label><input type="checkbox" value="indirect"> Indirect</label>
+          <label><input type="checkbox" value="raw"> Raw</label>
+          <label><input type="checkbox" value="depth"> Depth</label>
+          <label><input type="checkbox" value="normals"> Normals</label>
+        </div>
+        <div class="row" style="margin-top:8px"><button id="lightingLabCapture" type="button">Capture selected passes</button><button id="lightingLabReplayCapture" type="button" disabled>Capture again + compare</button></div>
+        <div id="lightingLabStatus" class="blurb" aria-live="polite"></div>
+        <pre id="lightingLabOutput" class="mono" style="max-height:220px;overflow:auto;white-space:pre-wrap;border:1px solid var(--line);padding:8px;margin:8px 0 0"></pre>
+        <div id="lightingLabImages" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"></div>
+      </details>
     </div>
 
     <div class="panel">
       <div class="material-inspector-content">
-        <p class="blurb">Inspect scene materials here. To change one, create an independent copy on a chosen part below; the source and its other assignments stay unchanged.</p>
+        <p class="blurb">Inspect the live scene material. Make a copy before changing a finish that is shared by other parts.</p>
         <div class="row"><select id="materialSelect" aria-label="Scene material"></select><button id="materialRefresh">Refresh</button><button type="button" id="materialSceneEditContext">Edit with chat</button></div>
         <div id="materialEditControls" class="material-edit-controls" hidden><div><b id="materialEditTitle">Scene material is read-only</b><p id="materialEditHelp">Enable edits to change exposed values on this material in the live KeyShot scene.</p></div><button type="button" id="materialEditToggle">Enable edits</button></div>
         <p class="material-map-note">Source material graphs stay protected in the copy workflow. Imported image maps can be applied to the independent copy below, or used to build a new unassigned material.</p>
@@ -190,10 +234,13 @@
     </div>
 
     <div class="panel">
-      <h2>Styles</h2>
-      <div class="dim" style="text-transform:none;letter-spacing:0;font-size:11.5px">Each folder in <span class="mono">references/</span> is a style. Put images in it, analyze, then match your rig to it.</div>
-      <div id="styles"></div>
-      <div id="matchlog" class="mono dim" style="margin-top:8px;white-space:pre-wrap"></div>
+      <details class="fold" id="styleLibraryFold"><summary>Saved styles &amp; references</summary>
+        <p class="blurb">Collect images into a named style, then select it beside your Director prompt.</p>
+        <label for="styleName">Style name</label><input id="styleName" placeholder="e.g. Brushed metal campaign" maxlength="64">
+        <button type="button" id="styleDrop" class="workspace-drop">Drop or paste reference images <span>PNG, JPEG or WebP · up to 8 at a time</span></button><input id="styleFiles" type="file" accept="image/png,image/jpeg,image/webp" multiple hidden>
+        <div id="styleThumbs" class="workspace-thumbs"></div><div class="row"><button id="styleSave" class="solid">Save images to style</button><button id="styleClear">Clear selection</button></div><p id="styleUploadStatus" class="blurb" role="status"></p>
+        <div id="styles"></div><div id="matchlog" class="mono dim" style="margin-top:8px;white-space:pre-wrap"></div>
+      </details>
     </div>
 
     <div class="panel">
@@ -213,28 +260,24 @@
   </aside>
 </main>
 
-<section id="referencesWorkspace" class="workspace-page" hidden aria-labelledby="referencesTitle">
-  <div class="workspace-heading"><div><h2 id="referencesTitle">References</h2><p>Use Match a look for a guided lighting change with preview and undo. Studio chat can interpret images more broadly; Material Lab builds a separate finish.</p></div><span class="scene-tag">Lighting &amp; mood</span></div>
-  <div class="reference-grid"><div id="referenceMatchHost"></div><div class="reference-library">
-    <div class="workspace-card"><h3>Style library</h3><p>Build a named collection of product photos. Paste, drop or choose images; then analyze and match a lighting rig.</p>
-      <label for="styleName">Collection name</label><input id="styleName" placeholder="e.g. Brushed metal campaign" maxlength="64">
-      <button type="button" id="styleDrop" class="workspace-drop">Drop or paste reference images <span>PNG, JPEG or WebP · up to 8 at a time</span></button><input id="styleFiles" type="file" accept="image/png,image/jpeg,image/webp" multiple hidden>
-      <div id="styleThumbs" class="workspace-thumbs"></div><div class="row"><button id="styleSave" class="solid">Save images to collection</button><button id="styleClear">Clear selection</button></div><p id="styleUploadStatus" class="blurb" role="status"></p>
-    </div><div id="styleLibraryHost"></div>
-  </div></div><div id="referenceVideoHost"></div>
-</section>
-
 <section id="materialsWorkspace" class="workspace-page" hidden aria-labelledby="materialsTitle">
-  <div class="workspace-heading"><div><h2 id="materialsTitle">Material Lab</h2><p>Build a reusable finish from reference photos or actual texture maps.</p></div><span class="scene-tag">Unassigned by default</span></div>
-  <section class="workspace-card" aria-labelledby="libraryMaterialTitle">
-    <div class="material-assets-heading"><div><h3 id="libraryMaterialTitle">Copy a KeyShot library material</h3><p>Search the real KeyShot library, select a target part in KeyShot, then create an independent copy to customize.</p></div><span class="scene-tag">Original stays unchanged</span></div>
-    <div class="texture-import-flow"><div><label for="libraryMaterialSearch">Find a material</label><input id="libraryMaterialSearch" type="search" placeholder="Search material or library folder"></div><div><label for="libraryMaterialSelect">KeyShot library result</label><select id="libraryMaterialSelect" aria-label="KeyShot library material"><option value="">Search the library to load materials</option></select></div></div>
-    <div class="row"><button type="button" id="libraryMaterialSearchButton">Search KeyShot library</button><button type="button" id="libraryMaterialCopyButton" class="solid" disabled>Copy to selected part</button></div>
-    <p id="libraryMaterialStatus" class="blurb" role="status" aria-live="polite">Select the part(s) in KeyShot before creating the copy. Then tell Material Director how you want the copy changed.</p>
+  <div class="workspace-heading"><div><h2 id="materialsTitle">Materials</h2><p>Build and tune finishes on your current KeyShot scene.</p></div><span class="scene-tag">Live scene</span></div>
+  <section id="libraryMaterialCopyCard" class="workspace-card library-material-quick" aria-label="Quick copy from the KeyShot library">
+    <details class="quick-library-details"><summary>Quick copy to current KeyShot selection</summary>
+      <p class="blurb">Search the real KeyShot library, select your target part in KeyShot, then create an independent copy. The library source stays unchanged.</p>
+      <div class="texture-import-flow"><div><label for="libraryMaterialSearch">Find a material</label><input id="libraryMaterialSearch" type="search" placeholder="Search material or library folder"></div><div><label for="libraryMaterialSelect">KeyShot library result</label><select id="libraryMaterialSelect" aria-label="KeyShot library material"><option value="">Search the library to load materials</option></select></div></div>
+      <div class="row"><button type="button" id="libraryMaterialSearchButton">Search KeyShot library</button><button type="button" id="libraryMaterialCopyButton" class="solid" disabled>Copy to selected part</button></div>
+      <p id="libraryMaterialStatus" class="blurb" role="status" aria-live="polite">Select the part(s) in KeyShot before creating the copy. Then tell Material Director how you want the copy changed.</p>
+    </details>
   </section>
-  <div class="material-grid"><div class="material-creative">
+  <div class="materials-workbench">
+    <div class="materials-primary">
+      <section class="workspace-card materials-preview-card" aria-labelledby="materialsPreviewTitle">
+        <div class="materials-preview-heading"><div><h3 id="materialsPreviewTitle">Current scene</h3><p>Your live KeyShot preview stays in sync with Studio.</p></div><span class="scene-tag">Live preview</span></div>
+        <div id="materialsStageHost"></div>
+      </section>
     <div class="workspace-card material-chat">
-      <div class="material-chat-heading"><div><h3>Material Director</h3><p>Describe the finish you want or add reference photos. Your product stays untouched until you apply the result in KeyShot.</p></div></div>
+      <div class="material-chat-heading"><div><h3>Material Director</h3><p>Describe the finish, add reference photos, or bring in a Poliigon texture set.</p></div></div>
       <div id="materialContext" class="material-context" hidden><div><span class="material-context-label">Working on</span><strong id="materialContextName"></strong><small id="materialContextNote"></small></div><button type="button" id="materialContextClear" class="text-button">Clear</button></div>
       <div id="materialChatLog" role="log" aria-live="polite" aria-label="Material Director conversation"><p class="chat-empty">Your conversation and build results will appear here. Start with a finish description or add a reference below.</p></div>
       <div class="material-composer">
@@ -245,13 +288,20 @@
       <div class="material-reference-heading"><span id="materialImageCount" aria-live="polite">No references added</span><button type="button" id="materialClearImages" class="text-button" hidden>Clear all</button></div><div id="materialThumbs" class="material-reference-grid" aria-label="Material reference images"></div>
       <div class="material-ratio-row"><label for="materialImageAspect">Generated material image ratio</label><select id="materialImageAspect" aria-describedby="materialImageAspectNote"><option value="original">Match reference</option><option value="1:1">Square · 1:1</option><option value="4:3">Landscape · 4:3</option><option value="3:2">Landscape · 3:2</option><option value="16:9">Wide · 16:9</option><option value="3:4">Portrait · 3:4</option><option value="2:3">Portrait · 2:3</option><option value="9:16">Tall · 9:16</option></select><small id="materialImageAspectNote">Saved as a preference for future material image generation. Image generation is not available yet.</small></div>
       <div class="row"><button id="materialSend" class="solid">Ask Material Director</button><button id="materialStop" disabled hidden>Stop</button><button id="materialNewChat">New chat</button></div>
-      <p class="blurb">Choose a tool below to browse texture sets, scene materials, the KeyShot library, or saved packages. Use Edit with chat on an item to make it the current chat target. Reference photos guide the finish description; they’re sent to the selected AI provider for this request and aren’t saved as training data.</p>
+      <p class="blurb">Source materials stay unchanged in copy workflows. Reference photos are sent to your selected AI provider for this request and aren’t saved as training data.</p>
       </div>
     </div>
-  </div></div>
+    </div>
+    <aside class="materials-inspector-column">
+      <section class="workspace-card materials-inspector-card" aria-labelledby="materialsInspectorTitle">
+        <div class="materials-inspector-heading"><div><h3 id="materialsInspectorTitle">Material inspector</h3><p>Live scene values and connected map signals.</p></div></div>
+        <div id="materialInspectorHost"></div>
+      </section>
+    </aside>
+  </div>
+  <section class="materials-tools" aria-label="Material tools">
   <nav class="material-tools-nav" role="tablist" aria-label="Material tools">
     <button id="materialTextureTab" type="button" role="tab" aria-selected="false" aria-controls="materialTexturePanel" data-material-tab="texture">Texture sets</button>
-    <button id="materialSceneTab" type="button" role="tab" aria-selected="false" aria-controls="materialScenePanel" data-material-tab="scene">Scene materials</button>
     <button id="materialLibraryTab" type="button" role="tab" aria-selected="false" aria-controls="materialLibraryPanel" data-material-tab="library">KeyShot library</button>
     <button id="materialSavedTab" type="button" role="tab" aria-selected="false" aria-controls="materialSavedPanel" data-material-tab="saved">Saved materials</button>
   </nav>
@@ -270,12 +320,9 @@
     <p id="textureBuildStatus" class="blurb" role="status" aria-live="polite"></p>
     <div id="textureSetList" class="material-asset-list" role="list"><p class="chat-empty">No texture sets imported yet.</p></div>
   </section>
-  <section id="materialScenePanel" class="workspace-card material-subpanel" role="tabpanel" aria-labelledby="materialSceneTitle" hidden>
-    <div class="material-assets-heading"><div><h3 id="materialSceneTitle">Scene materials</h3><p>Inspect the material graph in the open KeyShot scene. Use Edit with chat to set the current target.</p></div></div>
-    <div id="materialInspectorHost"></div>
-  </section>
   <section id="materialLibraryPanel" class="workspace-card material-subpanel material-assets" role="tabpanel" aria-labelledby="materialCopyTitle" hidden>
     <div class="material-assets-heading"><div><h3 id="materialCopyTitle">KeyShot Material Library</h3><p>Browse the loaded KeyShot library, copy a material onto one part, then edit the copy’s image maps. The library entry stays untouched.</p></div><button type="button" id="materialLibraryRefresh">Refresh library</button></div>
+    <div id="libraryQuickCopyHost"></div>
     <div class="texture-import-flow">
       <div><label for="materialLibrarySearch">Find a material</label><input id="materialLibrarySearch" type="search" placeholder="Search library names"></div>
       <div><label for="materialLibrarySelect">Library material</label><select id="materialLibrarySelect" size="7" aria-label="KeyShot library materials"></select></div>
@@ -296,6 +343,7 @@
     <div id="materialAssetList" class="material-asset-list" role="list"><p class="chat-empty">Loading material packages…</p></div>
   </section>
   </div>
+  </section>
 </section>
 
 <dialog id="settings">
@@ -327,16 +375,69 @@ async function api(path, body) {
   const r = await fetch(path, body === undefined ? {} : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   const j = await r.json(); if (!r.ok) throw new Error(j.error || r.status); return j;
 }
-// One page, three focused workspaces: moving existing controls preserves their handlers and KeyShot state.
-$('referenceMatchHost').appendChild(document.querySelector('.photo-workspace'));
-$('styleLibraryHost').appendChild($('styles').closest('.panel'));
-$('referenceVideoHost').appendChild($('vdrop').closest('.panel'));
+function sceneContextFact(label, value) {
+  if (value === undefined || value === null || value === '') return null;
+  const item = document.createElement('div'); item.className = 'scene-context-fact';
+  const term = document.createElement('span'); term.textContent = label;
+  const detail = document.createElement('strong'); detail.textContent = String(value);
+  item.append(term, detail); return item;
+}
+function renderSceneContext(context) {
+  const output = $('sceneContextOutput'), scene = context.scene || {}, active = context.active || {};
+  const environment = context.environment || {}, camera = context.camera || {}, render = context.render || {};
+  const selection = context.target?.selection || [], facts = document.createElement('div');
+  facts.className = 'scene-context-facts';
+  const cameraText = [camera.lens_type, Number.isFinite(camera.fov) ? `${camera.fov}° FOV` : null,
+    Number.isFinite(camera.focal) ? `${camera.focal} mm` : null].filter(Boolean).join(' · ');
+  const environmentName = environment.name || environment.hdri_name || active.studio;
+  const environmentText = [environmentName, Number.isFinite(environment.brightness) ? `${environment.brightness.toFixed(2)}×` : null].filter(Boolean).join(' · ');
+  const renderText = [render.engine, Array.isArray(render.image_size) && render.image_size.every(Number.isFinite) ? `${render.image_size[0]} × ${render.image_size[1]}` : null].filter(Boolean).join(' · ');
+  for (const fact of [
+    sceneContextFact('Scene', scene.display_name || 'Name unavailable'),
+    sceneContextFact('Units', scene.unit || 'Unknown'),
+    sceneContextFact('Environment', environmentText || 'Unavailable'),
+    sceneContextFact('Camera', cameraText || 'Unavailable'),
+    sceneContextFact('Render', renderText || 'Unavailable'),
+  ]) if (fact) facts.appendChild(fact);
+
+  const targets = document.createElement('div'); targets.className = 'scene-context-targets';
+  const heading = document.createElement('h3'); heading.textContent = selection.length ? 'Selected in KeyShot' : 'No part selected';
+  targets.appendChild(heading);
+  if (selection.length) {
+    const list = document.createElement('ul');
+    for (const part of selection) {
+      const row = document.createElement('li');
+      const path = Array.isArray(part.path) && part.path.length ? part.path.join(' / ') : (part.name || 'Unnamed part');
+      const name = document.createElement('strong'); name.textContent = path;
+      row.appendChild(name);
+      if (part.material) { const material = document.createElement('span'); material.textContent = `Material · ${part.material}`; row.appendChild(material); }
+      if (part.render_layer) { const layer = document.createElement('span'); layer.textContent = `Render layer · ${part.render_layer}`; row.appendChild(layer); }
+      if (Array.isArray(part.bounds) && part.bounds.length === 2 && part.bounds.every(point => Array.isArray(point) && point.length === 3 && point.every(Number.isFinite))) {
+        const span = part.bounds[0].map((low, axis) => Math.abs(part.bounds[1][axis] - low));
+        const bounds = document.createElement('span'); bounds.textContent = `Bounds · ${span.map(value => value.toFixed(2)).join(' × ')} ${scene.unit || 'scene units'}`; row.appendChild(bounds);
+      }
+      list.appendChild(row);
+    }
+    targets.appendChild(list);
+  } else {
+    const note = document.createElement('p'); note.textContent = 'Select one part in KeyShot for a bounded close-up, an explicitly targeted lighting rig, or a part-specific material action. Bounds show where to aim, not what feature it is.'; targets.appendChild(note);
+  }
+  const limit = document.createElement('p'); limit.className = 'scene-context-limit';
+  limit.textContent = 'Names and bounds can target a part spatially; they do not tell Director whether a surface is a button, bevel, logo, or grip.';
+  output.replaceChildren(facts, targets, limit);
+  output.dataset.loaded = 'true';
+}
+// Studio holds the scene, reference, saved style, and Director request in one flow.
 const materialPanel = $('materialSelect').closest('.panel');
 $('materialInspectorHost').appendChild(materialPanel);
-materialPanel.querySelector('.material-inspector-content').insertAdjacentHTML('afterbegin', '<p class="material-advanced-note">For manual value edits. Existing materials remain locked until you explicitly enable changes. Use KeyShot for full Material Graph rewiring.</p>');
+materialPanel.querySelector('.material-inspector-content').insertAdjacentHTML('afterbegin', '<p class="material-advanced-note">Only exposed values can be adjusted here. Connected texture maps stay read-only; use KeyShot for graph rewiring.</p>');
+const sceneStage = $('stage'), studioStageHome = $('studioStageHome'), materialsStageHost = $('materialsStageHost');
+$('studioWorkspace').querySelector('aside').prepend($('studioPanel'));
+$('libraryQuickCopyHost').appendChild($('libraryMaterialCopyCard'));
 function showWorkspace(name) {
-  if (!['studio','references','materials'].includes(name)) name = 'studio';
-  for (const key of ['studio','references','materials']) {
+  if (!['studio','materials'].includes(name)) name = 'studio';
+  (name === 'materials' ? materialsStageHost : studioStageHome).appendChild(sceneStage);
+  for (const key of ['studio','materials']) {
     $(`${key}Workspace`).hidden = key !== name;
     const button = document.querySelector(`[data-workspace="${key}"]`);
     if (key === name) button.setAttribute('aria-current','page'); else button.removeAttribute('aria-current');
@@ -415,34 +516,61 @@ function lstatus(m) { $('lightStatus').textContent = m || ''; }
 async function loadStudio() {
   ST = await api('/api/studio'); const box = $('rigs'); box.innerHTML = '';
   for (const r of ST.rigs) { const b = document.createElement('button'); b.textContent = r.label; b.title = r.blurb; if (ST.studio.rig === r.id) b.classList.add('solid');
-    b.onclick = () => busy(b, async () => { lstatus('Building ' + r.label + '...'); await api('/api/rig', { name: r.id, mirror: $('mirror').checked, exposure: Math.pow(2, +$('exp').value) }); await loadStudio(); }); box.appendChild(b); }
-  const cur = ST.rigs.find(r => r.id === ST.studio.rig); $('rigBlurb').textContent = cur ? cur.blurb : 'Pick a rig. Everything it adds is removed by Studio off.';
+    b.onclick = () => busy(b, async () => {
+      lstatus('Building ' + r.label + '...');
+      const result = await api('/api/rig', { name: r.id, mirror: $('mirror').checked, exposure: Math.pow(2, +$('exp').value), useSelectedPart: $('rigSelectedTarget').checked });
+      await loadStudio();
+      const target = ST.studio.rigSubject?.models?.[0], meter = result.auto?.measurement_scope;
+      lstatus(`${r.label} applied${target ? ` to ${target}` : ''}${meter ? ` · exposure measured from ${meter}` : ''}.`);
+    }); box.appendChild(b); }
+  const cur = ST.rigs.find(r => r.id === ST.studio.rig), targetPart = ST.studio.rigSubject?.models?.[0]; $('rigBlurb').textContent = cur ? cur.blurb + (targetPart ? ` Lighting target: ${targetPart}.` : '') : 'Pick a rig. Everything it adds is removed by Studio off.';
+  const envMultiplier = Number.isFinite(ST.studio.envMultiplier) ? ST.studio.envMultiplier : 1;
+  $('envFill').value = envMultiplier; $('venvfill').innerHTML = envMultiplier.toFixed(2) + '&times;';
   renderLights(); drawStage();
 }
-const fmts = { gain: v => (+v).toFixed(2) + '×', kelvin: v => Math.round(v) + ' K', az: v => Math.round(v) + '°', el: v => Math.round(v) + '°', d: v => (+v).toFixed(2) + ' sp', w: v => (+v).toFixed(2), h: v => (+v).toFixed(2) };
+const fmts = { gain: v => (+v).toFixed(2) + '×', kelvin: v => Math.round(v) + ' K', az: v => Math.round(v) + '°', el: v => Math.round(v) + '°', d: v => (+v).toFixed(2) + ' sp', w: v => (+v).toFixed(2), h: v => (+v).toFixed(2), radius: v => (+v).toFixed(1) + ' mm', angle: v => Math.round(v) + '°', falloff: v => (+v).toFixed(2) };
+function kelvinRgb(k) { const t = Math.max(10, Math.min(400, k / 100)), c = [t <= 66 ? 255 : 329.698727446 * Math.pow(t - 60, -0.1332047592), t <= 66 ? 99.4708025861 * Math.log(t) - 161.1195681661 : 288.1221695283 * Math.pow(t - 60, -0.0755148492), t >= 66 ? 255 : t <= 19 ? 0 : 138.5177312231 * Math.log(t - 10) - 305.0447927307].map(v => Math.max(0, Math.min(255, v)) / 255); const m = Math.max(...c) || 1; return c.map(v => v / m); }
+const rgbHex = rgb => '#' + rgb.slice(0, 3).map(v => Math.round(Math.max(0, Math.min(1, v)) * 255).toString(16).padStart(2, '0')).join('');
+const hexRgb = hex => [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255);
 const htmlText = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const lightLabel = l => l.id.startsWith('photo_') ? (l.role || 'Photo light') : l.id;
 function slider(label, key, l, min, max, step) { return `<label>${label} <span>${fmts[key](l[key])}</span></label><input type="range" aria-label="${htmlText(lightLabel(l))} ${htmlText(label)}" data-id="${htmlText(l.id)}" data-k="${key}" min="${min}" max="${max}" step="${step}" value="${l[key]}">`; }
 function renderLights() {
   const box = $('lightlist'); const open = new Set([...box.querySelectorAll('details[open]')].map(d => d.dataset.id)); box.innerHTML = '';
   for (const l of Object.values(ST.studio.lights)) {
+    const type = l.type || 'area', typeName = ({ area: 'Area', point: 'Point', ies: 'IES', spotlight: 'Spotlight' })[type] || 'Area';
     const d = document.createElement('details'); d.className = 'lrow'; d.dataset.id = l.id; if (open.has(l.id)) d.open = true;
-    d.innerHTML = `<summary><span class="sw"></span><b>${htmlText(lightLabel(l))}</b><span class="dim">${htmlText(l.id.startsWith('photo_') ? 'reference' : l.role)}</span><button class="rm sm" data-rm="${htmlText(l.id)}">Remove</button></summary><div class="body">
-      ${slider('Brightness', 'gain', l, 0.05, 4, 0.05)}${slider('Color temp', 'kelvin', l, 2000, 9000, 50)}${slider('Azimuth', 'az', l, -180, 180, 1)}${slider('Elevation', 'el', l, -10, 90, 1)}
-      ${slider('Distance', 'd', l, 1.2, 6, 0.05)}${slider('Width', 'w', l, 0.1, 4, 0.05)}${slider('Height', 'h', l, 0.1, 4, 0.05)}
-      <div class="chk"><label><input type="checkbox" data-id="${htmlText(l.id)}" data-k="refl" ${l.refl ? 'checked' : ''}> in reflections</label><label><input type="checkbox" data-id="${htmlText(l.id)}" data-k="eye" ${l.eye ? 'checked' : ''}> visible to camera</label><label><input type="checkbox" data-id="${htmlText(l.id)}" data-k="shadows" ${l.shadows !== false ? 'checked' : ''}> in shadows</label></div></div>`;
+    const shapeControls = type === 'area' ? `${slider('Width', 'w', l, 0.1, 4, 0.05)}${slider('Height', 'h', l, 0.1, 4, 0.05)}` : `${slider('Shadow radius', 'radius', l, 0, Math.max(20, Math.min(1000, (ST.studio.subject?.span || 1000) * 0.2)), 1)}`;
+    const beamControls = type === 'spotlight' ? `${slider('Beam angle', 'angle', l, 1, 120, 1)}${slider('Falloff', 'falloff', l, 0, 1, 0.01)}<div class="chk"><label><input type="checkbox" data-id="${htmlText(l.id)}" data-k="constant_output" ${l.constant_output !== false ? 'checked' : ''}> constant light output</label></div>` : '';
+    const visibilityControls = type === 'area' ? `<div class="chk"><label><input type="checkbox" data-id="${htmlText(l.id)}" data-k="refl" ${l.refl ? 'checked' : ''}> in reflections</label><label><input type="checkbox" data-id="${htmlText(l.id)}" data-k="eye" ${l.eye ? 'checked' : ''}> visible to camera</label><label><input type="checkbox" data-id="${htmlText(l.id)}" data-k="shadows" ${l.shadows !== false ? 'checked' : ''}> in shadows</label></div>` : '';
+    const tempKelvin = Number.isFinite(l.kelvin) ? l.kelvin : (Number.isFinite(l.profile_kelvin_hint) ? l.profile_kelvin_hint : 5600);
+    const tempControl = slider(type === 'ies' ? 'Temperature override' : 'Color temp', 'kelvin', { ...l, kelvin: tempKelvin }, 2000, 9000, 50);
+    const iesOverride = Number.isFinite(l.kelvin) || Array.isArray(l.rgb);
+    const iesInfo = type === 'ies' && l.ies_asset_id ? `<p class="dim">Fixture: ${htmlText(l.ies_asset_id.split('/').pop())}${l.profile_kelvin_hint ? ` · nominal ${l.profile_kelvin_hint} K` : ''}</p><p class="dim">${iesOverride ? 'Color override active' : 'Using native profile color'} unless changed below.</p>` : '';
+    d.innerHTML = `<summary><span class="sw"></span><b>${htmlText(lightLabel(l))}</b><span class="dim">${htmlText(typeName + ' · ' + (l.id.startsWith('photo_') ? 'reference' : l.role))}</span><button class="rm sm" data-rm="${htmlText(l.id)}">Remove</button></summary><div class="body">
+      ${slider('Brightness', 'gain', l, 0.05, 4, 0.05)}${tempControl}${iesInfo}<label>RGB tint <input type="color" aria-label="${htmlText(lightLabel(l))} RGB tint" data-id="${htmlText(l.id)}" data-k="rgb" value="${rgbHex(l.rgb || (Number.isFinite(l.kelvin) ? kelvinRgb(l.kelvin) : l.profile_rgb || kelvinRgb(tempKelvin)))}"></label>${slider('Azimuth', 'az', l, -180, 180, 1)}${slider('Elevation', 'el', l, -10, 90, 1)}
+      ${slider('Distance', 'd', l, 1.2, 6, 0.05)}${shapeControls}${beamControls}${visibilityControls}</div>`;
     box.appendChild(d);
   }
 }
 const lightTimers = {}, lightPending = {};
-function pushLight(id, patch) { lightPending[id] = { ...(lightPending[id] || {}), ...patch }; clearTimeout(lightTimers[id]); lightTimers[id] = setTimeout(() => { const p = lightPending[id]; delete lightPending[id]; api('/api/light', { id, ...p }).catch(e => toast(e.message)); }, 60); }
+function pushLight(id, patch) { const pending = lightPending[id] || {}; if ('rgb' in patch) delete pending.kelvin; if ('kelvin' in patch) delete pending.rgb; lightPending[id] = { ...pending, ...patch }; clearTimeout(lightTimers[id]); lightTimers[id] = setTimeout(() => { const p = lightPending[id]; delete lightPending[id]; api('/api/light', { id, ...p }).catch(e => toast(e.message)); }, 60); }
 $('lightlist').addEventListener('input', e => {
-  const t = e.target, id = t.dataset.id, k = t.dataset.k; if (!id || !k) return; const l = ST.studio.lights[id]; l[k] = t.type === 'checkbox' ? t.checked : +t.value;
+  const t = e.target, id = t.dataset.id, k = t.dataset.k; if (!id || !k) return; const l = ST.studio.lights[id];
+  if (t.type === 'checkbox') l[k] = t.checked;
+  else if (t.type === 'color') l.rgb = hexRgb(t.value);
+  else { l[k] = +t.value; if (k === 'kelvin') { delete l.rgb; const picker = t.closest('.body')?.querySelector('input[type="color"]'); if (picker) picker.value = rgbHex(kelvinRgb(l.kelvin)); } }
   if (t.type === 'range') t.previousElementSibling.querySelector('span').textContent = fmts[k](l[k]);
-  pushLight(id, { [k]: l[k] }); drawStage();
+  pushLight(id, { [k]: k === 'rgb' ? l.rgb : l[k] }); drawStage();
 });
 $('lightlist').addEventListener('click', e => { const id = e.target.dataset.rm; if (!id) return; e.preventDefault(); busy(e.target, async () => { await api('/api/light/remove', { id }); await loadStudio(); }); });
 $('exp').addEventListener('input', () => { $('vexp').innerHTML = Math.pow(2, +$('exp').value).toFixed(2) + '&times;'; clearTimeout($('exp').t); $('exp').t = setTimeout(() => api('/api/exposure', { value: Math.pow(2, +$('exp').value) }).catch(e => toast(e.message)), 150); });
+$('envFill').addEventListener('input', () => {
+  const multiplier = +$('envFill').value;
+  $('venvfill').innerHTML = multiplier.toFixed(2) + '&times;';
+  clearTimeout($('envFill').t);
+  $('envFill').t = setTimeout(() => api('/api/environment-fill', { multiplier }).catch(e => toast(e.message)), 150);
+});
 $('studiooff').onclick = e => busy(e.target, async () => { await api('/api/studio/off', {}); await loadStudio(); lstatus('Lights removed. Original environment restored.'); });
 $('addlight').onclick = e => busy(e.target, async () => { const n = 'light' + (Object.keys(ST.studio.lights).length + 1); await api('/api/light', { id: n, az: -40, el: 30, d: 3, w: 1.5, h: 1.5, E: 0.003 }); await loadStudio(); });
 /* ---------- material lab ---------- */
@@ -476,9 +604,8 @@ function clearMaterialContext() {
   $('materialContext').hidden = true;
   $('materialPrompt').placeholder = 'Fine bead-blasted aluminum, cool silver, a soft satin sheen…';
 }
-function setMaterialToolTab(key, toggle = true) {
-  const current = materialTabs.find(tab => tab.getAttribute('aria-selected') === 'true')?.dataset.materialTab;
-  const selected = toggle && current === key ? null : key;
+function setMaterialToolTab(key) {
+  const selected = key;
   for (const tab of materialTabs) {
     const active = tab.dataset.materialTab === selected;
     tab.setAttribute('aria-selected', String(active));
@@ -487,6 +614,7 @@ function setMaterialToolTab(key, toggle = true) {
   }
 }
 for (const tab of materialTabs) tab.onclick = () => setMaterialToolTab(tab.dataset.materialTab);
+setMaterialToolTab('texture', false);
 document.querySelector('.material-tools-nav').onkeydown = event => {
   if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
   event.preventDefault();
@@ -576,7 +704,6 @@ $('libraryMaterialCopyButton').onclick = e => busy(e.target, async () => {
   $('materialPrompt').focus();
 });
 $('materialRefresh').onclick = e => busy(e.target, () => loadMaterials());
-$('jumpToPoliigonImport').onclick = () => $('poliigonFolderChoose').scrollIntoView({ behavior: 'smooth', block: 'center' });
 $('materialSelect').onchange = () => loadMaterials($('materialSelect').value).catch(e => toast(e.message));
 $('materialSceneEditContext').onclick = () => {
   const name = $('materialSelect').value;
@@ -752,9 +879,10 @@ async function loadTextureSets() {
     let height = null;
     if (displacement) {
       const wrap = document.createElement('label'); wrap.className = 'texture-set-roles';
-      wrap.textContent = 'Height (mm) ';
-      height = document.createElement('input'); height.type = 'number'; height.min = '0.01'; height.max = '5';
-      height.step = '0.01'; height.value = '0.1'; height.style.width = '5em';
+      wrap.textContent = 'Height (mm; 0.001–0.1) ';
+      height = document.createElement('input'); height.type = 'number'; height.min = '0.001'; height.max = '0.1';
+      height.step = '0.001'; height.value = '0.01'; height.style.width = '5em';
+      height.title = 'Default 0.01 mm; supported range 0.001–0.1 mm';
       wrap.append(height); options.append(wrap);
     }
     if (options.childNodes.length) info.append(options);
@@ -767,7 +895,7 @@ async function loadTextureSets() {
       try {
         const result = await api('/api/material/build-from-texture-set', { texture_set_id: set.id,
           use_ao: !!ao?.checked, use_displacement: !!displacement?.checked,
-          displacement_height_mm: height ? Number(height.value) : 0.1 });
+          displacement_height_mm: height ? Number(height.value) : 0.01 });
         await loadMaterials(result.name); await loadMaterialAssets();
         selectMaterialContext({ kind: 'scene-material', name: result.name });
         const channelNames = { 'base-color':'Base Color', 'ambient-occlusion':'AO blend', roughness:'Roughness',
@@ -790,84 +918,11 @@ async function loadTextureSets() {
   }
 }
 const TEXTURE_EXTENSIONS = new Set(['.png','.jpg','.jpeg','.webp','.tif','.tiff','.exr','.hdr','.mtlx']);
-const TEXTURE_FILE_LIMIT = 80 * 1024 * 1024, TEXTURE_SET_LIMIT = 80 * 1024 * 1024;
+const TEXTURE_FILE_LIMIT = 80 * 1024 * 1024, TEXTURE_SET_LIMIT = 512 * 1024 * 1024;
 async function uploadTextureFile(file, id) {
   const response = await fetch(`/api/material/texture-file?id=${encodeURIComponent(id)}&name=${encodeURIComponent(file.name)}`, { method:'POST', headers:{'Content-Type':'application/octet-stream'}, body:file });
   const result = await response.json(); if (!response.ok) throw new Error(result.error || `Could not import ${file.name}.`); return result;
 }
-function poliigonRole(name) {
-  const stem = name.replace(/\\/g, '/').split('/').pop().replace(/\.[^.]+$/, '');
-  if (/preview|thumbnail|swatch/i.test(stem)) return 'preview';
-  const roles = [
-    ['ambient-occlusion', /(?:^|[_ .-])(?:ambient.?occlusion|ao)(?:[_ .-]|$)/i],
-    ['base-color', /(?:^|[_ .-])(?:base.?color|albedo|diffuse|color|col)(?:[_ .-]|$)/i],
-    ['displacement', /(?:^|[_ .-])(?:displacement|height|disp)(?:[_ .-]|$)/i],
-    ['metallic', /(?:^|[_ .-])(?:metallic|metalness|metal)(?:[_ .-]|$)/i],
-    ['normal', /(?:^|[_ .-])(?:normal|normalgl|normaldx|nrm)(?:[_ .-]|$)/i],
-    ['roughness', /(?:^|[_ .-])(?:roughness|rough)(?:[_ .-]|$)/i],
-    ['specular', /(?:^|[_ .-])(?:specular|spec)(?:[_ .-]|$)/i],
-    ['glossiness', /(?:^|[_ .-])(?:glossiness|gloss)(?:[_ .-]|$)/i],
-    ['bump', /(?:^|[_ .-])(?:bump)(?:[_ .-]|$)/i]
-  ];
-  for (const [role, re] of roles) if (re.test(stem)) return role;
-  return /\.mtlx$/i.test(name) ? 'materialx' : '';
-}
-function poliigonResolution(file) {
-  const full = `${file.webkitRelativePath || ''}/${file.name}`;
-  const match = full.match(/(?:^|[/_ .-])(1|2|4|8|16)K(?:[/_ .-]|$)/i);
-  return match ? Number(match[1]) : 0;
-}
-function poliigonSetName(file) {
-  const segments = (file.webkitRelativePath || '').replace(/\\/g, '/').split('/').filter(Boolean);
-  const root = segments.find(segment => !/^(?:1|2|4|8|16)K$/i.test(segment));
-  if (root && root !== file.name) return root.replace(/[_-]+/g, ' ').trim();
-  return file.name.replace(/\.[^.]+$/, '').replace(/(?:[_ .-](?:ambient.?occlusion|ao|base.?color|albedo|diffuse|color|col|displacement|height|disp|metallic|metalness|metal|normalgl|normaldx|normal|nrm|roughness|rough|specular|spec|glossiness|gloss|bump))$/i, '').replace(/[_-]+/g, ' ').trim();
-}
-async function importPoliigonFolder(files) {
-  const all = [...files];
-  if (!all.length) return;
-  const candidates = all.map(file => ({ file, role: poliigonRole(file.name) })).filter(item => item.role && item.role !== 'preview');
-  const maps = candidates.filter(item => item.role !== 'materialx');
-  if (!maps.length) { $('poliigonImportStatus').textContent = 'No named PBR texture maps found. Choose the Poliigon product folder or its 2K/4K maps folder.'; return; }
-  const resolutions = [...new Set(maps.map(item => poliigonResolution(item.file)).filter(Boolean))].sort((a, b) => a - b);
-  const selectedResolution = resolutions.includes(2) ? 2 : resolutions.includes(4) ? 4 : resolutions.length ? resolutions[resolutions.length - 1] : 0;
-  const atResolution = selectedResolution ? candidates.filter(item => !poliigonResolution(item.file) || poliigonResolution(item.file) === selectedResolution) : candidates;
-  const unique = new Map();
-  for (const item of atResolution) {
-    const key = item.role === 'materialx' ? 'materialx' : item.role;
-    if (!unique.has(key) || item.file.size > unique.get(key).file.size) unique.set(key, item);
-  }
-  const selected = [...unique.values()];
-  const total = selected.reduce((sum, item) => sum + item.file.size, 0);
-  if (selected.length > 32) { $('poliigonImportStatus').textContent = 'This download has more than 32 maps at the chosen resolution. Choose a specific resolution folder such as 2K, then import again.'; return; }
-  if (selected.some(item => !item.file.size || item.file.size > TEXTURE_FILE_LIMIT) || total > TEXTURE_SET_LIMIT) {
-    $('poliigonImportStatus').textContent = 'The chosen maps exceed the import limits (128 MB per file, 512 MB total). Choose a smaller resolution folder.'; return;
-  }
-  const first = selected.find(item => item.role !== 'materialx')?.file || selected[0].file;
-  const setName = poliigonSetName(first) || 'Poliigon PBR material';
-  $('textureSetName').value = setName;
-  $('poliigonFolderChoose').disabled = true;
-  $('poliigonImportStatus').textContent = `Importing ${selected.length} original files${selectedResolution ? ` from ${selectedResolution}K` : ''}…`;
-  try {
-    const created = await api('/api/material/texture-sets', { name: setName });
-    const imported = [];
-    for (let i = 0; i < selected.length; i++) {
-      const item = selected[i];
-      $('poliigonImportStatus').textContent = `Importing original files ${i + 1} of ${selected.length} · ${item.role}: ${item.file.name}`;
-      const result = await uploadTextureFile(item.file, created.id);
-      imported.push({ name: item.file.name, role: result.role });
-    }
-    const labels = imported.map(item => `${item.role}: ${item.name}`).join(' · ');
-    const skipped = all.filter(file => !selected.some(item => item.file === file)).length;
-    $('poliigonImportStatus').textContent = `Imported “${created.name}”${selectedResolution ? ` at ${selectedResolution}K` : ''}. Original files were preserved. Channels: ${labels}.${skipped ? ` Skipped ${skipped} preview, duplicate or other-resolution file(s).` : ''} Build the set below to create the KeyShot material.`;
-    await loadTextureSets();
-  } catch (error) {
-    $('poliigonImportStatus').textContent = `${error.message} Any files already copied remain in the imported set.`;
-    await loadTextureSets().catch(() => {});
-  } finally { $('poliigonFolderChoose').disabled = false; }
-}
-$('poliigonFolderChoose').onclick = () => $('poliigonFolderFiles').click();
-$('poliigonFolderFiles').onchange = event => { importPoliigonFolder(event.target.files); event.target.value = ''; };
 $('textureSetChoose').onclick = () => $('textureSetFiles').click();
 async function importTextureFiles(files, { resumeId = '', folderName = '', setName = null, statusTarget = null } = {}) {
   const showStatus = message => { $('textureSetStatus').textContent = message; if (statusTarget) $(statusTarget).textContent = message; };
@@ -893,7 +948,7 @@ async function importTextureFiles(files, { resumeId = '', folderName = '', setNa
   const invalid = pending.find(file => !TEXTURE_EXTENSIONS.has('.' + file.name.split('.').pop().toLowerCase()));
   if (invalid) { showStatus(`${invalid.name} is not a supported texture or MaterialX file.`); return null; }
   if (pending.some(file => !file.size || file.size > TEXTURE_FILE_LIMIT)) { showStatus('Each source file must be 80 MB or smaller.'); return null; }
-  if (total > TEXTURE_SET_LIMIT) { showStatus('This set is over the 80 MB import limit.'); return null; }
+  if (total > TEXTURE_SET_LIMIT) { showStatus('This set is over the 512 MB import limit.'); return null; }
   $('textureSetChoose').disabled = true;
   try {
     const created = existing || await api('/api/material/texture-sets', { name: setName || $('textureSetName').value.trim() || folderName || 'Imported texture set' });
@@ -991,22 +1046,23 @@ cv.addEventListener('pointerup', () => { if (dragLight) { dragLight = null; rend
 /* ---------- styles ---------- */
 async function loadStyles() {
   const list = (await api('/api/styles')).filter(s => !s.name.startsWith('_')); const box = $('styles'); box.innerHTML = '';
+  const selectedStyle = $('directorStyle').value;
+  $('directorStyle').replaceChildren(new Option('None selected', ''), ...list.filter(s => s.images > 0).map(s => new Option(s.name, s.name)));
+  $('directorStyle').value = list.some(s => s.name === selectedStyle && s.images > 0) ? selectedStyle : '';
   if (!list.length) box.innerHTML = '<div class="dim" style="margin-top:8px">No style folders yet.</div>';
   for (const s of list) {
     const d = document.createElement('div'); d.className = 'style';
-    d.innerHTML = `<div class="row"><b>${htmlText(s.name)}</b><span class="dim">${s.images} images${s.analyzed ? ' &middot; ' + s.looks.map(l => htmlText(l.id) + ' ' + l.count).join(', ') : ''}</span></div>
+    d.innerHTML = `<div class="row"><b>${htmlText(s.name)}</b><span class="dim">${s.images} image${s.images === 1 ? '' : 's'}${s.analyzed ? ' &middot; ' + s.looks.map(l => htmlText(l.id) + ' ' + l.count).join(', ') : s.images ? ' &middot; ready to analyze' : ' &middot; add images to use'}</span></div>
       <div class="style-previews">${(s.previews || []).map(file => `<img loading="lazy" alt="${htmlText(s.name)} reference" src="/api/styles/image?name=${encodeURIComponent(s.name)}&file=${encodeURIComponent(file)}">`).join('')}</div>
-      <div class="row" style="margin-top:6px"><button class="sm" data-an="${htmlText(s.name)}">Analyze</button><button class="sm" data-mt="${htmlText(s.name)}" ${s.analyzed ? '' : 'disabled'}>Match my rig</button></div>`;
+      <div class="row" style="margin-top:6px"><button class="sm" data-an="${htmlText(s.name)}" ${s.images ? '' : 'disabled'}>Analyze</button><button class="sm" data-use="${htmlText(s.name)}" ${s.images ? '' : 'disabled'}>Use in Director</button></div>`;
     box.appendChild(d);
   }
 }
 $('styles').addEventListener('click', e => {
-  const an = e.target.dataset.an, mt = e.target.dataset.mt;
+  const an = e.target.dataset.an, use = e.target.dataset.use;
   if (an) busy(e.target, async () => { $('matchlog').textContent = 'Analyzing ' + an + '...'; const r = await api('/api/styles/analyze', { name: an }); $('matchlog').textContent = `${r.analyzed} images -> ${r.looks.map(l => l.id + ' (' + l.images + ')').join(', ')}`; await loadStyles(); });
-  if (mt) { if (!ST || !ST.studio.rig) return toast('Build a rig first, then match it'); api('/api/style/match', { name: mt, rounds: 3 }).catch(err => toast(err.message)); pollMatch(); }
+  if (use) { $('directorStyle').value = use; $('prompt').focus(); document.querySelector('.promptbar').scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }
 });
-async function pollMatch() { for (;;) { await new Promise(r => setTimeout(r, 2500)); const j = await api('/api/style/match').catch(() => null); if (!j) return; $('matchlog').textContent = j.log.join('\n'); if (!j.running) { await loadStudio(); return; } } }
-
 /* ---------- prompt box ---------- */
 let attached = [], running = false;
 const log = $('log');
@@ -1137,7 +1193,7 @@ $('materialDrop').ondrop = async e => {
 };
 $('materialClearImages').onclick = () => { materialImages = []; renderMaterialImages(); };
 $('materialsWorkspace').addEventListener('paste', e => { const files = [...e.clipboardData.files].filter(f => /^image\/(png|jpeg|webp)$/.test(f.type)); if (files.length) { e.preventDefault(); queueMaterialImages(files).catch(err => toast(err.message)); } });
-$('referencesWorkspace').addEventListener('paste', e => { const f = [...e.clipboardData.files].filter(f => f.type.startsWith('image/')); if (!f.length) return; e.preventDefault(); if (document.activeElement === $('styleName') || document.activeElement === $('styleDrop')) addStyleImages(f); else $('photoDrop').dispatchEvent(new CustomEvent('referencepaste', { detail: f[0] })); });
+$('styleLibraryFold').addEventListener('paste', e => { const f = [...e.clipboardData.files].filter(file => /^image\/(png|jpeg|webp)$/.test(file.type)); if (!f.length) return; e.preventDefault(); addStyleImages(f); });
 function materialLine(kind, value) { const p = document.createElement('p'); p.className = `material-line ${kind}`; p.textContent = value; $('materialChatLog').querySelector('.chat-empty')?.remove(); $('materialChatLog').appendChild(p); p.scrollIntoView({ block: 'nearest' }); }
 async function sendMaterialPrompt() {
   const text = $('materialPrompt').value.trim(); if ((!text && !materialImages.length) || materialRunning) return;
@@ -1169,18 +1225,48 @@ $('attach').onclick = () => $('file').click(); $('file').onchange = e => { addFi
 $('prompt').addEventListener('paste', e => { const f = [...e.clipboardData.files]; if (f.length) { e.preventDefault(); addFiles(f); } });
 document.querySelector('.promptbar').addEventListener('dragover', e => e.preventDefault());
 document.querySelector('.promptbar').addEventListener('drop', e => { e.preventDefault(); addFiles([...e.dataTransfer.files]); });
-function setRunning(v) { running = v; $('send').disabled = v; $('stopBtn').disabled = !v; $('busy').textContent = v ? 'working...' : ''; }
+function setRunning(v) { running = v; $('send').disabled = v; $('stopBtn').disabled = !v; $('busy').textContent = v ? 'starting…' : ''; }
 async function sendPrompt(text) {
-  text = (text ?? $('prompt').value).trim(); if ((!text && !attached.length) || running) return;
-  add('msg u', text + (attached.length ? `  [${attached.length} image${attached.length > 1 ? 's' : ''}]` : '')); $('prompt').value = ''; $('examples').innerHTML = '';
-  const images = attached; attached = []; renderThumbs(); setRunning(true);
-  try { await api('/api/prompt', { text, images }); } catch (e) { add('tl err', e.message); setRunning(false); return; }
-  let since = 0, bubble = null;
+  text = (text ?? $('prompt').value).trim();
+  const reference = window.directorPhoto?.image || null;
+  const matchReference = !!reference && $('referenceUse').value === 'match';
+  const styleName = $('directorStyle').value;
+  const directMatch = matchReference && attached.length === 0 && !styleName;
+  if ((!text && !attached.length && !reference && !styleName) || running) return;
+  const label = [text || (matchReference ? 'Match this look' : 'Use selected reference'), reference ? 'reference image' : '', styleName ? `style: ${styleName}` : ''].filter(Boolean).join(' · ');
+  add('msg u', label); $('examples').innerHTML = '';
+  if (directMatch) {
+    setRunning(true);
+    const goal = $('lightingFocus').selectedOptions[0]?.textContent;
+    const brief = [text, $('lightingFocus').value !== 'auto' ? `Scene goal: ${goal}.` : ''].filter(Boolean).join(' ');
+    try {
+      const result = await window.directorPhoto.start({ brief, framing: $('photoFraming').checked, quality: $('photoQuality').value });
+      if (result.phase === 'complete') { add('msg a', 'Lighting match applied. Compare the KeyShot previews below, or undo the look.'); $('prompt').value = ''; }
+      else if (result.phase === 'canceled' || result.phase === 'restored') add('tl', 'Lighting match stopped and the scene was restored.');
+    }
+    catch (e) { add('tl err', e.message); }
+    finally { setRunning(false); await loadStudio().catch(() => {}); }
+    return;
+  }
+  const images = [...(reference ? [reference] : []), ...attached].slice(0, 8);
+  const styleInstruction = styleName ? `Use the saved style folder named ${JSON.stringify(styleName)}. Analyze it if needed, build a suitable lighting rig, then match the style and check the render.` : '';
+  const referenceInstruction = matchReference ? `Match the lighting and mood of the first attached image. ${$('photoFraming').checked ? 'Match framing too.' : 'Keep the current camera angle and framing.'} Use ${$('photoQuality').value} refinement. The other images are supporting context.` : '';
+  const requestText = [text || (matchReference ? 'Match this look.' : styleName ? 'Create a scene in this style.' : ''), referenceInstruction, styleInstruction].filter(Boolean).join('\n');
+  attached = []; renderThumbs(); setRunning(true);
+  try { await api('/api/prompt', { text: requestText, images, lighting_focus: $('lightingFocus').value }); $('prompt').value = ''; } catch (e) { add('tl err', e.message); setRunning(false); return; }
+  let since = 0, pollFailures = 0;
   for (;;) {
-    await new Promise(r => setTimeout(r, 700)); let j; try { j = await api('/api/prompt?since=' + since); } catch { continue; } since = j.next;
+    await new Promise(r => setTimeout(r, 700)); let j;
+    try { j = await api('/api/prompt?since=' + since); pollFailures = 0; }
+    catch (e) {
+      if (++pollFailures >= 8) { add('tl err', 'Director status stopped responding. The request may still be running; use Stop before sending another.'); setRunning(false); return; }
+      continue;
+    }
+    since = j.next;
     for (const ev of j.events) {
       if (ev.type === 'text') add('msg a', ev.text);
-      else if (ev.type === 'tool') add('tl', '> ' + ev.name + ' ' + (Object.keys(ev.input || {}).length ? JSON.stringify(ev.input) : ''));
+      else if (ev.type === 'mode') $('busy').textContent = ev.mode === 'ChatGPT (Codex CLI)' ? 'ChatGPT is thinking…' : ev.mode === 'claude (signed-in CLI)' ? 'Claude is thinking…' : 'working…';
+      else if (ev.type === 'tool') { $('busy').textContent = `Using ${ev.name.replaceAll('_',' ')}…`; add('tl', '> ' + ev.name + ' ' + (Object.keys(ev.input || {}).length ? JSON.stringify(ev.input) : '')); }
       else if (ev.type === 'result') { add('tl' + (ev.ok ? '' : ' err'), (ev.ok ? '  ok: ' : '  failed: ') + ev.summary); if (ev.image) { const im = document.createElement('img'); im.src = ev.image; log.appendChild(im); log.scrollTop = log.scrollHeight; } }
       else if (ev.type === 'error') add('tl err', ev.message);
     }
@@ -1190,7 +1276,7 @@ async function sendPrompt(text) {
 }
 $('send').onclick = () => sendPrompt();
 $('prompt').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendPrompt(); } });
-$('stopBtn').onclick = () => api('/api/prompt/stop', {});
+$('stopBtn').onclick = () => window.directorPhoto?.running ? window.directorPhoto.stop() : api('/api/prompt/stop', {});
 $('newchat').onclick = async () => { await api('/api/prompt/reset', {}); log.innerHTML = ''; showExamples(); };
 const EXAMPLES = ['Soft studio light with crisp edges', 'A close-up of the top detail', 'Duplicate my product for a three-piece composition', 'Dark, cinematic reflections', 'Slow hero push-in'];
 function showExamples() { const e = $('examples'); e.innerHTML = ''; for (const t of EXAMPLES) { const b = document.createElement('button'); b.className = 'sm ex'; b.textContent = t; b.onclick = () => { $('prompt').value = t; $('prompt').focus(); }; e.appendChild(b); } }
@@ -1245,7 +1331,7 @@ $('vstop').onclick = () => { api('/api/video/stop', {}); api('/api/render/stop',
 /* ---------- connect line: the one-liner for KeyShot's scripting console, with a Copy button ---------- */
 let CONNECT = '';
 async function loadConnect() {
-  try { CONNECT = (await api('/api/connect')).line; document.querySelectorAll('.cline').forEach(e => (e.textContent = CONNECT)); } catch { /* server not up yet */ }
+  try { CONNECT = (await api('/api/connect')).line; document.querySelectorAll('.cline').forEach(e => (e.textContent = CONNECT)); $('connectQuick').disabled = false; } catch { /* server not up yet */ }
 }
 document.addEventListener('click', async e => {
   const b = e.target.closest('[data-copy]'); if (!b || !CONNECT) return;
@@ -1277,21 +1363,41 @@ async function loadConfig() {
 $('cliRecheck').onclick = e => busy(e.target, async () => { await api('/api/config', { engine: $('engine').value, cliPath: $('cliPath').value.trim(), codexPath: $('codexPath').value.trim(), recheck: true }); await loadConfig(); });
 $('settingsBtn').onclick = () => { $('apikey').value = ''; $('settings').showModal(); };
 $('closeSettings').onclick = () => $('settings').close();
-$('disconnectBtn').onclick = e => busy(e.target, async () => { await api('/api/bridge/stop', {}); toast('Bridge stopped. In KeyShot, run the launcher again to reconnect.'); });
+$('disconnectBtn').onclick = e => busy(e.target, async () => { const result = await api('/api/bridge/stop', {}); toast(result.note || (result.ok ? 'Bridge stopped.' : 'The bridge stop was not confirmed.')); });
 $('restartBtn').onclick = async () => { try { await api('/api/quit', { restart: true }); } catch { /* server already going down */ } toast('Restarting... this page reconnects by itself'); $('settings').close(); };
 $('quitBtn').onclick = async () => { if (!confirm('Quit KeyShot Director? Start it again from its app folder.')) return; try { await api('/api/quit', {}); } catch { /* going down */ } document.body.innerHTML = '<div style="padding:40px;font:14px Helvetica">KeyShot Director has quit. Close this tab. Start it again from its app folder.</div>'; };
 $('saveSettings').onclick = async () => { const b = { model: $('model').value, codexModel: $('codexModel').value.trim(), engine: $('engine').value, cliPath: $('cliPath').value.trim(), codexPath: $('codexPath').value.trim() }; if ($('apikey').value.trim()) b.apiKey = $('apikey').value; await api('/api/config', b); await loadConfig(); $('settings').close(); toast(CFG.engine === 'offline' ? 'Saved. Still in offline mode.' : 'Saved. Prompts will use ' + (CFG.provider === 'codex' ? 'ChatGPT (Codex)' + (CFG.codexModel ? ' · ' + CFG.codexModel : ' default model') + '.' : 'Claude.')); };
 
 /* ---------- connection, preview loop ---------- */
 let booted = false;
+const sceneContextRefresh = $('sceneContextRefresh');
+let sceneContextRefreshing = false;
+sceneContextRefresh.onclick = async () => {
+  sceneContextRefreshing = true;
+  sceneContextRefresh.disabled = true;
+  $('sceneContextStatus').textContent = 'Reading the current scene…';
+  try {
+    renderSceneContext(await api('/api/scene-context'));
+    $('sceneContextStatus').textContent = 'Snapshot refreshed';
+  } catch (error) {
+    $('sceneContextOutput').replaceChildren();
+    delete $('sceneContextOutput').dataset.loaded;
+    $('sceneContextStatus').textContent = error.message;
+  } finally { sceneContextRefreshing = false; sceneContextRefresh.disabled = $('status').textContent !== 'KeyShot connected'; }
+};
 async function tick() {
   try {
     const s = await api('/api/status'); $('dot').className = 'dot' + (s.bridge.alive ? ' ok' : '');
     $('status').textContent = s.bridge.alive ? 'KeyShot connected' : 'KeyShot bridge not running';
+    sceneContextRefresh.disabled = !s.bridge.alive;
+    if (!s.bridge.alive) $('sceneContextStatus').textContent = $('sceneContextOutput').dataset.loaded ? 'Disconnected · last snapshot may be stale' : 'Connect KeyShot to inspect';
+    else if (!sceneContextRefreshing && $('sceneContextStatus').textContent === 'Connect KeyShot to inspect') $('sceneContextStatus').textContent = 'Ready to inspect';
+    else if (!sceneContextRefreshing && $('sceneContextStatus').textContent.startsWith('Disconnected')) $('sceneContextStatus').textContent = 'Connection restored · refresh the snapshot';
+    $('connectQuick').hidden = s.bridge.alive;
     if (!s.bridge.alive && !tick.opened) { tick.opened = true; $('connectFold').open = true; } if (s.bridge.alive) tick.opened = false;
     if (s.bridge.alive && !booted) { booted = true; await syncPose(); loadMotions().catch(() => {}); $('recipe').value = $('recipe').value || ''; }
     if (!qrDone && s.ips.length) { qrDone = true; const u = `http://${s.ips[0]}:${s.port}`; try { new QRCode($('qr'), { text: u, width: 120, height: 120 }); } catch { /* offline: no QR library */ } $('qrurl').textContent = u; }
-  } catch { $('dot').className = 'dot'; $('status').textContent = 'server not reachable'; }
+  } catch { $('dot').className = 'dot'; $('status').textContent = 'server not reachable'; sceneContextRefresh.disabled = true; }
 }
 setInterval(tick, 1500); tick();
 const img = $('shot');
@@ -1303,5 +1409,6 @@ loadStudio().catch(() => {}); loadMaterials().catch(() => {}); loadMaterialAsset
 setInterval(() => { if (ST === null) loadStudio().catch(() => {}); }, 3000);
 </script>
 <script src="/photo-ui.js"></script>
+<script src="/lighting-lab-ui.js"></script>
 </body>
 </html>

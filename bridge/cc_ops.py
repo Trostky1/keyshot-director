@@ -1,4 +1,5 @@
 # cc_ops.py - command implementations, hot-reloaded by cc_bridge.py when this file changes.
+# Included operation modules are exec-loaded together whenever this registry reloads.
 # Namespace provides: lux, luxmath, os, json, time, shutil, math, SHOTS, INITIAL (dict or None)
 # DEV NOTE: the 'exec' op runs arbitrary Python inside KeyShot when a file is dropped in bridge\cmd. It is for local
 # development only and is OFF unless the file bridge\dev.flag exists (that file is never shipped).
@@ -78,7 +79,10 @@ def op_screenshot(c):
     dst = os.path.join(SHOTS, c.get("name", "shot") + ".png")
     w = int(c.get("width", 640))
     h = int(c.get("height", round(w * 9 / 16 / 2) * 2))
-    opts = lux.getRenderOptions()
+    # Render through a detached options object so a preview cannot silently change the user's
+    # active KeyShot render settings. RenderOptions itself is not copyable with copy.copy().
+    current = lux.getRenderOptions()
+    opts = lux.RenderOptions(current.getDict())
     opts.setOutputAlphaChannel(False)
     opts.setMaxTimeRendering(float(c.get("secs", 1.2)))
     lux.renderImage(path=dst, width=w - (w % 2), height=h - (h % 2), opts=opts)
@@ -240,4 +244,8 @@ MATERIAL_FILE = os.path.join(os.path.dirname(SHOTS), "cc_materials.py")
 with open(MATERIAL_FILE, "r", encoding="utf-8-sig") as _f:
     exec(compile(_f.read(), MATERIAL_FILE, "exec"), globals())
 OPS.update(MATERIAL_OPS)
-# edit stamp for companion modules: 68 (template-driven procedural displacement blend)
+CONTEXT_FILE = os.path.join(os.path.dirname(SHOTS), "cc_scene_context.py")
+with open(CONTEXT_FILE, "r", encoding="utf-8-sig") as _f:
+    exec(compile(_f.read(), CONTEXT_FILE, "exec"), globals())
+OPS.update(SCENE_CONTEXT_OPS)
+# edit stamp for companion modules: 105 (omit unavailable active context labels)

@@ -1,57 +1,47 @@
-# KeyShot Director - roadmap
+# KeyShot Director roadmap
 
-> Next big item: native timeline animation via animated glTF import. See `GLTF_ROUTE_BRIEF.md` (rough brief + experiments, written to hand to a planning model).
+## Product direction
 
-Goal: an app on the second monitor / phone that drives the user's open KeyShot, so an AI (Claude) can create and execute camera moves, lighting, part motion and whole shots from plain language and from a reference image or video - "Vizcom for KeyShot animation".
+Help a designer understand a lighting reference, build a convincing native KeyShot setup around their own product, and refine it from real render evidence. Keep the product and source materials intact, make scene changes reviewable, and be clear about what KeyShot does not expose.
 
-## Where we are (done)
-- In-KeyShot bridge (message-pumped loop, hot-reloaded ops) + Node server + web UI (live preview, sliders, presets, saved views, JSON shot recipe, QR for phone).
-- Proven: exact 360 orbit, real-time shot playback (viewport ~4-6 fps), safe camera reset, live viewport screenshots.
+Lighting and mood recreation remain the main product priority. Camera framing, materials, and staging should improve the lighting workflow rather than compete with it.
 
-## PRIORITY CHANGE (user): lighting is the most important part - "take the headache out of professional studio-grade lighting". Camera/animation is easier for the AI. Lighting engine goes right after Phase 2.
+## Current foundation
 
-## Lighting engine - proven by spike (Oct 8)
-- Softbox = imported flat OBJ plane (bridge/assets/cc_light_panel.obj, 100x100 mm, +Z normal) + library material "Area Light 1200 Lumen Neutral" (setObjectMaterial by object ID; the library material gets copied into the scene as "... #1"). Placed with node.applyTransform(M, absolute=True) on the OBJECT node (find(name=..., types=lux.NODE_TYPE_OBJECT)) - the group node refuses absolute transforms. Orientation via luxmath rotateAroundAxis(cross(+Z, dir), angle). Placement read back exactly.
-- Import defaults MUST be overridden or KeyShot moves the camera/environment: adjust_camera_look_at, adjust_environment, camera_import, center_geometry, snap_to_ground = False; geometry_units=1000 (mm scene).
-- Environments: lux.newEnvironment(name, activate, clone) + Env.setLightingEnvironment(path) / setBrightness / setRotation / setBackgroundColor / ground shadows. Library has 32 studio HDRIs (3 Point, Light Tent, Overhead/Side Panels, Zebra Stripes, gradients) + 65 total.
-- Library light materials (77): Area Light 1200 Lumen Cool/Neutral/Warm/White, Emissive *, Point Light *, Spotlight 15-120 deg, fixtures. Light presets: Performance Mode, Basic, Product, Interior, Jewelry. Image style: bloom, vignette, curve (photographic only), denoise.
-- Cleanup is clean: delete our nodes (find by name, node.delete()), setActiveEnvironment back, removeEnvironment, deleteMaterial. Leaves one blank "" scene-material entry and the deleted object ID in getObjects().
-- Next: rig engine (named lights in spherical coords around the subject bbox: softbox/strip/spot/rim/kicker/flag), rig presets (hero soft 3-point, dark moody single softbox, high-key, edge/rim for glass, e-commerce), light registry + non-destructive group, UI panel, AI-callable API.
+- **Live KeyShot control:** a local Node app and an in-KeyShot Python bridge provide camera, environment, lighting, material, scene-staging, preview, and render operations. The bridge executes in KeyShot's scripting thread.
+- **Lighting:** product-scaled Area, Point, Spotlight, and installed IES fixtures; reusable studio and mood rigs; environment brightness and exposure; light behavior controls; typed playbooks for catalog, hero, macro, low-key, color, glass, and reflective materials.
+- **Reference matching:** still-photo and reference-folder workflows estimate measurable lighting and tone, apply a real KeyShot rig, and can refine from actual previews. Local lighting evidence supports beauty, Clown, Direct, Indirect, Reflection, Shadow, Raw, Depth, and Normals captures where the installed renderer exposes them.
+- **Scene awareness:** the read-only `scene_context` snapshot supplies selected part paths, bounds, assigned materials, camera/lens, environment, scene units, and render details to relevant agent workflows. The Studio inspector exposes the same facts on demand; chat and the Detail close-up button can frame exactly one selected part. Chat or the Studio rig target checkbox can scale a preset around one selected part; selected-rig exposure uses its projected bounds when available and reports a whole-product fallback otherwise. Normal presets continue to target the whole product.
+- **Materials:** the Material Lab inspects live graphs, copies source materials before edits, imports bounded PBR texture sets, and supports separate bump/normal and geometric displacement paths. Displacement defaults are deliberately small; geometry execution is explicit and guarded.
+- **Framing and motion:** full-product and detail framing, live camera controls, camera-motion recipes, reference-video analysis, and frame-by-frame KeyShot video rendering.
+- **Scene staging:** bounded object inventory, transforms, independent copies, simple set pieces, and session-local undo.
 
-## Phase 2 - direct manipulation (like the friend's app)  [DONE: drag orbit / wheel zoom / right-drag pan / touch / record / smooth / replay]
-- Drag/scroll/pinch in the app viewport = orbit / pan / zoom the KeyShot camera.
-- Record the motion into a shot recipe (path capture), then smooth, retime, ease, replay.
-- Problem: KeyShot setters cost 100-250ms, so dragging would lag. Fix: export the product to glTF (lux.exportFile EXPORT_GLTF) and show a WebGL proxy in the app. The proxy responds instantly and records at full rate; KeyShot follows at its own pace; final output is rendered offline at exact time steps.
-- Later: phone gyro (DeviceOrientation) for the AR-style hand-held feel (needs HTTPS on the phone).
+The current feature and evidence inventory is in [the full audit](docs/FEATURE_AUDIT_AND_KEYSHOT_CONTEXT.md). See the [lighting and mood research](docs/LIGHTING_AND_MOOD_DEEP_DIVE.md), [materials and displacement research](docs/MATERIALS_AND_DISPLACEMENT_DEEP_DIVE.md), and [photo workflow](docs/PHOTO_WORKFLOW.md) for details and limits.
 
-## Phase 3 - render pipeline
-- Shot recipe -> frames at fixed time steps (renderImage / renderFrames) -> video (encodeVideo). Resolution, fps, quality presets, queue.
-- Probe createAnimation (editable KeyShot timeline animations) - never call lux.getAnimations (native crash on this scene).
+## Next: make lighting more scene-aware
 
-## Phase 4 - knowledge layer from the professor's Render Guide (https://www.subinay.com/render-toolkit)
-- Nine standard angles (Hero 3/4, front elevation, profile, high 3/4, top-down, low hero, rear 3/4, macro...) as shot presets; azimuth/inclination/twist/focal length/framing/shift X-Y, matching his "Copy shot recipe" fields (add twist/roll, focal length, shift to our recipe).
-- Lens rules: 70-135mm for product; 24-35mm only for drama/scale; 200mm+/ortho for elevations and spec views; change focal length and distance together to keep framing; hero near 30-40 deg azimuth, camera slightly above midline; keep height and lens consistent across a set.
-- Sequence: establish, explain, prove, close. Proof shots: macros, exploded/ghosted, colorway lineups. Plan negative space for type; treat the logo as a material.
-- Lighting: same product + camera under different environments; light must suit the material (metal vs plastic vs fabric).
-- Use as principles for the AI; ask the professor before redistributing his data.
+1. **Verify the context view in a live scene.** Confirm that selection, part path, material, units, camera, and environment remain accurate after normal user changes. Keep inspection manual and bounded so it does not interrupt KeyShot.
+2. **Validate selected-target lighting.** The code now accepts an explicit selected-part target, uses its measured bounds for rig scale/aim and approximate projected-region exposure metering, and retains that target for edits within the current Director session. Compare the live close-up and full-product render before claiming improved lighting. Ask for a semantic label when the CAD name is opaque; do not infer buttons, bevels, logos, or grips from bounds alone.
+3. **Refine from diagnostic evidence.** Use product-masked Direct, Reflection, and Shadow evidence to distinguish illumination, highlight shape, and softness. Compare same-look repeats to account for render noise; do not score pixels outside a reliable product mask.
+4. **Build material-aware recipes from controlled comparisons.** Compare representative reflective metal, glossy polymer, matte polymer, and transparent materials at full-product and close-up scales. Record what generalizes and what remains scene-specific.
+5. **Improve reference interpretation.** Keep key direction, source size, fill, environment brightness, shadow character, color, and camera crop as separate decisions. Report uncertainty when the reference background or product mask is ambiguous.
 
-## Phase 5 - scene control (beyond the camera)
-- Bridge ops for environments (HDRI, rotation, brightness, ground, backdrop color), lighting presets, material swaps, part show/hide/move/scale (exploded views), model sets, image styles.
-- describe_scene so the AI knows the product parts and materials.
+## Then: broaden reliable scene understanding
 
-## Phase 6 - reference ingestion (the Vizcom part)
-- Image first: estimate camera angle/lens/framing, light direction + softness + contrast, background, mood -> pick HDRI/rotation/brightness, materials, framing.
-- Video: cut detection, per-shot move classification (orbit, push-in, crane, whip), timing/easing, speed ramps -> recipe. Camera-solve (COLMAP/DPVO style) only as an optional upgrade; clean product renders track poorly.
-- Honest limit: exact lighting/material match from a picture is approximate.
+- Use existing render layers and user-confirmed aliases to connect a visual region to a named part. Clown colors can help mask material regions but are not object IDs.
+- Add on-demand material-graph and texture-mapping summaries for the selected part, including map role, bit depth, scale, and displacement-to-Geometry path where those values are exposed.
+- Calibrate displacement on representative assets with the user's Advanced Plastic and Realistic Plastic graphs. Keep map, bump, and geometric relief roles distinct, preserve original files, and require explicit execution.
+- Expand lighting presets only when controlled render evidence explains why they work. Keep shot scale, mood, source type, and material response as separate recipe axes.
 
-## Phase 7 - closed loop
-- Execute -> screenshot -> a vision model compares to the reference -> adjust -> repeat. Screenshot is ~55ms, so iteration is cheap. This loop is what makes results converge.
+## Boundaries
 
-## Phase 8 - polish
-- Proper packaged KeyShot script, one-click bridge launch, shot library, shareable recipes, multi-product support.
+- A scene tree, node name, material, and bounding box do not reveal the semantic identity or surface normal of a button, bevel, logo, or grip.
+- KeyShot scripting operations run on the application thread. Long renders, repeated captures, other scripts, or dialogs can interrupt the user's work; prefer one bounded operation and explicit refreshes.
+- Director does not save the user's scene. The user reviews and saves results in KeyShot.
+- Native per-part Light Layers, arbitrary hidden APIs, and editable native timeline animation are not claimed unless a supported operation is proven on the installed KeyShot build.
+- Reference recreation is an evidence-guided approximation; exact scene reconstruction from a photograph is not promised.
+- The local-network app is intended for a trusted network and has no multi-user authentication. Provider requests should receive only the scene context needed for the task.
 
-## Standing risks
-- KeyShot main-thread scripting: don't run other scripts / open dialogs while the bridge runs; always save first.
-- No headless on this license; live GUI only.
-- Camera setters are slow; viewport preview is low fps.
-- Friend's code (when it arrives) may show a faster/safer mechanism.
+## Final distribution step
+
+After the audit and implementation pass is complete, create a one-click desktop launcher, perform the final source and package review, and then publish the completed update to GitHub.
