@@ -18,4 +18,11 @@ jobs:
         with:
           node-version: 22
       - name: Run isolated agent, photo, staging, image and material workflow checks
-        run: node --test tools/test_agent_lighting_fallback.js tools/test_photo.js tools/test_staging_cli.js tools/test_image_tools.js tools/test_material_textures.js tools/test_texture_edit.js
+        run: node --test tools/test_agent_lighting_fallback.js tools/test_photo.js tools/test_photo_refinement.js tools/test_lighting_measurements.js tools/test_style_measurements.js tools/test_package_contract.js tools/test_staging_cli.js tools/test_image_tools.js tools/test_material_textures.js tools/test_texture_edit.js
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Check material edit recovery with an isolated KeyShot substitute
+        run: |
+          python tools/test_material_receipts.py
+          python tools/test_lighting_camera.py

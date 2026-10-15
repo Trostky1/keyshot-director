@@ -1932,6 +1932,34 @@ def op_lighting_configure_scene_mm(c):
             "before_signature": _lighting_hash(before), "after_signature": _lighting_hash(after)}
 
 
+def _lighting_camera_observation(camera):
+    """Fail closed when pose or the already-used scene-context lens surface is unreadable."""
+    def finite(value):
+        return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
+    if not isinstance(camera, dict):
+        return None
+    for key in ("pos", "pivot", "dir", "lookat", "up"):
+        values = camera.get(key)
+        if not isinstance(values, (list, tuple)) or len(values) != 3 or not all(finite(v) for v in values):
+            return None
+    if not all(finite(camera.get(key)) for key in ("dist", "fov", "focal")):
+        return None
+    try:
+        # Reuse the project's supported, read-only context API instead of guessing lens methods.
+        observed = op_scene_context({}).get("camera", {})
+        parameters = observed.get("lens_parameters")
+        if not isinstance(parameters, dict) or "shift" not in parameters:
+            return None
+        shift = parameters["shift"]
+        shift_valid = all(finite(v) for v in shift) and len(shift) > 0 if isinstance(shift, (list, tuple)) else finite(shift)
+        lens_type = observed.get("lens_type")
+        if not shift_valid or (not isinstance(lens_type, str) or not lens_type.strip()) and not isinstance(parameters.get("perspective"), bool):
+            return None
+        return {"pose": camera, "lens_type": lens_type, "lens_parameters": parameters}
+    except Exception:
+        return None
+
+
 def op_lighting_render_passes(c):
     """Capture bounded beauty and diagnostic passes with detached render options; never changes or saves the scene."""
     run_id = str(c.get("run_id", ""))
@@ -1948,8 +1976,8 @@ def op_lighting_render_passes(c):
         seconds = float(c.get("secs", 2.0))
     except (TypeError, ValueError):
         raise ValueError("width and height must be even integers; secs must be numeric")
-    if width < 320 or width > 1280 or height < 200 or height > 960 or width % 2 or height % 2:
-        raise ValueError("render dimensions must be even and within 320x200 to 1280x960")
+    if width < 32 or width > 1280 or height < 32 or height > 960 or width % 2 or height % 2 or width * height > 4000000:
+        raise ValueError("render dimensions must be even and within 32x32 to 1280x960, at most 4 million pixels")
     if seconds < 0.5 or seconds > 8.0:
         raise ValueError("secs must be between 0.5 and 8 seconds")
     render_engine = str(c.get("render_engine", "current")).lower()
@@ -1973,6 +2001,44 @@ def op_lighting_render_passes(c):
     current = lux.getRenderOptions()
     before_options = current.getDict()
     before_state = _lighting_render_state()
+    camera_observation = _lighting_camera_observation(before_state.get("camera"))
+    geometry_identity = None
+    try:
+        product_nodes = []
+        for node in _scene_nodes():
+            if not node.isObject():
+                continue
+            cursor = node
+            director_light = False
+            visited = set()
+            while cursor is not None:
+                cursor_id = str(cursor.getID())
+                if cursor_id in visited:
+                    raise RuntimeError("Scene parent traversal contains a cycle")
+                visited.add(cursor_id)
+                if (cursor.getName() or "").startswith(PREFIX):
+                    director_light = True
+                    break
+                try: cursor = cursor.getParent()
+                except Exception: cursor = None
+            if director_light:
+                continue
+            product_nodes.append({"id": str(node.getID()), "name": node.getName(),
+                                  "transform": list(node.getTransform(world=True).val()),
+                                  "material": _material_name(lux.getObjectMaterial(node.getID()))})
+        geometry_identity = _lighting_hash(sorted(product_nodes, key=lambda item: item["id"]))
+    except Exception:
+        # Missing observations invalidate strict paired comparison rather than claiming compatibility.
+        pass
+    target = c.get("measurement_target")
+    if target is not None:
+        region = target.get("region") if isinstance(target, dict) else None
+        if (not isinstance(region, dict) or not isinstance(target.get("id"), str) or
+                not target.get("id") or not isinstance(target.get("identity"), str) or not target.get("identity") or
+                any(not isinstance(region.get(k), (int, float)) or not math.isfinite(region[k]) or
+                    not 0 <= region[k] <= 1 for k in ("x0", "y0", "x1", "y1")) or
+                region["x0"] >= region["x1"] or region["y0"] >= region["y1"]):
+            raise ValueError("measurement_target requires an identity and normalized projected bounds")
     # Clone the current settings, then explicitly disable every pass before enabling the requested set.
     # This preserves all user settings while avoiding inherited pass outputs and global option mutation.
     opts = lux.RenderOptions(before_options)
@@ -2034,11 +2100,27 @@ def op_lighting_render_passes(c):
     after_state_hash = _lighting_hash(after_state)
     before_fingerprint, before_render_metadata = _lighting_render_fingerprint(before_state)
     after_fingerprint, after_render_metadata = _lighting_render_fingerprint(after_state)
+    scene_info = before_state.get("scene") or {}
+    compatibility = None
+    # Missing observations cannot establish that two views are comparable.
+    if (geometry_identity is not None and camera_observation is not None and "read_error" not in scene_info):
+        compatibility = {
+            "camera_hash": _lighting_hash(camera_observation),
+            "scene_identity_hash": _lighting_hash({key: scene_info.get(key) for key in
+                ("file", "file name", "filename", "unit", "unitScale")}),
+            "render_options_hash": before_option_hash,
+            "geometry_identity_hash": geometry_identity,
+            "render_engine": engine_during,
+            "width": width, "height": height, "max_render_seconds": seconds,
+        }
     return {"schema_version": "1.0", "run_id": run_id, "requested_passes": requested,
             "width": width, "height": height, "max_render_seconds": seconds, "elapsed_seconds": elapsed,
             "render_engine_requested": render_engine, "render_engine_values": engine_values,
             "render_engine_before": engine_before, "render_engine_during": engine_during,
             "render_engine_after": engine_after,
+            "capture_metadata": {"schema_version": "1.0", "compatibility": compatibility,
+                                 "measurement_target": target,
+                                 "identity_limit": "Camera and scene-unit/file identity are observed; projected bounds do not verify pixel-to-object identity."},
             "files": found, "missing_passes": missing,
             "scene_unchanged": before_fingerprint == after_fingerprint,
             "scene_raw_unchanged": before_state_hash == after_state_hash,

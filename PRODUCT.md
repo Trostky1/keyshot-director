@@ -19,7 +19,9 @@ Choose a reference product photograph, describe the lighting qualities to borrow
 
 ## Primary workflow
 
-Reference + brief → scene inspection and rollback checkpoint → visual lighting plan → custom product-scaled area lights and environment → real renderer preview → optional single visual refinement → compare, tune or undo.
+Reference + brief → scene inspection and rollback checkpoint → visual lighting plan → custom product-scaled native lights and environment → real renderer preview → optional bounded measured refinement → compare, tune or undo.
+
+Measured refinement requires an explicit reference region and objective. Keep the best result only when comparable target-region evidence improves beyond repeat-render variation. Report projection/occlusion uncertainty and keep the first look when evidence is unavailable. Materials explain actual graph connections and provide verified session recovery only for supported operations.
 
 No reference-matching percentage or unsupported quality guarantee. Final-resolution output remains KeyShot's job in this iteration; downloadable images are explicitly previews.
 

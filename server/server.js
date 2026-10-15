@@ -16,6 +16,7 @@ const { RIGS, ENV_RIGS, buildRig, toPos } = require('./rigs');
 const lightingPlaybooks = require('./lighting-playbooks');
 const { decode, productStats } = require('./png');
 const style = require('./style');
+const { runStyleSearch } = require('./style-search');
 const { createLightingLab } = require('./lighting-lab');
 const video = require('./video');
 const janitor = require('./janitor');
@@ -123,11 +124,31 @@ async function measure(settleMs = 2500, { subject = null, pose = null } = {}) {
     : subject ? 'whole-product fallback (selected crop unavailable)' : 'whole-product region';
   return { ...stats, measurement_scope: scope };
 }
-// Score the live viewport against a style folder's looks; returns the closest look, its distance, and per-feature deltas.
+async function captureStyleMeasurement(previousRunId = null) {
+  let record;
+  if (previousRunId) record = await lightingLab.replay({ run_id: previousRunId });
+  else {
+    const scene_context = await send('scene_context', {}, 15000), subject = await ensureSubject(true), pose = await readPose();
+    const size = scene_context.render?.image_size;
+    const aspect = size?.[0] > 0 && size?.[1] > 0 ? size[0] / size[1] : 16 / 9;
+    const dimensions = photo.captureDimensions(aspect);
+    const measurement_target = photo.measurementTarget({ scene_context, subject }, pose, dimensions.width / dimensions.height);
+    record = await lightingLab.run({ operation_id: 'lighting.capture_diagnostic_passes', inputs: {
+      passes: ['clown', 'direct'], ...dimensions, secs: 2, render_engine: 'current', measurement_target
+    } });
+  }
+  if (record.status !== 'verified_shape' || !record.output?.analysis?.available)
+    throw new Error(record.error || 'Style measurements did not pass capture validation.');
+  const files = record.output.files, beauty = files.find(file => file.pass === 'beauty'), clown = files.find(file => file.pass === 'clown');
+  const features = style.features(decode(fs.readFileSync(beauty.path)), {
+    mask: decode(fs.readFileSync(clown.path)), region: record.inputs.measurement_target?.region
+  });
+  return { features, run_id: record.id, comparison: record.output.analysis.comparison_to?.result || null };
+}
+// Style-folder reference regions remain inferred; live target pixels come from Clown plus bounds.
 async function scoreLive(name, settleMs = 2500) {
   await sleep(settleMs);
-  const r = await send('screenshot', { name: 'style_score', width: 640, secs: 1.5 }, 30000);
-  const f = style.features(decode(fs.readFileSync(r.path)));
+  const { features: f } = await captureStyleMeasurement();
   const prof = style.loadProfile(name);
   const scored = prof.looks.map(l => ({ look: l.id, images: l.images.length, ...style.score(f, l.profile) })).sort((a, b) => a.distance - b.distance);
   return { style: name, best: scored[0], all: scored.map(s => ({ look: s.look, distance: s.distance })), features: f };
@@ -143,11 +164,10 @@ async function matchStyle(name, { look, rounds = 3, settle = 2200 } = {}) {
   try {
     if (!studio.rig || !studio.subject) throw new Error('build a rig first (e.g. Blank studio), then match it');
     const prof = style.loadProfile(name); let target = look && prof.looks.find(l => l.id === look);
-    const evalNow = async () => {
-      await sleep(150); const r = await send('screenshot', { name: 'match', width: 640, secs: 1.5 }, 30000);
-      const f = style.features(decode(fs.readFileSync(r.path)));
+    const evalNow = async ({ previousRunId }) => {
+      const measured = await captureStyleMeasurement(previousRunId), f = measured.features;
       if (!target) target = prof.looks.map(l => ({ l, s: style.score(f, l.profile).distance })).sort((a, b) => a.s - b.s)[0].l;
-      return style.score(f, target.profile);
+      return { ...style.score(f, target.profile), run_id: measured.run_id, comparison: measured.comparison };
     };
     let envMul = studio.envMultiplier ?? 1;
     const setEnv = async m => { envMul = m; await setEnvironmentMultiplier(m); };
@@ -158,27 +178,11 @@ async function matchStyle(name, { look, rounds = 3, settle = 2200 } = {}) {
       const key = Object.keys(studio.lights).find(i => studio.lights[i].role === 'key');
       if (key) params.push({ id: key + '.az', get: () => studio.lights[key].az, set: v => editLight(key, { az: v }), min: -80, max: 80, step: 18, mul: false });
     }
-    let best = await evalNow(); const start = best.distance;
-    say(`look "${target.id}" (${target.images.length} images) - start distance ${best.distance}`);
-    for (let round = 1; round <= rounds; round++) {
-      let improved = false;
-      for (const p of params) {
-        const cur = p.get();
-        for (const dir of [1, -1]) {
-          const cand = p.mul ? (cur === 0 ? (dir > 0 ? (p.seed ?? 0.1) : 0) : cur * Math.pow(p.step, dir)) : cur + dir * p.step;
-          if (cand === cur || cand < p.min || cand > p.max) continue;
-          await p.set(cand); const s = await evalNow();
-          if (s.distance < best.distance - 0.004) { say(`round ${round}: ${p.id} ${(+cur).toFixed(2)} -> ${(+cand).toFixed(2)}   distance ${best.distance} -> ${s.distance}`); best = s; improved = true; break; }
-          await p.set(cur);                                                  // revert and try the other direction
-        }
-      }
-      for (const p of params) p.step = p.mul ? 1 + (p.step - 1) * 0.55 : p.step * 0.55;      // finer steps next round
-      if (!improved && round > 1) break;
-    }
-    const final = await evalNow();
-    matchJob.result = { style: name, look: target.id, startDistance: start, finalDistance: final.distance, deltas: final.deltas, tuned: Object.fromEntries(params.map(p => [p.id, +(+p.get()).toFixed(3)])) };
-    say(`done: distance ${start} -> ${final.distance}`);
-  } catch (e) { matchJob.result = { error: e.message }; say('error: ' + e.message); }
+    const result = await runStyleSearch({ params, measure: evalNow, rounds: Math.max(1, Math.min(3, Math.floor(rounds) || 1)), onLog: say });
+    matchJob.result = { style: name, look: target.id, ...result,
+      limitation: 'Reference-folder product regions are inferred; this score is an approximate style objective, not photographic similarity.' };
+    say(`done: distance ${result.startDistance} -> ${result.finalDistance}; ${result.stopReason}`);
+  } catch (e) { matchJob.result = { ...(e.searchResult || {}), error: e.message }; say('error: ' + e.message); }
   finally { matchJob.running = false; tidyLater(); }
 }
 async function setExposure(x) {
@@ -425,12 +429,14 @@ async function applyPose(p) {
 
 let currentPhotoSnapshot = null;
 const photoDirector = photo.createDirector({
-  async snapshot() {
+  async snapshot({ signal } = {}) {
+    signal?.throwIfAborted();
     await syncFromKeyShot();
     const subject = await ensureSubject(true), camera = await readPose();
     let scene_context = null;
     try { scene_context = await send('scene_context', {}, 15000); } catch { /* Keep photo matching usable if optional context is unavailable. */ }
     const lights = await send('lights_list');
+    signal?.throwIfAborted();
     const checkpoint = await send('camera_checkpoint', {}, 30000);
     currentPhotoSnapshot = { subject, camera, scene_context, checkpoint, environment: await send('env_info'), selectOnly: true, lights, createdIds: [], studio: JSON.parse(JSON.stringify(studio)) };
     return currentPhotoSnapshot;
@@ -439,13 +445,20 @@ const photoDirector = photo.createDirector({
     const r = await send('lighting_ies_assets', { limit: 40 }, 30000);
     return r.installed_files?.assets || [];
   },
-  async lightingEvidence(previousRunId = null) {
+  async lightingEvidence(previousRunId = null, { aspect = 16 / 9, snapshot, signal } = {}) {
+    signal?.throwIfAborted();
+    const camera = await readPose();
+    const dimensions = photo.captureDimensions(aspect);
+    const measurement_target = photo.measurementTarget(snapshot, camera, dimensions.width / dimensions.height);
+    signal?.throwIfAborted();
     const record = previousRunId
       ? await lightingLab.replay({ run_id: previousRunId })
       : await lightingLab.run({ operation_id: 'lighting.capture_diagnostic_passes', inputs: {
-        passes: ['clown', 'direct', 'reflection', 'shadow'], width: 640, height: 400, secs: 2, render_engine: 'current'
+        passes: ['clown', 'direct', 'reflection', 'shadow'], ...dimensions, secs: 2,
+        render_engine: 'current', measurement_target
       } });
-    if (record.status === 'failed') throw new Error(record.error || 'KeyShot diagnostic capture failed.');
+    signal?.throwIfAborted();
+    if (record.status !== 'verified_shape') throw new Error(record.error || 'KeyShot diagnostic capture did not pass its state checks.');
     return record;
   },
   async restore(s) {
@@ -458,32 +471,37 @@ const photoDirector = photo.createDirector({
     Object.assign(studio, s.studio);
   },
   async apply(plan, opts) {
+    const check = () => opts.signal?.throwIfAborted();
+    check();
     const subject = await ensureSubject(true), camera = await readPose();
     const lightFrame = photo.lightingFrame(subject, camera, plan.shot, opts.aspect, { frameCamera: !!opts.framing });
     const ids = plan.lights.map(l => 'photo_' + opts.id + '_' + l.id);
     const existing = await send('lights_list');
-    await send('light_visibility', { ids: Object.keys(existing).filter(id => !ids.includes(id)), visible: false }, 30000);
+    check(); await send('light_visibility', { ids: Object.keys(existing).filter(id => !ids.includes(id)), visible: false }, 30000);
     studio.lights = {};
     Object.assign(studio, { rig: 'reference_photo', exposure: 1, frameAz: camera.az, mirror: false, subject, rigSubject: subject, envScales: false, envMultiplier: 1 });
     const { background, ...environment } = plan.environment;
     studio.envBaseBrightness = Math.max(0.000001, Number(environment.brightness) || 1);
-    studio.env = await send('env_set', { ...environment, director_name: 'CC_Photo_' + opts.id, bg: background.map(v => Math.round(255 * Math.pow(v / 255, 2.2))) }, 30000);
+    check(); studio.env = await send('env_set', { ...environment, director_name: 'CC_Photo_' + opts.id, bg: background.map(v => Math.round(255 * Math.pow(v / 255, 2.2))) }, 30000);
     for (const [i, source] of plan.lights.entries()) {
+      check();
       const l = { ...source, id: ids[i], radius: source.radius * subject.span * lightFrame.sourceScale };
       if (!currentPhotoSnapshot.createdIds.includes(l.id)) currentPhotoSnapshot.createdIds.push(l.id);
       const prior = existing[l.id];
       if (prior && (prior.spec?.type || 'area') !== l.type) await send('light_remove', { id: l.id }, 30000);
-      await send('light_set', lightSpec(l, { subject, target: lightFrame.target, sourceScale: lightFrame.sourceScale }), 30000);
-      await send('light_visibility', { ids: [l.id], visible: true }, 30000); studio.lights[l.id] = l;
+      check(); await send('light_set', lightSpec(l, { subject, target: lightFrame.target, sourceScale: lightFrame.sourceScale }), 30000);
+      check(); await send('light_visibility', { ids: [l.id], visible: true }, 30000); studio.lights[l.id] = l;
     }
-    if (opts.framing) await applyPose(lightFrame.pose);
+    check(); if (opts.framing) await applyPose(lightFrame.pose);
     return { lighting_frame: { aim_point_mm: lightFrame.target, source_scale: lightFrame.sourceScale,
       view_distance_mm: lightFrame.viewDistance, full_product_fit_distance_mm: lightFrame.fullProductDistance,
       camera_framed: !!opts.framing } };
   },
-  async capture(file, aspect, secs) {
-    const width = Math.round(Math.min(960, 960 * aspect) / 2) * 2, height = Math.round(width / aspect / 2) * 2;
+  async capture(file, aspect, secs, signal) {
+    signal?.throwIfAborted();
+    const { width, height } = photo.captureDimensions(aspect);
     await send('grab', { path: file, width, height, secs }, 120000);
+    signal?.throwIfAborted();
     latestShot = fs.readFileSync(file); preview.last = Date.now();
   },
   refresh() { preview.wanted = true; },
@@ -872,7 +890,7 @@ const actions = {
   async copy_material({ source, object_id, name }) { const r = await send('material_copy', { source, object_id, name }, 30000); return { summary: `Independent copy ${r.name} created on the selected part; source ${source} is unchanged`, ...r }; },
   async material_library_copy({ source, object_id, name }) { const r = await send('material_library_copy', { source, object_id, name }, 30000); return { summary: `Independent copy ${r.name} created on the selected part; library source ${source} is unchanged`, ...r }; },
   async set_material_bump({ name, path, role, strength }) { const r = await send('material_bump_set', { name, path, role, strength }, 30000); return { summary: `${name} bump settings updated; original source material is unchanged`, ...r }; },
-  async set_material_value({ name, node_id, parameter, value }) { const r = await send('material_set', { name, node_id, parameter, value }, 15000); return { summary: `${name}: ${parameter} updated`, ...r }; },
+  async set_material_value({ name, node_id, parameter, value, expected_value }) { const r = await send('material_set', { name, node_id, parameter, value, ...(expected_value !== undefined ? { expected_value } : {}) }, 15000); return { summary: `${name}: ${parameter} updated`, ...r }; },
   async undo_material() { const r = await send('material_undo', {}, 15000); return { summary: `${r.parameter} restored`, ...r }; },
   async save_material({ name }) { const r = await send('material_save', { name }, 30000); return { summary: `Portable material package saved: ${r.path}`, ...r }; },
   async remove_light({ id }) { await send('light_remove', { id }, 30000); delete studio.lights[id]; return { summary: `removed ${id}` }; },

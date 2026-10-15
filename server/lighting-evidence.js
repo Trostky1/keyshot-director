@@ -4,12 +4,36 @@ const fs = require('fs');
 const { decode } = require('./png');
 const { decode: decodeExr } = require('./exr');
 
+const labelCode = rgb => (rgb[0] << 16) | (rgb[1] << 8) | rgb[2];
+const labelRgb = code => [(code >> 16) & 255, (code >> 8) & 255, code & 255];
+function normalizeTarget(target) {
+  if (target == null) return null;
+  const r = target.region;
+  if (typeof target.id !== 'string' || !target.id.trim() || target.id.length > 200 ||
+      typeof target.identity !== 'string' || !target.identity.trim() || target.identity.length > 2000 ||
+      !r || !['x0', 'y0', 'x1', 'y1'].every(k => Number.isFinite(r[k]) && r[k] >= 0 && r[k] <= 1) ||
+      r.x0 >= r.x1 || r.y0 >= r.y1 || Object.keys(target).some(k => !['id', 'identity', 'region'].includes(k)))
+    throw new Error('measurement_target needs a stable id, identity and a nonempty normalized region.');
+  return { id: target.id, identity: target.identity, region: { x0: r.x0, y0: r.y0, x1: r.x1, y1: r.y1 } };
+}
+function inRegion(x, y, width, height, target) {
+  if (!target) return true;
+  const r = target.region, u = (x + 0.5) / width, v = (y + 0.5) / height;
+  return u >= r.x0 && u < r.x1 && v >= r.y0 && v < r.y1;
+}
+function measurementScope(target) {
+  return { kind: target ? 'projected_bounds_roi' : 'all_rendered_labels', target_id: target?.id || null,
+    region: target?.region || null, pixel_identity_verified: false,
+    uncertainty: target ? 'Projected bounds can include occluders or unrelated geometry; Clown colors do not establish target identity.'
+      : 'All non-black rendered labels are included; this does not isolate the product or selected part.' };
+}
+
 function quantile(sorted, fraction) {
   if (!sorted.length) return null;
   return sorted[Math.min(sorted.length - 1, Math.max(0, Math.floor(fraction * sorted.length)))];
 }
 
-function summarizeLinearPass(file, clown) {
+function summarizeLinearPass(file, clown, target = null) {
   try {
     const image = decodeExr(fs.readFileSync(file.path));
     if (image.width !== clown.w || image.height !== clown.h)
@@ -20,6 +44,7 @@ function summarizeLinearPass(file, clown) {
     const productRgb = [0, 0, 0], nonProductRgb = [0, 0, 0];
     let invalid = 0;
     for (let y = 0; y < image.height; y++) for (let x = 0; x < image.width; x++) {
+      if (!inRegion(x, y, image.width, image.height, target)) continue;
       const index = y * image.width + x;
       const rgb = gray ? [gray[index], gray[index], gray[index]] : [red[index], green[index], blue[index]];
       const luma = 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2];
@@ -30,7 +55,7 @@ function summarizeLinearPass(file, clown) {
       const sums = isProduct ? productRgb : nonProductRgb;
       for (let c = 0; c < 3; c++) sums[c] += rgb[c];
       if (isProduct) {
-        const code = (label[0] >= 128 ? 4 : 0) | (label[1] >= 128 ? 2 : 0) | (label[2] >= 128 ? 1 : 0);
+        const code = labelCode(label);
         if (code) {
           let item = labels.get(code);
           if (!item) { item = { lumas: [], rgb: [0, 0, 0], x: 0, y: 0, minX: x, minY: y, maxX: x, maxY: y }; labels.set(code, item); }
@@ -56,13 +81,14 @@ function summarizeLinearPass(file, clown) {
     return {
       available: true,
       format: 'linear EXR luminance; ZIP tiled single-level pass',
+      measurement_scope: measurementScope(target),
       dimensions: { width: image.width, height: image.height },
       product: summary(product, productRgb),
       non_product: summary(nonProduct, nonProductRgb),
       clown_labels: [...labels.entries()].sort((a, b) => b[1].lumas.length - a[1].lumas.length).map(([code, item]) => {
         item.lumas.sort((a, b) => a - b);
         return {
-          rgb_bits: [(code >> 2) & 1, (code >> 1) & 1, code & 1],
+          rgb: labelRgb(code),
           sampled_pixels: item.lumas.length,
           centroid_normalized: { x: +((item.x / item.lumas.length) / image.width).toFixed(4), y: +((item.y / item.lumas.length) / image.height).toFixed(4) },
           bounds_normalized: { x0: +(item.minX / image.width).toFixed(4), y0: +(item.minY / image.height).toFixed(4), x1: +((item.maxX + 1) / image.width).toFixed(4), y1: +((item.maxY + 1) / image.height).toFixed(4) },
@@ -80,7 +106,21 @@ function summarizeLinearPass(file, clown) {
   }
 }
 
-function compareCaptures(referenceFiles, candidateFiles, threshold = 1e-4) {
+function compareCaptures(referenceFiles, candidateFiles, threshold = 1e-4, context = {}) {
+  const targetA = normalizeTarget(context.reference?.measurement_target), targetB = normalizeTarget(context.candidate?.measurement_target);
+  if (context.require_metadata) {
+    const a = context.reference, b = context.candidate;
+    const complete = metadata => metadata &&
+      ['camera_hash', 'scene_identity_hash', 'geometry_identity_hash', 'render_options_hash'].every(key => typeof metadata[key] === 'string' && metadata[key].length > 0) &&
+      metadata.render_engine != null && ['width', 'height', 'max_render_seconds'].every(key => Number.isFinite(metadata[key]));
+    if (!a || !b || !complete(a.compatibility) || !complete(b.compatibility))
+      return { available: false, reason: 'Capture compatibility metadata is missing; recapture both runs.' };
+    if (Object.keys(a.compatibility).length !== Object.keys(b.compatibility).length ||
+        Object.keys(a.compatibility).some(key => a.compatibility[key] !== b.compatibility[key]))
+      return { available: false, reason: 'Camera, scene identity, render settings or engine changed; captures are incompatible.' };
+  }
+  if (JSON.stringify(targetA) !== JSON.stringify(targetB))
+    return { available: false, reason: 'Measurement target or projected region changed; captures are incompatible.' };
   const reference = new Map((referenceFiles || []).map(file => [file.pass, file]));
   const candidate = new Map((candidateFiles || []).map(file => [file.pass, file]));
   const referenceClown = reference.get('clown'), candidateClown = candidate.get('clown');
@@ -91,16 +131,18 @@ function compareCaptures(referenceFiles, candidateFiles, threshold = 1e-4) {
     if (maskA.w !== maskB.w || maskA.h !== maskB.h)
       return { available: false, reason: 'Capture mask dimensions differ; align the camera and render size before comparing.' };
 
-    let productA = 0, productB = 0, intersection = 0, union = 0, maskChanged = 0, labelMatches = 0, labelChanges = 0;
+    let productA = 0, productB = 0, intersection = 0, union = 0, maskChanged = 0, labelMatches = 0, labelChanges = 0, regionPixels = 0;
     const productMaskA = new Uint8Array(maskA.w * maskA.h), productMaskB = new Uint8Array(maskB.w * maskB.h);
-    const clownCodeA = new Uint8Array(maskA.w * maskA.h), clownCodeB = new Uint8Array(maskB.w * maskB.h);
+    const clownCodeA = new Uint32Array(maskA.w * maskA.h), clownCodeB = new Uint32Array(maskB.w * maskB.h);
     for (let y = 0; y < maskA.h; y++) for (let x = 0; x < maskA.w; x++) {
+      if (!inRegion(x, y, maskA.w, maskA.h, targetA)) continue;
+      regionPixels++;
       const i = y * maskA.w + x;
       const labelA = maskA.px(x, y), labelB = maskB.px(x, y);
       const a = Math.max(...labelA) > 8, b = Math.max(...labelB) > 8;
       productMaskA[i] = a ? 1 : 0; productMaskB[i] = b ? 1 : 0;
-      clownCodeA[i] = (labelA[0] >= 128 ? 4 : 0) | (labelA[1] >= 128 ? 2 : 0) | (labelA[2] >= 128 ? 1 : 0);
-      clownCodeB[i] = (labelB[0] >= 128 ? 4 : 0) | (labelB[1] >= 128 ? 2 : 0) | (labelB[2] >= 128 ? 1 : 0);
+      clownCodeA[i] = labelCode(labelA);
+      clownCodeB[i] = labelCode(labelB);
       if (a) productA++;
       if (b) productB++;
       if (a || b) union++;
@@ -113,6 +155,9 @@ function compareCaptures(referenceFiles, candidateFiles, threshold = 1e-4) {
       }
       if (a !== b) maskChanged++;
     }
+    if (!intersection) return { available: false, reason: 'The measurement region has no shared Clown object pixels.' };
+    if (intersection / Math.max(1, union) < 0.95)
+      return { available: false, reason: 'Object silhouette changed within the measurement region; captures are incompatible.' };
     const passResults = {};
     for (const pass of ['direct', 'indirect', 'reflection', 'shadow', 'raw']) {
       const fileA = reference.get(pass), fileB = candidate.get(pass);
@@ -130,6 +175,7 @@ function compareCaptures(referenceFiles, candidateFiles, threshold = 1e-4) {
           ? [image.channels.Y[index], image.channels.Y[index], image.channels.Y[index]]
           : [image.channels.R[index], image.channels.G[index], image.channels.B[index]];
         for (let i = 0; i < maskA.w * maskA.h; i++) {
+          if (!inRegion(i % maskA.w, Math.floor(i / maskA.w), maskA.w, maskA.h, targetA)) continue;
           const isProductA = productMaskA[i] === 1, isProductB = productMaskB[i] === 1;
           if (isProductA !== isProductB) continue; // Exclude silhouette edges if the camera or mask shifted.
           const rgbA = pixelRgb(imageA, i), rgbB = pixelRgb(imageB, i);
@@ -167,7 +213,7 @@ function compareCaptures(referenceFiles, candidateFiles, threshold = 1e-4) {
           product: finish(regions.product),
           non_product: finish(regions.non_product),
           clown_labels: [...labelDeltas.entries()].sort((a, b) => b[1].count - a[1].count).map(([code, stats]) => ({
-            rgb_bits: [(code >> 2) & 1, (code >> 1) & 1, code & 1], ...finish(stats)
+            rgb: labelRgb(code), ...finish(stats)
           }))
         };
       } catch (error) {
@@ -177,6 +223,7 @@ function compareCaptures(referenceFiles, candidateFiles, threshold = 1e-4) {
     if (!Object.keys(passResults).length) return { available: false, reason: 'The captures have no matching supported linear EXR passes.' };
     return {
       available: true,
+      measurement_scope: measurementScope(targetA),
       method: 'Paired linear EXR deltas on pixels where both Clown masks agree',
       dimensions: { width: maskA.w, height: maskA.h },
       mask_agreement: {
@@ -184,7 +231,7 @@ function compareCaptures(referenceFiles, candidateFiles, threshold = 1e-4) {
         reference_product_pixels: productA,
         candidate_product_pixels: productB,
         shared_product_pixels: intersection,
-        changed_mask_share: +(maskChanged / (maskA.w * maskA.h)).toFixed(6),
+        changed_mask_share: +(maskChanged / Math.max(1, regionPixels)).toFixed(6),
         suitable_for_lighting_only_comparison: intersection / Math.max(1, union) >= 0.95,
         shared_labeled_pixel_count: labelMatches + labelChanges,
         clown_label_agreement: +((labelMatches / Math.max(1, labelMatches + labelChanges))).toFixed(4),
@@ -200,6 +247,7 @@ function compareCaptures(referenceFiles, candidateFiles, threshold = 1e-4) {
 }
 
 function analyzeCapture(files, expected = {}) {
+  const target = normalizeTarget(expected.measurement_target);
   const byPass = new Map((files || []).map(file => [file.pass, file]));
   const beautyFile = byPass.get('beauty'), clownFile = byPass.get('clown');
   if (!beautyFile || !clownFile) return { available: false, reason: 'Beauty and Clown PNG outputs are both required for product-region analysis.' };
@@ -216,6 +264,7 @@ function analyzeCapture(files, expected = {}) {
   let leftSum = 0, leftCount = 0, rightSum = 0, rightCount = 0, topSum = 0, topCount = 0, bottomSum = 0, bottomCount = 0;
 
   for (let y = 0; y < beauty.h; y += step) for (let x = 0; x < beauty.w; x += step) {
+    if (!inRegion(x, y, beauty.w, beauty.h, target)) continue;
     const label = clown.px(x, y);
     const isProduct = Math.max(label[0], label[1], label[2]) > 8;
     const [r, g, b] = beauty.px(x, y);
@@ -224,14 +273,15 @@ function analyzeCapture(files, expected = {}) {
     if (x < minX) minX = x; if (x > maxX) maxX = x;
     if (y < minY) minY = y; if (y > maxY) maxY = y;
     productCount++; lumas.push(luma); rSum += r; gSum += g; bSum += b;
-    // Quantize flat Clown colors to RGB primaries; this ignores antialiased edge mixtures.
-    const code = (label[0] >= 128 ? 4 : 0) | (label[1] >= 128 ? 2 : 0) | (label[2] >= 128 ? 1 : 0);
+    // Preserve full labels; antialiased edge mixtures remain anonymous color regions.
+    const code = labelCode(label);
     labelCounts.set(code, (labelCounts.get(code) || 0) + 1);
   }
   if (!productCount || maxX < minX || maxY < minY) return { available: false, reason: 'Clown pass contained no non-background object pixels.' };
 
   const spanX = Math.max(1, maxX - minX + 1), spanY = Math.max(1, maxY - minY + 1);
   for (let y = 0; y < beauty.h; y += step) for (let x = 0; x < beauty.w; x += step) {
+    if (!inRegion(x, y, beauty.w, beauty.h, target)) continue;
     const label = clown.px(x, y);
     if (Math.max(label[0], label[1], label[2]) <= 8) continue;
     const [r, g, b] = beauty.px(x, y), luma = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
@@ -243,6 +293,7 @@ function analyzeCapture(files, expected = {}) {
   let highlightCount = 0, highlightX = 0, highlightY = 0, edgeSum = 0, edgeCount = 0, interiorSum = 0, interiorCount = 0;
   const marginX = Math.max(1, spanX * 0.15), marginY = Math.max(1, spanY * 0.15);
   for (let y = 0; y < beauty.h; y += step) for (let x = 0; x < beauty.w; x += step) {
+    if (!inRegion(x, y, beauty.w, beauty.h, target)) continue;
     const label = clown.px(x, y);
     if (Math.max(label[0], label[1], label[2]) <= 8) continue;
     const [r, g, b] = beauty.px(x, y), luma = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
@@ -251,23 +302,25 @@ function analyzeCapture(files, expected = {}) {
     if (edge) { edgeSum += luma; edgeCount++; } else { interiorSum += luma; interiorCount++; }
   }
   const labels = [...labelCounts.entries()].filter(([code]) => code !== 0).sort((a, b) => b[1] - a[1]).map(([code, count]) => ({
-    rgb_bits: [(code >> 2) & 1, (code >> 1) & 1, code & 1], sampled_pixels: count
+    rgb: labelRgb(code), sampled_pixels: count
   }));
   const mean = lumas.reduce((sum, value) => sum + value, 0) / lumas.length;
   const backgroundMean = backgroundLumas.length ? backgroundLumas.reduce((sum, value) => sum + value, 0) / backgroundLumas.length : null;
   const linearPasses = {};
   for (const file of byPass.values()) {
     if (['direct', 'indirect', 'reflection', 'shadow', 'raw'].includes(file.pass) && /\.exr$/i.test(file.name || file.path || ''))
-      linearPasses[file.pass] = summarizeLinearPass(file, clown);
+      linearPasses[file.pass] = summarizeLinearPass(file, clown, target);
   }
 
   return {
     available: true,
+    measurement_scope: measurementScope(target),
     method: 'Clown non-black mask aligned to beauty render',
     dimensions: { width: beauty.w, height: beauty.h, sample_step: step },
     product_mask: {
       sampled_pixels: productCount,
-      image_share: +(productCount / (productCount + backgroundCount)).toFixed(4),
+      image_share: +(productCount / (Math.ceil(beauty.w / step) * Math.ceil(beauty.h / step))).toFixed(4),
+      region_share: +(productCount / (productCount + backgroundCount)).toFixed(4),
       bounds_normalized: { x0: +(minX / beauty.w).toFixed(4), y0: +(minY / beauty.h).toFixed(4), x1: +((maxX + 1) / beauty.w).toFixed(4), y1: +((maxY + 1) / beauty.h).toFixed(4) },
       dominant_color_labels: labels
     },
@@ -295,4 +348,4 @@ function analyzeCapture(files, expected = {}) {
   };
 }
 
-module.exports = { analyzeCapture, compareCaptures };
+module.exports = { analyzeCapture, compareCaptures, normalizeTarget };

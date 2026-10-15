@@ -39,3 +39,6 @@ Original light nodes and materials stay in the scene, temporarily hidden. A `CC_
 `node tools/test_http_safety.js` checks a running server with intentionally invalid requests; it does not change the scene.
 
 `node tools/test_photo_live.js` is an explicitly opt-in live integration check: capture its own reference, run signed-in Codex vision, build native lights, render, then undo and compare original light/environment/camera state. Add `--refined` to test two vision passes. This is a plumbing/restoration check on the phone scene, not evidence that arbitrary references match perfectly.
+# Working-checkout update
+
+The current source adds bounded measured candidates, explicit reference-region/objective controls, consistent capture aspect, compatibility checks and best-result retention. See [Measured refinement](MEASURED_REFINEMENT.md) for the current contract and local-verification limits. Any older single-refinement behavior described below is historical.

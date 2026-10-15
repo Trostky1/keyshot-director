@@ -19,6 +19,55 @@ DISPLACEMENT_HEIGHT_DEFAULT_MM = 0.01
 DISPLACEMENT_HEIGHT_MAX_MM = 0.1
 
 
+def _assignment(object_id):
+    value = lux.getObjectMaterial(object_id)
+    if value is None or value == "" or value == [] or value == ():
+        raise ValueError("Original material assignment cannot be read safely")
+    return str(value[0] if isinstance(value, (list, tuple)) and value else value)
+
+
+def _assignment_guard(operation):
+    def guarded(c):
+        object_id = int(c.get("object_id"))
+        before = _assignment(object_id)
+        prior_receipts = list(MATERIAL_UNDO)
+        try:
+            return operation(c)
+        except Exception as error:
+            try:
+                lux.setObjectMaterial(before, object_id, link=True)
+                lux.sync()
+                if _assignment(object_id) != before:
+                    raise RuntimeError("restored assignment readback differs")
+                MATERIAL_UNDO[:] = prior_receipts
+            except Exception as recovery_error:
+                raise RuntimeError("Material copy failed; assignment recovery could not be verified: " + str(recovery_error)) from error
+            raise
+    return guarded
+
+
+def _remember_material_edit(receipt):
+    receipt["scene_identity"] = _material_scene_identity()
+    MATERIAL_UNDO.append(receipt)
+    if len(MATERIAL_UNDO) > 20:
+        MATERIAL_UNDO.pop(0)
+    return {k: v for k, v in receipt.items() if k != "restore"}
+
+
+def _material_scene_identity():
+    try:
+        info = lux.getSceneInfo()
+        filename = str(info.get("file", "") or "").strip()
+        if not filename:
+            return None
+        return {"file": os.path.normcase(os.path.abspath(filename)),
+                "name": str(info.get("name", "") or ""),
+                "unit": str(info.get("unit", "") or ""),
+                "unit_scale": info.get("unitScale"), "root_id": lux.getSceneTree().getID()}
+    except Exception:
+        return None
+
+
 def _save_created_registry():
     tmp = _CREATED_REGISTRY + ".tmp"
     with open(tmp, "w", encoding="utf-8") as f:
@@ -103,6 +152,7 @@ def op_material_scene_objects(c):
     return {"objects": out}
 
 
+@_assignment_guard
 def op_material_library_copy(c):
     """Copy a library material directly onto one selected object, without editing the library entry."""
     global MATERIAL_EDIT_TARGET
@@ -125,17 +175,15 @@ def op_material_library_copy(c):
         if parent.isLocked() or parent.isHidden():
             raise ValueError("The selected part belongs to a hidden or locked assembly")
         parent = parent.getParent()
-    try:
-        before_assignment = lux.getObjectMaterial(object_id)
-        before_assignment = before_assignment[0] if isinstance(before_assignment, (list, tuple)) and before_assignment else before_assignment
-    except Exception:
-        before_assignment = None
+    before_assignment = _assignment(object_id)
     lux.setObjectMaterial(source, object_id, link=False)
     copied = lux.getObjectMaterial(object_id)
     copied = copied[0] if isinstance(copied, (list, tuple)) and copied else copied
     copied = str(copied)
     if not copied or copied == source:
         raise RuntimeError("KeyShot did not create an independent scene copy")
+    _remember_material_edit({"kind": "assignment", "name": copied, "object_id": object_id,
+                             "before": before_assignment, "after": copied})
     if copied in _material_names() and copied not in MATERIAL_CREATED:
         copied = ""
         for candidate in lux.getSceneMaterials():
@@ -235,9 +283,21 @@ def op_material_inspect(c):
                            "source_type": edge.get("source_type") if edge else None})
         nodes.append({"id": n.getID(), "type": n.getType(), "parameters": params})
     created = name in MATERIAL_CREATED
+    channels = []
+    for socket, meaning in (("surface", "Surface shading"), ("label", "Label shading and coverage"),
+                            ("geometry", "Geometry processing; execution is a separate action")):
+        try:
+            edge = g.getRoot().getInputEdge(socket)
+            source = edge.getSourceNode() if edge is not None else None
+            channels.append({"socket": socket, "meaning": meaning, "source_node_id": source.getID() if source else None,
+                             "source_type": source.getType() if source else None,
+                             "enabled": edge.isEnabled() if edge is not None else None})
+        except Exception as error:
+            channels.append({"socket": socket, "meaning": meaning, "error": repr(error)})
     return {"name": name, "editable": created or name == MATERIAL_EDIT_TARGET,
             "director_created": created, "edit_enabled": name == MATERIAL_EDIT_TARGET,
-            "nodes": nodes, "edges": edges}
+            "nodes": nodes, "edges": edges, "root_channels": channels,
+            "undo": {"available": bool(MATERIAL_UNDO), "scope": "Session only: value edits, copy assignments and supported map replacements. Geometry execution and saved files are excluded."}}
 
 
 def op_material_edit_target(c):
@@ -272,6 +332,7 @@ def op_material_create(c):
     return op_material_inspect({"name": name})
 
 
+@_assignment_guard
 def op_material_copy(c):
     """Make an independent scene-material copy on the selected object."""
     global MATERIAL_EDIT_TARGET
@@ -303,7 +364,9 @@ def op_material_copy(c):
     copied = copied[0] if isinstance(copied, (list, tuple)) and copied else copied
     copied = str(copied)
     if not copied or copied == source:
-        raise RuntimeError("KeyShot did not return an independent material copy; source was left unchanged")
+        raise RuntimeError("KeyShot did not return an independent material copy")
+    _remember_material_edit({"kind": "assignment", "name": copied, "object_id": object_id,
+                             "before": source, "after": copied})
     MATERIAL_CREATED.add(copied)
     MATERIAL_COPIES.add(copied)
     MATERIAL_EDIT_TARGET = None
@@ -333,6 +396,8 @@ def op_material_set(c):
     if connected_edge is not None:
         raise ValueError("This input is driven by a connected node; edit the source map or disconnect it first")
     old = _parameter_value(param)
+    if "expected_value" in c and c["expected_value"] != old:
+        raise ValueError("Material changed since inspection; refresh before editing")
     if old is None:
         raise ValueError("Connected shader input cannot be edited as a value")
     value = c.get("value")
@@ -350,24 +415,79 @@ def op_material_set(c):
         value = tuple(float(x) for x in value)
     else:
         raise ValueError("This parameter type is not editable yet")
-    param.setValue(value)
-    lux.sync()
-    MATERIAL_UNDO.append((name, node.getID(), param.getName(), old))
-    if len(MATERIAL_UNDO) > 20: MATERIAL_UNDO.pop(0)
-    return {"name": name, "node_id": node.getID(), "parameter": param.getName(), "before": old, "after": _parameter_value(param)}
+    receipt = None
+    try:
+        param.setValue(value)
+        actual = _parameter_value(param)
+        receipt = {"kind": "value", "name": name, "node_id": node.getID(),
+                   "parameter": param.getName(), "before": old, "after": actual}
+        _remember_material_edit(receipt)
+        lux.sync()
+        actual = _parameter_value(param)
+        valid = (isinstance(actual, bool) if isinstance(old, bool) else
+                 isinstance(actual, (int, float)) and not isinstance(actual, bool) and math.isfinite(actual)
+                 if isinstance(old, (int, float)) else
+                 isinstance(actual, list) and len(actual) == len(old) and
+                 all(isinstance(item, (int, float)) and math.isfinite(item) for item in actual))
+        if not valid:
+            raise RuntimeError("KeyShot did not provide a valid material value after synchronization")
+        receipt["after"] = actual
+    except Exception as error:
+        try:
+            param.setValue(tuple(old) if isinstance(old, list) else old)
+            lux.sync()
+            if _parameter_value(param) != old:
+                raise RuntimeError("restored value readback differs")
+            if receipt is not None and MATERIAL_UNDO and MATERIAL_UNDO[-1] is receipt:
+                MATERIAL_UNDO.pop()
+        except Exception as recovery_error:
+            raise RuntimeError("Material edit failed; value recovery could not be verified: " + str(recovery_error)) from error
+        raise
+    return {"name": name, "node_id": node.getID(), "parameter": param.getName(), "before": old, "after": actual}
 
 
 def op_material_undo(c):
     if not MATERIAL_UNDO:
         raise ValueError("No Director material edit to undo")
-    name, nid, pname, old = MATERIAL_UNDO[-1]
+    receipt = MATERIAL_UNDO[-1]
+    identity = _material_scene_identity()
+    if identity is None or receipt.get("scene_identity") is None or identity != receipt["scene_identity"]:
+        raise ValueError("Scene identity changed or cannot be verified; undo refused and receipt retained")
+    if receipt["kind"] == "assignment":
+        object_id = receipt["object_id"]
+        node = next((n for n in lux.getSceneTree().find("") if n.getID() == object_id), None)
+        if node is None or node.isDeleted() or node.isLocked() or node.isHidden():
+            raise ValueError("The assignment target is no longer available for undo")
+        parent = node.getParent()
+        root_id = lux.getSceneTree().getID()
+        while parent and parent.getID() != root_id:
+            if parent.isLocked() or parent.isHidden():
+                raise ValueError("The assignment target belongs to a hidden or locked assembly")
+            parent = parent.getParent()
+        if _assignment(object_id) != receipt["after"]:
+            raise ValueError("Material assignment changed outside this operation; undo refused")
+        lux.setObjectMaterial(receipt["before"], object_id, link=True)
+        lux.sync()
+        if _assignment(object_id) != receipt["before"]:
+            raise RuntimeError("KeyShot did not confirm restored assignment; receipt retained")
+        MATERIAL_UNDO.pop()
+        return {"name": receipt["before"], "parameter": "material assignment", "restored": receipt["before"]}
+    if receipt["kind"] == "map":
+        receipt["restore"]()
+        MATERIAL_UNDO.pop()
+        return {"name": receipt["name"], "parameter": receipt["parameter"], "restored": "previous map connection"}
+    name, nid, pname, old = receipt["name"], receipt["node_id"], receipt["parameter"], receipt["before"]
     g = _material_graph(name)
     node = next((n for n in g.getNodes() if n.getID() == nid), None)
     if node is None: raise ValueError("Material node no longer exists")
     param = next((p for p in node.getParameters() if p.getName() == pname), None)
     if param is None: raise ValueError("Material parameter no longer exists")
+    if node.getInputEdge(pname) is not None or _parameter_value(param) != receipt["after"]:
+        raise ValueError("Material value changed outside this operation; undo refused")
     param.setValue(tuple(old) if isinstance(old, list) else old)
     lux.sync()
+    if _parameter_value(param) != old:
+        raise RuntimeError("KeyShot did not confirm restored value; receipt retained")
     MATERIAL_UNDO.pop()
     return {"name": name, "node_id": nid, "parameter": pname, "restored": old}
 
@@ -928,8 +1048,14 @@ def op_material_bump_set(c):
         except AttributeError:
             pass
     prior_edge = shader.getInputEdge(target_input)
+    prior_source_id = prior_edge.getSourceNode().getID() if prior_edge is not None else None
+    prior_enabled = prior_edge.isEnabled() if prior_edge is not None else None
+    if prior_enabled is False:
+        raise ValueError("Disabled map connections cannot be safely replaced by Director yet")
     prior_strength = next((p for p in shader.getParameters() if p.getName() in ("bump_height", "bump_scale", "bump_strength")), None)
     old_strength = _parameter_value(prior_strength) if prior_strength else None
+    if strength is not None and prior_strength is None:
+        raise ValueError("This shader does not expose a supported bump strength parameter")
     made = None
     converter = None
     removed = False
@@ -982,15 +1108,56 @@ def op_material_bump_set(c):
                     g.removeEdge(edge)
                 g.removeNode(made)
             if removed and prior_edge is not None:
-                source = prior_edge.getSourceNode()
-                g.newEdge(source, shader, target_input)
+                source = next((node for node in g.getNodes() if node.getID() == prior_source_id), None)
+                if source is not None:
+                    g.newEdge(source, shader, target_input)
             if prior_strength is not None and old_strength is not None:
                 prior_strength.setValue(tuple(old_strength) if isinstance(old_strength, list) else old_strength)
             lux.sync()
         except Exception:
             pass
         raise
-    return {"name": name, "map": path, "role": role, "strength": _parameter_value(prior_strength) if prior_strength else None,
+    expected_edge = shader.getInputEdge(target_input)
+    expected_source_id = expected_edge.getSourceNode().getID() if expected_edge is not None else None
+    expected_strength = _parameter_value(prior_strength) if prior_strength else None
+    intended_source = converter if converter is not None else made
+    if path is not None and (intended_source is None or expected_source_id != intended_source.getID()):
+        raise RuntimeError("KeyShot did not confirm the requested map connection")
+    shader_id = shader.getID()
+    def restore_map():
+        graph = _material_graph(name)
+        nodes_by_id = {node.getID(): node for node in graph.getNodes()}
+        target = nodes_by_id.get(shader_id)
+        if target is None:
+            raise ValueError("Map target no longer exists; undo refused")
+        edge = target.getInputEdge(target_input)
+        current_id = edge.getSourceNode().getID() if edge is not None else None
+        strength_param = next((p for p in target.getParameters() if p.getName() in ("bump_height", "bump_scale", "bump_strength")), None)
+        if current_id != expected_source_id or (strength_param is not None and _parameter_value(strength_param) != expected_strength):
+            raise ValueError("Map or strength changed outside this operation; undo refused")
+        if edge is not None and not edge.isEnabled():
+            raise ValueError("Map connection was disabled outside this operation; undo refused")
+        original = nodes_by_id.get(prior_source_id) if prior_source_id is not None else None
+        if prior_source_id is not None and original is None:
+            raise ValueError("Original map source no longer exists; undo refused")
+        if path is not None:
+            if edge is not None:
+                graph.removeEdge(edge)
+            if original is not None:
+                graph.newEdge(original, target, target_input)
+        if strength_param is not None and old_strength is not None:
+            strength_param.setValue(tuple(old_strength) if isinstance(old_strength, list) else old_strength)
+        lux.sync()
+        restored_edge = target.getInputEdge(target_input)
+        restored_id = restored_edge.getSourceNode().getID() if restored_edge is not None else None
+        if restored_id != prior_source_id or (strength_param is not None and _parameter_value(strength_param) != old_strength):
+            raise RuntimeError("KeyShot did not confirm restored map; receipt retained")
+        # Retain disconnected nodes: another branch may now reference them.
+    receipt = _remember_material_edit({"kind": "map", "name": name, "parameter": role,
+                                       "before": {"source_node_id": prior_source_id, "strength": old_strength},
+                                       "after": {"source_node_id": expected_source_id, "strength": expected_strength},
+                                       "restore": restore_map})
+    return {"name": name, "map": path, "role": role, "receipt": receipt, "strength": _parameter_value(prior_strength) if prior_strength else None,
             "note": "Only the independent Director copy was changed; the source material was not modified."}
 
 

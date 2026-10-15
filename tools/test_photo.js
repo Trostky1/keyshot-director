@@ -56,10 +56,10 @@ test('cancel while planning prevents any scene change',async t=>{
   const {d,calls}=setup(t,{ask:async(_i,_c,signal)=>{entered(); return new Promise((_r,reject)=>signal.addEventListener('abort',()=>reject(signal.reason),{once:true}));}});
   await d.start({image}); await ready; d.stop(); await d.wait(); assert.equal(d.status().phase,'canceled'); assert.equal(calls.length,0);
 });
-test('refinement failure reapplies first complete plan',async t=>{
+test('missing explicit reference region retains first plan without speculative refinement',async t=>{
   let n=0; const {d,calls}=setup(t,{ask:async()=>{if(n++) throw new Error('provider unavailable'); return {plan,engine:'stub'};}});
-  await d.start({image}); await d.wait(); assert.equal(d.status().phase,'complete'); assert.equal(calls.filter(c=>c[0]==='apply').length,2);
-  assert.match(d.status().result.limitations.join(' '),/Refinement was unavailable/);
+  await d.start({image}); await d.wait(); assert.equal(d.status().phase,'complete'); assert.equal(calls.filter(c=>c[0]==='apply').length,1);
+  assert.match(d.status().result.limitations.join(' '),/Choose a reference measurement region/);
 });
 test('busy jobs reject a second start and undo',async t=>{
   let release; const held=new Promise(r=>release=r); const {d}=setup(t,{snapshot:async()=>{await held; return {subject};}});

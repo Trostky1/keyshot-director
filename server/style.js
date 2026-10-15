@@ -13,11 +13,16 @@ const lum = (r, g, b) => (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
 const med = a => { if (!a.length) return 0; const s = [...a].sort((x, y) => x - y); return s[Math.floor(s.length / 2)]; };
 const pct = (sorted, p) => sorted.length ? sorted[Math.min(sorted.length - 1, Math.floor(p * sorted.length))] : 0;
 
-function features(img) {
+function features(img, { mask: objectMask, region } = {}) {
+  if (!img || !Number.isInteger(img.w) || !Number.isInteger(img.h) || img.w < 1 || img.h < 1 || typeof img.px !== 'function')
+    throw new Error('Style measurement needs a nonempty decoded image.');
+  if (objectMask && (objectMask.w !== img.w || objectMask.h !== img.h)) throw new Error('Style mask dimensions do not match the beauty capture.');
+  if (region && (!objectMask || !['x0', 'y0', 'x1', 'y1'].every(k => Number.isFinite(region[k]) && region[k] >= 0 && region[k] <= 1) ||
+      region.x0 >= region.x1 || region.y0 >= region.y1)) throw new Error('Style region needs an aligned object mask and valid normalized bounds.');
   // sample on a grid (<= ~120k points)
   const step = Math.max(1, Math.round(Math.sqrt((img.w * img.h) / 120000)));
   const pts = [];
-  for (let y = 0; y < img.h; y += step) for (let x = 0; x < img.w; x += step) { const [r, g, b] = img.px(x, y); pts.push({ x: x / img.w, y: y / img.h, r, g, b, l: lum(r, g, b) }); }
+  for (let y = 0; y < img.h; y += step) for (let x = 0; x < img.w; x += step) { const [r, g, b] = img.px(x, y); pts.push({ x: (x + 0.5) / img.w, y: (y + 0.5) / img.h, pixelX: x, pixelY: y, r, g, b, l: lum(r, g, b) }); }
   // backdrop from the frame border; "has backdrop" when the four corners agree
   const corner = (x0, y0) => pts.filter(p => p.x >= x0 && p.x < x0 + 0.1 && p.y >= y0 && p.y < y0 + 0.1);
   const cs = [corner(0, 0), corner(0.9, 0), corner(0, 0.9), corner(0.9, 0.9)].map(c => ({ l: med(c.map(p => p.l)), r: med(c.map(p => p.r)), g: med(c.map(p => p.g)), b: med(c.map(p => p.b)) }));
@@ -27,7 +32,11 @@ function features(img) {
   const tol = 0.06;
   let mask = pts.filter(p => Math.abs(p.l - bgL) > tol || Math.hypot(p.r - bgRGB[0], p.g - bgRGB[1], p.b - bgRGB[2]) / 255 > 0.14);
   const hasBackdrop = spread < 0.18 && mask.length < 0.85 * pts.length;
-  if (!hasBackdrop || mask.length < 0.05 * pts.length) mask = pts;
+  if (objectMask) {
+    mask = pts.filter(p => (!region || (p.x >= region.x0 && p.x < region.x1 && p.y >= region.y0 && p.y < region.y1))
+      && Math.max(...objectMask.px(p.pixelX, p.pixelY).slice(0, 3)) > 8);
+    if (!mask.length) throw new Error('No labelled target pixels in the style measurement region.');
+  } else if (!hasBackdrop || mask.length < 0.05 * pts.length) mask = pts;
   const L = mask.map(p => p.l).sort((a, b) => a - b);
   const xs = mask.map(p => p.x).sort((a, b) => a - b), ys = mask.map(p => p.y).sort((a, b) => a - b);
   const bb = { x0: pct(xs, 0.01), x1: pct(xs, 0.99), y0: pct(ys, 0.01), y1: pct(ys, 0.99) };
@@ -45,6 +54,8 @@ function features(img) {
   const bgPts = hasBackdrop ? pts.filter(p => Math.abs(p.l - bgL) <= tol && (p.x < 0.12 || p.x > 0.88)) : [];
   const bgTop = mean(bgPts.filter(p => p.y < 0.4)), bgBot = mean(bgPts.filter(p => p.y > 0.6));
   return {
+    measurement_scope: objectMask ? (region ? 'Clown labels within projected bounds; may include occluders and unrelated geometry.' : 'All non-black Clown labels; semantic product identity is unverified.')
+      : 'Reference border-color heuristic; segmentation is uncertain.',
     hasBackdrop: hasBackdrop ? 1 : 0,
     bgLuma: +bgL.toFixed(3), bgRGB, bgGradient: hasBackdrop && bgPts.length > 20 ? +(bgTop - bgBot).toFixed(3) : 0,
     p05: +pct(L, 0.05).toFixed(3), p25: +pct(L, 0.25).toFixed(3), p50: +pct(L, 0.5).toFixed(3), p75: +pct(L, 0.75).toFixed(3), p95: +pct(L, 0.95).toFixed(3), p99: +pct(L, 0.99).toFixed(3),
@@ -72,7 +83,7 @@ const SCORE = {
 function summarize(feats) {
   const prof = {};
   for (const k of Object.keys(SCORE)) {
-    const v = feats.map(f => f[k]).filter(x => typeof x === 'number').sort((a, b) => a - b);
+    const v = feats.map(f => f[k]).filter(Number.isFinite).sort((a, b) => a - b);
     if (!v.length) continue;
     prof[k] = { med: +pct(v, 0.5).toFixed(3), lo: +pct(v, 0.2).toFixed(3), hi: +pct(v, 0.8).toFixed(3), iqr: +(pct(v, 0.75) - pct(v, 0.25)).toFixed(3) };
   }
@@ -84,13 +95,14 @@ function summarize(feats) {
 function score(f, profile) {
   let total = 0, wsum = 0; const deltas = {};
   for (const [k, [w, floor]] of Object.entries(SCORE)) {
-    const p = profile[k]; if (!p || typeof f[k] !== 'number') continue;
-    const scale = Math.max(floor, p.iqr);
+    const p = profile[k]; if (!p || !Number.isFinite(f[k]) || ![p.med, p.lo, p.hi].every(Number.isFinite) || p.lo > p.hi) continue;
+    const scale = Math.max(floor, Number.isFinite(p.iqr) && p.iqr >= 0 ? p.iqr : 0);
     const d = (f[k] - p.med) / scale;
     // inside the 20-80% band of the references counts as a match (no penalty)
     const out = f[k] < p.lo ? (p.lo - f[k]) / scale : f[k] > p.hi ? (f[k] - p.hi) / scale : 0;
     total += w * Math.min(out, 6); wsum += w; deltas[k] = { value: f[k], target: p.med, delta: +(f[k] - p.med).toFixed(3), z: +d.toFixed(2), inBand: out === 0 };
   }
+  if (!wsum) throw new Error('Style profile has no finite comparable measurements. Analyze its reference images again.');
   return { distance: +(total / wsum).toFixed(3), deltas };
 }
 

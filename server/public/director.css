@@ -1,6 +1,11 @@
 /* Scoped extension: a neutral photographic workbench on a second monitor.
    Reference and intent precede the renderer; evidence and reversible controls stay nearby. */
 ::selection { background: #171717; color: #fff; }
+#photoRefinementOptions { flex-basis: 100%; max-width: 100%; }
+#photoRefinementOptions .row { flex-wrap: wrap; }
+#photoRefinementOptions input[type="number"] { width: 72px; min-width: 0; }
+#photoLocks { border: 1px solid var(--line, #d9dde2); border-radius: 9px; margin: 10px 0; padding: 8px 12px; }
+#photoLocks label { display: inline-flex; margin: 5px 12px 5px 0; }
 :focus-visible { outline: 2px solid #171717; outline-offset: 3px; }
 textarea { caret-color: #000; }
 button:hover:not(:disabled) { background: #ededed; color: #111; }

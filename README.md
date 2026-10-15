@@ -28,6 +28,8 @@ The release ZIP contains the prebuilt material compiler, so users do not need Ru
 
 See the [2.0 release notes](docs/RELEASE_NOTES_2.0.md) for new features and current limits.
 
+The working checkout adds [measured lighting refinement](docs/MEASURED_REFINEMENT.md) and [material edit recovery](docs/MATERIAL_EDIT_RECEIPTS.md). Set an explicit reference rectangle and objective to enable measured candidates; missing or incompatible evidence retains the first look. A disposable KeyShot 2026.2 calibration measured material mapping and displacement behavior; its [results](docs/MATERIAL_CALIBRATION_RESULTS.md) refine the [calibration plan](docs/MATERIAL_CALIBRATION_PLAN.md). Broader end-to-end verification of these new lighting and material workflows is still needed in KeyShot.
+
 ## macOS setup
 1. Download and extract the release ZIP somewhere permanent. Install Node.js 20+ LTS if it is not already installed.
 2. Open Terminal in the extracted folder and run `bash install-mac.sh`. It installs a launcher in your user Library without administrator access.

@@ -8,6 +8,7 @@
     const j = await r.json(); if (!r.ok) throw new Error(j.error || 'Request failed.'); return j;
   }
   async function choose(file) {
+    if (pending) throw new Error('Wait for the current photo match before changing its reference.');
     if (!file || !/^image\/(png|jpeg|webp)$/.test(file.type)) throw new Error('Choose a PNG, JPG or WebP photo.');
     if (file.size > 25 * 1024 * 1024) throw new Error('Use a reference photo under 25 MB.');
     const url = URL.createObjectURL(file), img = new Image();
@@ -16,6 +17,7 @@
       const canvas = document.createElement('canvas'); canvas.width = Math.round(img.width * scale); canvas.height = Math.round(img.height * scale);
       const ctx = canvas.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
       image = canvas.toDataURL('image/png'); byId('photoRef').src = image; byId('photoRef').hidden = false; byId('photoDropText').textContent = 'Change reference';
+      byId('photoMeasureRegion').checked = false;
       byId('referenceSelection').textContent = file.name || 'Reference image selected'; byId('clearPhoto').hidden = false; byId('referenceUseLabel').hidden = false;
       byId('directorResult').hidden = false;
       updateMode(); message('Reference ready. Your current product angle stays unless you choose to match framing.');
@@ -52,9 +54,16 @@
   byId('photoStop').onclick = stop;
   async function start({ brief = '', framing = false, quality = 'refined' } = {}) {
     if (!image) throw new Error('Add a reference image first.');
+    const measure = byId('photoMeasureRegion').checked;
+    const region = Object.fromEntries(['X0', 'Y0', 'X1', 'Y1'].map(key => [key.toLowerCase(), Number(byId('photoRegion' + key).value) / 100]));
+    if (measure && (!Object.values(region).every(n => Number.isFinite(n) && n >= 0 && n <= 1) || region.x1 - region.x0 < 0.025 || region.y1 - region.y0 < 0.025))
+      throw new Error('Set the reference rectangle inside 0–100%, at least 2.5% wide and high.');
+    const refinement = { objective: byId('photoObjective').value, max_attempts: Number(byId('photoAttempts').value),
+      reference_region: measure ? region : null, locks: Object.fromEntries([...byId('photoLocks').querySelectorAll('input')].map(el => [el.value, el.checked])) };
     pending = true; launching = true; byId('photoDrop').disabled = true; byId('clearPhoto').disabled = true;
+    for (const el of byId('photoRefinementOptions').querySelectorAll('input,select')) el.disabled = true;
     try {
-      await request('/api/photo', { image, brief, framing, quality });
+      await request('/api/photo', { image, brief, framing, quality, refinement });
       launching = false;
       for (;;) {
         await new Promise(resolve => setTimeout(resolve, 1500));
@@ -64,7 +73,8 @@
           return status;
         }
       }
-    } finally { launching = false; pending = false; byId('clearPhoto').disabled = false; await poll(); }
+    } finally { launching = false; pending = false; byId('clearPhoto').disabled = false;
+      for (const el of byId('photoRefinementOptions').querySelectorAll('input,select')) el.disabled = false; await poll(); }
   }
   byId('photoUndo').onclick = async () => { byId('photoUndo').disabled = true;
     try { await request('/api/photo/undo', {}); byId('photoComparison').hidden = true; await syncPose(); await loadStudio(); await poll(); }
@@ -73,7 +83,7 @@
     try {
       const s = await request('/api/photo'); pending = launching || s.running;
       byId('photoStop').disabled = !pending; byId('photoUndo').disabled = pending || !s.canUndo;
-      byId('photoDrop').disabled = pending; byId('photoPhase').textContent = phase[s.phase] || s.phase;
+      byId('photoDrop').disabled = pending; byId('photoPhase').textContent = s.phase === 'measuring' ? 'Measuring the render' : phase[s.phase] || s.phase;
       byId('directorResult').hidden = !image && !s.running && !s.canUndo && !s.result;
       if (lastPhase !== s.phase) { lastPhase = s.phase; message(s.error || s.log?.at(-1) || '');
         if (['restored','canceled','failed'].includes(s.phase)) { byId('photoComparison').hidden = true; await syncPose(); await loadStudio(); }
@@ -84,6 +94,7 @@
         byId('photoDownload').href = url('after') + '&download'; byId('photoRecipe').href = url('recipe') + '&download';
         byId('photoEvidence').hidden = false; const box = byId('photoDecisions'); box.replaceChildren();
         for (const text of [s.result.title, ...(s.result.observations || []), ...(s.result.limitations || [])]) { const p = document.createElement('p'); p.textContent = text; box.appendChild(p); }
+        if (s.result.refinement) { const p = document.createElement('p'); p.textContent = `${s.result.refinement.accepted_attempts} improved candidates kept; ${s.result.refinement.captures_used} captures used.`; box.appendChild(p); }
         byId('stage').style.aspectRatio = String(s.result.aspect); await syncPose(); await loadStudio();
       }
       return s;

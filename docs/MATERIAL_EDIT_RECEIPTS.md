@@ -1,0 +1,13 @@
+# Material inspection and recovery
+
+The inspector reports KeyShot's actual root Surface, Label and Geometry connections, including source node IDs, types, enabled state and inspection errors. These channels have independent effects. A connected Geometry input does not prove that geometry has been executed. File-based parameter values are displayed as read-only evidence.
+
+Director records up to 20 supported material operations in the current bridge session. Undo restores a simple exposed value, the preceding assignment after making an independent material copy, or the preceding map connection/bump strength after editing a copy. It verifies current values or connection source IDs before restoring and checks the restored result. An outside edit causes refusal and retains the receipt. Hidden or locked assignment targets and assemblies are refused. UI value edits also include the last inspected value to reject stale edits.
+
+Undo does not reverse saved library files/KMPs, generated texture files, geometry execution, material creation, or procedural graph builds. History is lost when the bridge restarts. Restored map operations retain disconnected generated nodes because other graph branches may reference them. A readback failure retains the receipt and requires inspection; it is not a claim of transactional recovery under every KeyShot failure.
+
+Copy operations require a readable original assignment and record the confirmed independent assignment before registry writes or graph inspection. If later work fails, Director attempts to restore and verify the original assignment. Value edits record readback before synchronization and attempt restoration on failure. A failed recovery reports that verification failed. Registry/package writes and unassigned copied material resources are not rolled back by this mechanism.
+
+The generated-material and copy registries still use names. Receipts bind to the normalized saved scene filename, scene name, units/scale and root ID reported by KeyShot. Undo refuses a different or unavailable identity, including unsaved scenes with no filename, and retains the receipt. Runtime target IDs and observed values/connections are checked separately. The public API evidence does not establish a scene-load generation token: reopening the same file with identical root IDs and state cannot be distinguished by this signature. Restart the bridge after that operation. Live KeyShot verification remains required for native assignment identity, graph edge lifetime and geometry behavior. The isolated fake-API tests verify bridge decisions and receipt handling only.
+
+Run the isolated checks with `python tools/test_material_receipts.py`. They do not connect to KeyShot.

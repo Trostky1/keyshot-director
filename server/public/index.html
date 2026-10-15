@@ -120,7 +120,17 @@
       </div>
       <div class="thumbs" id="thumbs"></div>
       <textarea id="prompt" rows="3" placeholder="Describe the look, shot, or change you want…"></textarea>
-      <div class="director-match-options" id="directorMatchOptions" hidden><label><input id="photoFraming" type="checkbox"> Match reference framing too</label><label for="photoQuality">Refinement <select id="photoQuality"><option value="refined">Visual refinement</option><option value="quick">Quick first look</option></select></label></div>
+      <div class="director-match-options" id="directorMatchOptions" hidden><label><input id="photoFraming" type="checkbox"> Match reference framing too</label><label for="photoQuality">Refinement <select id="photoQuality"><option value="refined">Measured refinement</option><option value="quick">Quick first look</option></select></label>
+        <details id="photoRefinementOptions"><summary>Measurement region &amp; refinement limits</summary>
+          <p class="dim">Set a tight rectangle around the product or detail in your reference. Director compares it with the projected bounds of one selected KeyShot part, or the whole product. Overlapping objects may enter that region. Without a reference region, the first look is kept.</p>
+          <label><input id="photoMeasureRegion" type="checkbox"> Use this reference rectangle</label>
+          <div class="row"><label>Left % <input id="photoRegionX0" type="number" min="0" max="97" value="0"></label><label>Top % <input id="photoRegionY0" type="number" min="0" max="97" value="0"></label><label>Right % <input id="photoRegionX1" type="number" min="3" max="100" value="100"></label><label>Bottom % <input id="photoRegionY1" type="number" min="3" max="100" value="100"></label></div>
+          <label>Improve <select id="photoObjective"><option value="highlight_position">Highlight position</option><option value="contrast">Contrast range</option><option value="tone">Highlight brightness</option></select></label>
+          <label>Candidate limit <select id="photoAttempts"><option value="1">1</option><option value="2" selected>2</option><option value="3">3</option></select></label>
+          <fieldset id="photoLocks"><legend>Keep fixed while refining</legend><label><input type="checkbox" value="position"> Source positions</label><label><input type="checkbox" value="power"> Power</label><label><input type="checkbox" value="color"> Light color</label><label><input type="checkbox" value="shape"> Source shape</label><label><input type="checkbox" value="environment"> Environment</label></fieldset>
+          <p class="dim">At most 12 preview captures and 8 minutes per match. Only improvements beyond repeat-render variation are kept. Scores describe this image objective, not overall photographic similarity.</p>
+        </details>
+      </div>
       <div class="row" style="margin-top:6px">
         <button id="send" class="solid">Send to Director</button>
         <button id="stopBtn" disabled>Stop</button>
@@ -656,6 +666,15 @@ async function inspectMaterial() {
   $('materialDiscard').disabled = !graph.director_created;
   $('materialSave').disabled = !graph.editable;
   box.innerHTML = '';
+  for (const channel of graph.root_channels || []) {
+    const line = document.createElement('p'); line.className = 'material-readonly-input';
+    const type = channel.source_type;
+    line.textContent = `${channel.socket}: ${channel.error ? 'inspection unavailable' : channel.source_node_id == null ? 'not connected' : `${type?.display_name || type?.name || 'node'} · ${channel.source_node_id}${channel.enabled === false ? ' (disabled)' : ''}`} — ${channel.meaning}`;
+    box.appendChild(line);
+  }
+  const undoScope = document.createElement('p'); undoScope.className = 'material-readonly-input';
+  undoScope.textContent = graph.undo?.scope || 'Undo applies to supported edits in this bridge session.';
+  box.appendChild(undoScope);
   for (const node of graph.nodes) {
     if (node.type.name === '__root') continue;
     const section = document.createElement('div'); section.style.cssText = 'padding:9px 0;border-top:1px solid #ddd';
@@ -670,14 +689,14 @@ async function inspectMaterial() {
       }
       if (p.value === null || typeof p.value === 'string' || (typeof p.value === 'object' && !Array.isArray(p.value))) {
         const note = document.createElement('div'); note.className = 'material-readonly-input';
-        note.textContent = `${p.name}: connected or file-based input (read-only here)`; section.appendChild(note); continue;
+        note.textContent = `${p.name}: ${typeof p.value === 'string' ? p.value : 'no independent readable value'} (read-only here)`; section.appendChild(note); continue;
       }
       const row = document.createElement('div'); row.className = 'row'; row.style.marginTop = '6px';
       const label = document.createElement('label'); label.textContent = p.name; label.style.minWidth = '90px'; row.appendChild(label);
       const input = document.createElement('input'); input.style.width = Array.isArray(p.value) ? '155px' : '95px'; input.value = Array.isArray(p.value) ? p.value.join(', ') : String(p.value); input.disabled = !graph.editable;
       if (typeof p.value === 'number') { input.type = 'number'; input.step = Number.isInteger(p.value) ? '1' : 'any'; }
       if (typeof p.value === 'boolean') { input.type = 'checkbox'; input.checked = p.value; }
-      input.onchange = async () => { try { const value = Array.isArray(p.value) ? input.value.split(',').map(x => Number(x.trim())) : typeof p.value === 'boolean' ? input.checked : Number(input.value); await api('/api/material/set', { name, node_id: node.id, parameter: p.name, value }); $('materialStatus').textContent = `${p.name} updated. Undo edit restores the previous value.`; } catch (e) { toast(e.message); await inspectMaterial(); } };
+      input.onchange = async () => { try { const value = Array.isArray(p.value) ? input.value.split(',').map(x => Number(x.trim())) : typeof p.value === 'boolean' ? input.checked : Number(input.value); const result = await api('/api/material/set', { name, node_id: node.id, parameter: p.name, value, expected_value: p.value }); p.value = result.after; if (typeof p.value === 'boolean') input.checked = p.value; else input.value = Array.isArray(p.value) ? p.value.join(', ') : String(p.value); $('materialStatus').textContent = `${p.name} read back from KeyShot. Undo restores the last supported material operation in this session.`; } catch (e) { toast(e.message); await inspectMaterial(); } };
       row.appendChild(input); section.appendChild(row);
     }
     box.appendChild(section);

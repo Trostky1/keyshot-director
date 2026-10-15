@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { decode } = require('./png');
-const { analyzeCapture, compareCaptures } = require('./lighting-evidence');
+const { analyzeCapture, compareCaptures, normalizeTarget } = require('./lighting-evidence');
 
 const CATEGORIES = ['area', 'point', 'ies', 'spotlight'];
 const OPERATION_VERSION = '1.15.0';
@@ -153,10 +153,11 @@ const OPERATIONS = [
     description: 'Render beauty plus selected lighting, reflection, shadow, clown, depth, and normal evidence. A temporary render engine can be selected and is restored before the operation returns.',
     inputs: {
       passes: { type: 'array', items: ['direct', 'indirect', 'reflection', 'shadow', 'raw', 'clown', 'depth', 'normals'], default: ['clown', 'reflection', 'shadow'], minItems: 1, maxItems: 8 },
-      width: { type: 'integer', default: 640, minimum: 320, maximum: 1280 },
-      height: { type: 'integer', default: 400, minimum: 200, maximum: 960 },
+      width: { type: 'integer', default: 640, minimum: 32, maximum: 1280 },
+      height: { type: 'integer', default: 400, minimum: 32, maximum: 960 },
       secs: { type: 'number', default: 2, minimum: 0.5, maximum: 8 },
-      render_engine: { type: 'enum', items: ['current', 'product_cpu', 'interior_cpu', 'product_gpu', 'interior_gpu'], default: 'current', description: 'Temporarily select a render engine for this capture; KeyShot restores the active engine before returning.' }
+      render_engine: { type: 'enum', items: ['current', 'product_cpu', 'interior_cpu', 'product_gpu', 'interior_gpu'], default: 'current', description: 'Temporarily select a render engine for this capture; KeyShot restores the active engine before returning.' },
+      measurement_target: { type: 'object', optional: true, description: 'Stable target id and identity plus normalized projected-bounds region {x0,y0,x1,y1}. This ROI is approximate and may include occluders; it does not establish pixel identity.' }
     },
     preconditions: ['KeyShot Director bridge is connected.', 'Exact pass setter mapping is present in this KeyShot version.'],
     validation: ['Every requested output is present and PNG output decodes at the requested dimensions.', 'Clown yields aligned product-region metrics for Beauty and supported linear EXR passes.', 'The original render engine and active RenderOptions are restored; the scene signature is unchanged.'],
@@ -451,7 +452,7 @@ function createLightingLab({ send, heartbeat, SHOTS }) {
     }
     if (id === 'lighting.capture_diagnostic_passes') {
       const allowed = ['direct', 'indirect', 'reflection', 'shadow', 'raw', 'clown', 'depth', 'normals'];
-      const unknown = Object.keys(value).filter(key => !['passes', 'width', 'height', 'secs', 'render_engine'].includes(key));
+      const unknown = Object.keys(value).filter(key => !['passes', 'width', 'height', 'secs', 'render_engine', 'measurement_target'].includes(key));
       if (unknown.length) throw Object.assign(new Error(`Unsupported input: ${unknown[0]}`), { status: 400 });
       const passes = value.passes == null ? ['clown', 'reflection', 'shadow'] : value.passes;
       if (!Array.isArray(passes) || !passes.length || passes.length > allowed.length || passes.some(pass => !allowed.includes(pass)) || new Set(passes).size !== passes.length)
@@ -462,11 +463,14 @@ function createLightingLab({ send, heartbeat, SHOTS }) {
       const engines = ['current', 'product_cpu', 'interior_cpu', 'product_gpu', 'interior_gpu'];
       const render_engine = value.render_engine == null ? 'current' : String(value.render_engine).toLowerCase();
       if (!engines.includes(render_engine)) throw Object.assign(new Error(`render_engine must be one of: ${engines.join(', ')}.`), { status: 400 });
-      if (!Number.isInteger(width) || width < 320 || width > 1280 || width % 2 || !Number.isInteger(height) || height < 200 || height > 960 || height % 2)
-        throw Object.assign(new Error('width/height must be even integers within 320x200 to 1280x960.'), { status: 400 });
+      if (!Number.isInteger(width) || width < 32 || width > 1280 || width % 2 || !Number.isInteger(height) || height < 32 || height > 960 || height % 2 || width * height > 4000000)
+        throw Object.assign(new Error('width/height must be even integers within 32x32 to 1280x960, at most 4 million pixels.'), { status: 400 });
       if (typeof secs !== 'number' || !Number.isFinite(secs) || secs < 0.5 || secs > 8)
         throw Object.assign(new Error('secs must be a number from 0.5 to 8.'), { status: 400 });
-      return { passes: passes.slice(), width, height, secs, render_engine };
+      let measurement_target;
+      try { measurement_target = normalizeTarget(value.measurement_target); }
+      catch (error) { throw Object.assign(error, { status: 400 }); }
+      return { passes: passes.slice(), width, height, secs, render_engine, ...(measurement_target ? { measurement_target } : {}) };
     }
     throw Object.assign(new Error('No input schema is available for this operation.'), { status: 400 });
   }
@@ -702,7 +706,10 @@ function createLightingLab({ send, heartbeat, SHOTS }) {
             if (previous.operation_id === operation_id && Array.isArray(previous.output?.files)) {
               output.analysis.comparison_to = {
                 run_id: previous.id,
-                result: compareCaptures(previous.output.files, output.files)
+                result: compareCaptures(previous.output.files, output.files, 1e-4, {
+                  require_metadata: true, reference: previous.output.capture_metadata,
+                  candidate: output.capture_metadata
+                })
               };
             }
           } catch { /* Keep the current capture analysis if the source run is unavailable. */ }
