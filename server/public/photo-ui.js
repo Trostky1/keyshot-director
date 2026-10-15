@@ -1,26 +1,31 @@
 (() => {
   const byId = id => document.getElementById(id);
   let image = null, currentId = null, lastPhase = '', pending = false, launching = false;
-  const phase = { idle: 'Ready for a reference', inspecting: 'Inspecting your scene', planning: 'Reading the reference', lighting: 'Building the light', refining: 'Checking the real render', restoring: 'Restoring your scene', complete: 'Look applied', failed: 'Match needs attention', canceled: 'Match canceled', restored: 'Previous look restored' };
+  const phase = { idle: 'Ready for a reference', inspecting: 'Checking the KeyShot scene', planning: 'Reading the reference', lighting: 'Building the lighting setup', refining: 'Checking a KeyShot render', restoring: 'Restoring the scene', complete: 'Lighting match applied', failed: 'Lighting match needs attention', canceled: 'Lighting match stopped', restored: 'Previous lighting restored' };
   const message = t => { byId('photoProgress').textContent = t; };
   async function request(url, data) {
-    const r = await fetch(url, data === undefined ? {} : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
-    const j = await r.json(); if (!r.ok) throw new Error(j.error || 'Request failed.'); return j;
+    let r;
+    try { r = await fetch(url, data === undefined ? {} : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }); }
+    catch { throw new Error('Could not reach Director. Check that the app is open, then try again.'); }
+    let j;
+    try { j = await r.json(); } catch { throw new Error('Director returned an unreadable response. Restart the app and try again.'); }
+    if (!r.ok) throw new Error(j.error || `Director could not complete the lighting match (${r.status}).`);
+    return j;
   }
   async function choose(file) {
-    if (pending) throw new Error('Wait for the current photo match before changing its reference.');
-    if (!file || !/^image\/(png|jpeg|webp)$/.test(file.type)) throw new Error('Choose a PNG, JPG or WebP photo.');
-    if (file.size > 25 * 1024 * 1024) throw new Error('Use a reference photo under 25 MB.');
+    if (pending) throw new Error('Wait for the current lighting match to finish before changing its reference.');
+    if (!file || !/^image\/(png|jpeg|webp)$/.test(file.type)) throw new Error('Choose a PNG, JPG, or WebP image.');
+    if (file.size > 25 * 1024 * 1024) throw new Error('Choose a reference image smaller than 25 MB.');
     const url = URL.createObjectURL(file), img = new Image();
     try {
       img.src = url; await img.decode(); const scale = Math.min(1, 1400 / Math.max(img.width, img.height));
       const canvas = document.createElement('canvas'); canvas.width = Math.round(img.width * scale); canvas.height = Math.round(img.height * scale);
       const ctx = canvas.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      image = canvas.toDataURL('image/png'); byId('photoRef').src = image; byId('photoRef').hidden = false; byId('photoDropText').textContent = 'Change reference';
+      image = canvas.toDataURL('image/png'); byId('photoRef').src = image; byId('photoRef').alt = file.name ? `Reference image: ${file.name}` : 'Selected reference image'; byId('photoRef').hidden = false; byId('photoDropText').textContent = 'Change reference image';
       byId('photoMeasureRegion').checked = false;
       byId('referenceSelection').textContent = file.name || 'Reference image selected'; byId('clearPhoto').hidden = false; byId('referenceUseLabel').hidden = false;
       byId('directorResult').hidden = false;
-      updateMode(); message('Reference ready. Your current product angle stays unless you choose to match framing.');
+      updateMode(); message('Reference ready. The current camera framing stays unless you choose to match the reference framing.');
     } finally { URL.revokeObjectURL(url); }
   }
   const drop = byId('photoDrop'); drop.onclick = () => byId('photoFile').click();
@@ -38,14 +43,15 @@
     byId('directorMatchOptions').hidden = !matching;
     byId('directorPrivacy').hidden = !image;
     byId('directorPrivacy').textContent = matching
-      ? 'For lighting matches, your reference and KeyShot previews go to the selected AI provider. Materials stay untouched. Save your scene in KeyShot to keep the result.'
-      : 'This reference image goes to the selected AI provider with your Director request.';
+      ? 'For a lighting match, Director sends this reference image and KeyShot previews to your selected AI provider. Materials are not changed. Save the scene in KeyShot to keep the result.'
+      : 'Director sends this reference image with your request to the selected AI provider.';
   }
   byId('referenceUse').onchange = updateMode;
   byId('clearPhoto').onclick = () => {
     if (pending) return;
     image = null; byId('photoRef').removeAttribute('src'); byId('photoRef').hidden = true;
-    byId('photoDropText').innerHTML = 'Add a reference image<span>Choose or drop · PNG, JPG, WebP</span>';
+    byId('photoRef').alt = '';
+    byId('photoDropText').innerHTML = 'Add a reference image<span>Choose or drop · PNG, JPG, or WebP</span>';
     byId('referenceSelection').textContent = 'No reference image selected.';
     byId('clearPhoto').hidden = true; byId('referenceUseLabel').hidden = true; byId('photoFile').value = '';
     updateMode(); if (byId('photoUndo').disabled && byId('photoComparison').hidden) byId('directorResult').hidden = true;
@@ -53,11 +59,11 @@
   const stop = () => request('/api/photo/stop', {}).then(r => message(r.note)).catch(e => message(e.message));
   byId('photoStop').onclick = stop;
   async function start({ brief = '', framing = false, quality = 'refined' } = {}) {
-    if (!image) throw new Error('Add a reference image first.');
+    if (!image) throw new Error('Add a reference image before starting a lighting match.');
     const measure = byId('photoMeasureRegion').checked;
     const region = Object.fromEntries(['X0', 'Y0', 'X1', 'Y1'].map(key => [key.toLowerCase(), Number(byId('photoRegion' + key).value) / 100]));
     if (measure && (!Object.values(region).every(n => Number.isFinite(n) && n >= 0 && n <= 1) || region.x1 - region.x0 < 0.025 || region.y1 - region.y0 < 0.025))
-      throw new Error('Set the reference rectangle inside 0–100%, at least 2.5% wide and high.');
+      throw new Error('Keep the rectangle within 0–100% on each edge and make it at least 2.5% wide and high.');
     const refinement = { objective: byId('photoObjective').value, max_attempts: Number(byId('photoAttempts').value),
       reference_region: measure ? region : null, locks: Object.fromEntries([...byId('photoLocks').querySelectorAll('input')].map(el => [el.value, el.checked])) };
     pending = true; launching = true; byId('photoDrop').disabled = true; byId('clearPhoto').disabled = true;
@@ -107,11 +113,11 @@
       if (kind === 'detail') {
         const context = await request('/api/scene-context');
         const selection = context.target?.selection || [];
-        if (selection.length > 1) throw new Error('Select one part in KeyShot for a part close-up, or clear the selection to frame the product.');
+        if (selection.length > 1) throw new Error('Select one part in KeyShot for a close-up, or clear the selection to frame the full product.');
         useSelectedPart = selection.length === 1;
       }
       const result = await request('/api/frame', { kind: kind === 'hero' ? 'hero' : 'detail', fill: kind === 'hero' ? 0.75 : 1.5, focus: kind === 'upper' ? [0,0.3,0] : [0,0,0], fov: 35, aspect, ...(useSelectedPart ? { use_selected_part: true } : {}) });
-      byId('stage').style.aspectRatio = String(aspect); await syncPose(); message(useSelectedPart ? `Framed ${result.target_part || 'the selected part'}. Materials and viewing angle were preserved.` : 'Framing updated. Materials and viewing angle were preserved.'); }
+      byId('stage').style.aspectRatio = String(aspect); await syncPose(); message(useSelectedPart ? `Framed ${result.target_part || 'the selected part'}. Material assignments were not changed.` : 'Framing updated. Material assignments were not changed.'); }
     catch (e) { message(e.message); } finally { button.disabled = false; }
   }; });
   byId('environmentFold').ontoggle = async e => { if (!e.target.open) return;

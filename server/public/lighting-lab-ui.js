@@ -25,8 +25,8 @@
     const names = (group?.assets || []).map(asset => asset.material);
     const params = [...new Set((group?.assets || []).flatMap(asset => asset.parameters.map(parameter => parameter.name)))];
     status.textContent = record.status === 'failed'
-      ? `Inspection failed: ${record.error || 'unknown bridge error'} · run ${record.id}`
-      : `${replayed ? 'Replay' : 'Inspection'} ${record.status} · KeyShot ${keyshot.display_version || keyshot.version || 'version unavailable'} · ${count} ${type.value} graph(s) · run ${record.id}`;
+      ? `Could not inspect the ${type.value} light graph: ${record.error || 'KeyShot returned an unknown error.'} · run ${record.id}`
+      : `${replayed ? 'Repeat inspection' : 'Inspection'} complete · KeyShot ${keyshot.display_version || keyshot.version || 'version unavailable'} · ${count} ${type.value} light graph${count === 1 ? '' : 's'} found · run ${record.id}`;
     const details = group ? { selected_type: type.value, shader_type: group.shader_type, candidate_count: group.candidate_count,
       truncated: group.truncated, candidate_names: group.candidate_names, materials: names, unmatched_assets: group.unmatched_assets,
       exposed_parameters: params, parameter_graphs: group.assets, material_templates: record.output?.material_templates,
@@ -49,14 +49,14 @@
       const direct = comparison.passes?.direct?.product;
       const reflection = comparison.passes?.reflection?.product;
       const fmt = value => `${value >= 0 ? '+' : ''}${value.toFixed(6)}`;
-      const parts = [comparison.mask_agreement?.suitable_for_lighting_only_comparison ? 'framing stable' : 'framing shifted'];
-      if (direct && Number.isFinite(direct.mean_signed_luma_delta)) parts.push(`Direct Δ ${fmt(direct.mean_signed_luma_delta)} · avg abs ${direct.mean_absolute_luma_delta.toFixed(6)}`);
-      if (reflection && Number.isFinite(reflection.mean_signed_luma_delta)) parts.push(`Reflection Δ ${fmt(reflection.mean_signed_luma_delta)} · avg abs ${reflection.mean_absolute_luma_delta.toFixed(6)}`);
+      const parts = [comparison.mask_agreement?.suitable_for_lighting_only_comparison ? 'product framing stayed consistent' : 'product framing shifted'];
+      if (direct && Number.isFinite(direct.mean_signed_luma_delta)) parts.push(`Direct light change ${fmt(direct.mean_signed_luma_delta)} · average absolute change ${direct.mean_absolute_luma_delta.toFixed(6)}`);
+      if (reflection && Number.isFinite(reflection.mean_signed_luma_delta)) parts.push(`Reflection change ${fmt(reflection.mean_signed_luma_delta)} · average absolute change ${reflection.mean_absolute_luma_delta.toFixed(6)}`);
       comparisonText = ` · ${parts.join(' · ')}`;
     }
     status.textContent = record.status === 'failed'
-      ? `Capture failed: ${record.error || 'unknown bridge error'} · run ${record.id}`
-      : `${record.replay_of ? 'Comparison capture' : 'Capture'} ${record.status} · ${result?.elapsed_seconds ?? '?'}s · scene ${result?.scene_unchanged ? 'unchanged' : 'check needed'} · render options ${result?.render_options_unchanged ? 'unchanged' : 'check needed'}${comparisonText} · run ${record.id}`;
+      ? `Could not capture the render passes: ${record.error || 'KeyShot returned an unknown error.'} · run ${record.id}`
+      : `${record.replay_of ? 'Comparison capture' : 'Render capture'} complete · ${result?.elapsed_seconds ?? '?'} sec · scene ${result?.scene_unchanged ? 'unchanged' : 'changed; check it'} · render settings ${result?.render_options_unchanged ? 'unchanged' : 'changed; check them'}${comparisonText} · run ${record.id}`;
     output.textContent = JSON.stringify({ requested_passes: result?.requested_passes, missing_passes: result?.missing_passes,
       size: result ? `${result.width} × ${result.height}` : null, files: (result?.files || []).map(file => ({ pass: file.pass, name: file.name, bytes: file.bytes, sha256: file.sha256, extension: file.extension })),
       region_analysis: result?.analysis,
@@ -85,8 +85,8 @@
     const scene = result.scene || {};
     const unitReady = scene.unit === 'mm' && Math.abs(Number(scene.unitScale) - 1000) < 0.000001;
     status.textContent = record.status === 'failed'
-      ? `Scene snapshot failed: ${record.error || 'unknown bridge error'} · run ${record.id}`
-      : `Scene snapshot ${record.status} · ${scene.unit || 'unit unknown'} · ${result.geometry_ids?.length ?? '?'} geometry IDs · ${result.tree?.length ?? '?'} scene nodes · Area Light import ${unitReady ? 'unit-ready' : 'blocked until scene is mm'}${result.scene_changed ? ' · unsaved scene edits detected' : ''} · run ${record.id}`;
+      ? `Could not capture the scene settings: ${record.error || 'KeyShot returned an unknown error.'} · run ${record.id}`
+      : `Scene settings captured · units: ${scene.unit || 'unknown'} · ${result.geometry_ids?.length ?? '?'} part IDs · ${result.tree?.length ?? '?'} scene items · Area Light import ${unitReady ? 'ready (millimeter units)' : 'unavailable until the scene uses millimeters'}${result.scene_changed ? ' · unsaved scene edits detected' : ''} · run ${record.id}`;
     output.textContent = JSON.stringify({ keyshot: result.keyshot, scene, scene_materials: result.scene_materials,
       geometry_ids: result.geometry_ids, tree: result.tree, camera: result.camera, environment: result.environment,
       render_options_hash: result.render_options_hash, scene_changed: result.scene_changed,
@@ -96,7 +96,7 @@
 
   async function runSceneSnapshot() {
     snapshot.disabled = inspect.disabled = replay.disabled = capture.disabled = replayCapture.disabled = true;
-    status.textContent = 'Reading scene identities and settings…';
+    status.textContent = 'Reading part names and scene settings…';
     try {
       const record = await post('/api/lighting-lab/run', { operation_id: 'lighting.inspect_scene_state', inputs: {} });
       showSceneSnapshot(record);
@@ -113,14 +113,14 @@
 
   async function runControlSurface() {
     snapshot.disabled = surface.disabled = inspect.disabled = replay.disabled = capture.disabled = replayCapture.disabled = true;
-    status.textContent = 'Reading KeyShot lighting API names and class surfaces…';
+    status.textContent = 'Checking which lighting controls KeyShot exposes…';
     try {
       const record = await post('/api/lighting-lab/run', { operation_id: 'lighting.inspect_control_surface', inputs: {} });
       const result = record.output || {};
       const api = result.api_surface || {};
       status.textContent = record.status === 'failed'
-        ? `API inspection failed: ${record.error || 'unknown bridge error'} · run ${record.id}`
-        : `Lighting API ${record.status} · KeyShot ${result.keyshot?.display_version || result.keyshot?.version || 'version unavailable'} · ${api.lighting_related_lux_names?.length ?? 0} related names · run ${record.id}`;
+        ? `Could not inspect KeyShot lighting controls: ${record.error || 'KeyShot returned an unknown error.'} · run ${record.id}`
+        : `Lighting control inspection complete · KeyShot ${result.keyshot?.display_version || result.keyshot?.version || 'version unavailable'} · ${api.lighting_related_lux_names?.length ?? 0} lighting-related controls found · run ${record.id}`;
       output.textContent = JSON.stringify({ keyshot: result.keyshot, inspection_scope: result.inspection_scope,
         lighting_related_lux_names: api.lighting_related_lux_names, potential_pin_names: api.potential_pin_names,
         surface_targeting_names: api.surface_targeting_names,
@@ -140,7 +140,7 @@
 
   async function runInspection(replayLast) {
     snapshot.disabled = inspect.disabled = replay.disabled = capture.disabled = replayCapture.disabled = true;
-    status.textContent = replayLast ? 'Replaying inspection with the selected light type…' : 'Reading KeyShot light material graphs…';
+    status.textContent = replayLast ? 'Repeating the inspection with this light type…' : 'Reading KeyShot light material graphs…';
     try {
       const inputs = { types: [type.value], max_assets: 12 };
       const record = replayLast
@@ -162,7 +162,7 @@
     if (!passes.length) { status.textContent = 'Select at least one diagnostic pass.'; return; }
     if (compareLast && !lastCaptureRunId) return;
     snapshot.disabled = inspect.disabled = replay.disabled = capture.disabled = replayCapture.disabled = true;
-    status.textContent = compareLast ? 'Capturing again and comparing to the prior pass set…' : 'Rendering a bounded diagnostic preview with cloned settings…';
+    status.textContent = compareLast ? 'Capturing the same render passes again for comparison…' : 'Rendering a small diagnostic preview with copied settings…';
     try {
       const record = compareLast
         ? await post('/api/lighting-lab/replay', { run_id: lastCaptureRunId })

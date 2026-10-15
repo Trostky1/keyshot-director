@@ -91,52 +91,52 @@
 <link rel="stylesheet" href="/director.css">
 </head>
 <body>
-<!-- THESIS: A premium workbench for directing the live KeyShot scene. OWN-WORLD: Graphite navigation, warm silver surfaces, precise blue actions, and the user's live render as the hero. STORY: Shape the light, state the intent, then refine from evidence. FIRST VIEWPORT: Scene, unified Director brief, and lighting controls in one glance. FORM: Wide render with focused native controls; Materials pairs the same live render with the real inspector. FINISH: Clear hierarchy, responsive touch targets, explicit scene state, and no simulated controls. -->
+<!-- THESIS: A premium workbench for directing the live KeyShot scene. OWN-WORLD: Editorial black-and-white typography, KeyShot blue actions, restrained orange punctuation, and a fine grid reserved for actual editing canvases. STORY: Shape the light, state the intent, then refine from evidence. FIRST VIEWPORT: Scene, unified Director brief, and lighting controls in one glance. FORM: Preserve the wide render and focused native controls; Materials pairs the same live render with the real inspector. FINISH: Clear hierarchy, responsive touch targets, explicit scene state, and no simulated controls. -->
 <header class="app-header">
   <div class="brand-lockup"><span class="brand-mark" aria-hidden="true">K</span><h1>KeyShot Director</h1></div>
   <nav class="workspace-nav" aria-label="Workspaces"><button type="button" data-workspace="studio" aria-current="page">Studio</button><button type="button" data-workspace="materials">Materials</button></nav>
-  <div class="header-actions"><div class="connection-status"><span class="dot" id="dot"></span><span id="status">connecting</span></div><span class="dim" id="mode"></span>
-    <button class="sm solid" id="connectQuick" data-copy disabled hidden title="Copy the KeyShot console command. In KeyShot, open Window → Scripting, paste it into the console, and press Enter." aria-label="Copy KeyShot hookup command">Copy hookup</button>
+  <div class="header-actions"><div class="connection-status"><span class="dot" id="dot"></span><span id="status" role="status" aria-live="polite">Checking connection…</span></div><span class="dim" id="mode"></span>
+    <button class="sm solid" id="connectQuick" data-copy disabled hidden title="Copy the setup command, then paste it into KeyShot’s scripting console." aria-label="Copy KeyShot setup command">Copy setup command</button>
     <button class="sm" id="settingsBtn">Settings</button>
   </div>
 </header>
 <main id="studioWorkspace">
   <section class="col">
-    <div class="stage-heading"><div><h2>Studio</h2><p>Shape your product in KeyShot, right from here.</p></div><span class="scene-tag">Live scene</span></div>
-    <div id="studioStageHome" class="studio-stage-host"><div class="stage" id="stage"><img id="shot" alt="" draggable="false"><div class="empty" id="empty"><b>Waiting for KeyShot</b><br><br>Save your scene, then in KeyShot open <b>Window &rarr; Scripting</b>, click the console, paste this and press Enter:<div class="connectline"><code class="cline">...</code><button class="solid" data-copy>Copy</button></div><details class="first-run-guide"><summary>First time connecting?</summary><ol><li>In KeyShot, open <b>Window &rarr; Scripting</b>.</li><li>Choose <b>KeyShot Director</b> and click <b>Run</b>. If missing on Windows, run <b>Install KeyShot Director.bat</b> from the extracted download. On Mac, run <code>bash install-mac.sh</code> and add the printed folder in KeyShot Preferences &rarr; Folders &rarr; Scripts.</li><li>Or paste the command above in KeyShot's scripting console and press Enter.</li></ol><p>Keep the Director app window and KeyShot open while you work. Once connected, the live scene appears here.</p></details><span class="dim">The bridge runs inside KeyShot. Leave its scripting window alone while it runs (no other scripts or dialogs).</span></div><div class="livebar"><label><input type="checkbox" id="live"> live preview</label><button class="sm" id="refresh">Refresh</button></div><div class="hint">drag orbit &middot; right-drag / shift-drag pan &middot; wheel zoom &middot; touch: 1 finger orbit, 2 pan + pinch</div></div></div>
-      <div class="conversation-heading"><h2>Ask Director</h2><span>Describe a look, choose a shot goal, or add a reference.</span></div>
-    <div id="log"></div>
+    <div class="stage-heading"><div><h2>Studio</h2><p>Control lighting, framing, and materials in your connected KeyShot scene.</p></div><div class="stage-heading-actions"><button type="button" class="preview-toggle" data-preview-toggle aria-controls="stage" aria-expanded="true">Hide preview</button><span class="scene-tag" id="studioSceneTag">Checking scene</span></div></div>
+    <div id="studioStageHome" class="studio-stage-host"><div class="stage" id="stage"><img id="shot" alt="Current KeyShot render preview" draggable="false"><div class="empty" id="empty"><b>Waiting for KeyShot</b><br><br>Save your scene. In KeyShot, open <b>Window &rarr; Scripting</b>, click the console, paste this command, and press Enter:<div class="connectline"><code class="cline">...</code><button class="solid" data-copy aria-label="Copy KeyShot setup command">Copy command</button></div><details class="first-run-guide"><summary>First time connecting?</summary><ol><li>In KeyShot, open <b>Window &rarr; Scripting</b>.</li><li>Choose <b>KeyShot Director</b> and click <b>Run</b>. If it is missing on Windows, run <b>Install KeyShot Director.bat</b> from the extracted download. On Mac, run <code>bash install-mac.sh</code>, then add the printed folder in KeyShot Preferences &rarr; Folders &rarr; Scripts.</li><li>You can also paste the command above into KeyShot’s scripting console and press Enter.</li></ol><p>Keep both KeyShot and Director open while you work. Your scene preview appears here after they connect.</p></details><span class="dim">The connection runs inside KeyShot. Keep its scripting window open and do not run other scripts or open dialogs there while connected.</span></div><div class="livebar"><label><input type="checkbox" id="live"> Update preview automatically</label><button class="sm" id="refresh" title="Request a fresh render preview from KeyShot">Refresh preview</button></div><div class="hint">Drag to orbit · Right-drag or Shift-drag to pan · Scroll to zoom · Touch: one finger orbits; two fingers pan and pinch</div></div></div>
+      <div class="conversation-heading"><h2>Ask Director</h2><span>Describe a change, choose a lighting goal, or add reference images.</span></div>
+    <div id="log" role="log" aria-live="polite" aria-relevant="additions text" aria-label="Director conversation"></div>
     <div class="promptbar">
       <div class="director-context">
-        <label for="lightingFocus">Scene goal
-        <select id="lightingFocus"><option value="auto">Auto from request</option><option value="catalog_studio">Clean catalog studio</option><option value="hero_product">Soft hero product</option><option value="macro_detail">Close-up / macro detail</option><option value="low_key_moody">Low-key / moody</option><option value="dramatic_color">Dramatic colored light</option><option value="glass_transparency">Glass / transparent</option><option value="reflective_metal">Reflective metal</option></select></label>
-        <label for="directorStyle">Saved style
-          <select id="directorStyle"><option value="">None selected</option></select></label>
+        <label for="lightingFocus">Lighting goal
+        <select id="lightingFocus"><option value="auto">Choose from my request</option><option value="catalog_studio">Clean catalog lighting</option><option value="hero_product">Soft hero lighting</option><option value="macro_detail">Close-up detail</option><option value="low_key_moody">Dark, moody lighting</option><option value="dramatic_color">Dramatic colored light</option><option value="glass_transparency">Glass and transparency</option><option value="reflective_metal">Reflective metal</option></select></label>
+        <label for="directorStyle">Saved reference style
+          <select id="directorStyle"><option value="">No style selected</option></select></label>
       </div>
       <div class="director-reference-row">
         <button class="photo-drop" id="photoDrop" type="button"><img id="photoRef" alt="Selected reference" hidden><span id="photoDropText">Add a reference image<span>Choose or drop · PNG, JPG, WebP</span></span></button>
         <input id="photoFile" type="file" accept="image/png,image/jpeg,image/webp" hidden>
-        <div class="director-reference-details"><p id="referenceSelection">No reference image selected.</p><button id="clearPhoto" type="button" hidden>Remove image</button><label for="referenceUse" id="referenceUseLabel" hidden>Use image for<select id="referenceUse"><option value="match">Match lighting and mood</option><option value="context">Director context only</option></select></label></div>
+        <div class="director-reference-details"><p id="referenceSelection" role="status" aria-live="polite">No reference image selected.</p><button id="clearPhoto" type="button" hidden>Remove image</button><label for="referenceUse" id="referenceUseLabel" hidden>Use this image to<select id="referenceUse"><option value="match">Match its lighting and mood</option><option value="context">Provide context for my request</option></select></label></div>
       </div>
       <div class="thumbs" id="thumbs"></div>
-      <textarea id="prompt" rows="3" placeholder="Describe the look, shot, or change you want…"></textarea>
-      <div class="director-match-options" id="directorMatchOptions" hidden><label><input id="photoFraming" type="checkbox"> Match reference framing too</label><label for="photoQuality">Refinement <select id="photoQuality"><option value="refined">Measured refinement</option><option value="quick">Quick first look</option></select></label>
-        <details id="photoRefinementOptions"><summary>Measurement region &amp; refinement limits</summary>
-          <p class="dim">Set a tight rectangle around the product or detail in your reference. Director compares it with the projected bounds of one selected KeyShot part, or the whole product. Overlapping objects may enter that region. Without a reference region, the first look is kept.</p>
-          <label><input id="photoMeasureRegion" type="checkbox"> Use this reference rectangle</label>
+      <textarea id="prompt" rows="3" aria-label="Describe a lighting or scene change" placeholder="Describe the look, shot, or change you want…"></textarea>
+      <div class="director-match-options" id="directorMatchOptions" hidden><label><input id="photoFraming" type="checkbox"> Also match the camera framing</label><label for="photoQuality">Lighting refinement <select id="photoQuality"><option value="refined">Refine using render measurements</option><option value="quick">Keep the first result (faster)</option></select></label>
+        <details id="photoRefinementOptions"><summary>Measurement area and attempt limits</summary>
+          <p class="dim">Draw a tight rectangle around the product or detail in your reference. Director measures the selected KeyShot part’s projected bounds there, or the full product if no part is selected. Other objects inside the rectangle can affect the score. If you do not set an area, Director keeps the first result.</p>
+          <label><input id="photoMeasureRegion" type="checkbox"> Measure inside this reference rectangle</label>
           <div class="row"><label>Left % <input id="photoRegionX0" type="number" min="0" max="97" value="0"></label><label>Top % <input id="photoRegionY0" type="number" min="0" max="97" value="0"></label><label>Right % <input id="photoRegionX1" type="number" min="3" max="100" value="100"></label><label>Bottom % <input id="photoRegionY1" type="number" min="3" max="100" value="100"></label></div>
-          <label>Improve <select id="photoObjective"><option value="highlight_position">Highlight position</option><option value="contrast">Contrast range</option><option value="tone">Highlight brightness</option></select></label>
-          <label>Candidate limit <select id="photoAttempts"><option value="1">1</option><option value="2" selected>2</option><option value="3">3</option></select></label>
-          <fieldset id="photoLocks"><legend>Keep fixed while refining</legend><label><input type="checkbox" value="position"> Source positions</label><label><input type="checkbox" value="power"> Power</label><label><input type="checkbox" value="color"> Light color</label><label><input type="checkbox" value="shape"> Source shape</label><label><input type="checkbox" value="environment"> Environment</label></fieldset>
-          <p class="dim">At most 12 preview captures and 8 minutes per match. Only improvements beyond repeat-render variation are kept. Scores describe this image objective, not overall photographic similarity.</p>
+          <label>What to improve <select id="photoObjective"><option value="highlight_position">Highlight position</option><option value="contrast">Light-to-dark contrast</option><option value="tone">Highlight brightness</option></select></label>
+          <label>Maximum refinement attempts <select id="photoAttempts"><option value="1">1 attempt</option><option value="2" selected>2 attempts</option><option value="3">3 attempts</option></select></label>
+          <fieldset id="photoLocks"><legend>Keep fixed during refinement</legend><label><input type="checkbox" value="position"> Light positions</label><label><input type="checkbox" value="power"> Light power</label><label><input type="checkbox" value="color"> Light color</label><label><input type="checkbox" value="shape"> Light shape</label><label><input type="checkbox" value="environment"> Environment</label></fieldset>
+          <p class="dim">Each match is limited to 12 preview renders or 8 minutes. A result is kept only when its improvement is larger than normal render variation. The score tracks the selected goal; it does not measure overall similarity to the reference.</p>
         </details>
       </div>
       <div class="row" style="margin-top:6px">
-        <button id="send" class="solid">Send to Director</button>
+        <button id="send" class="solid">Send request</button>
         <button id="stopBtn" disabled>Stop</button>
-        <button id="attach">More images</button><input type="file" id="file" accept="image/*" multiple hidden>
-        <button id="newchat" title="Forget this conversation">New chat</button>
-        <span class="dim" id="busy"></span>
+        <button id="attach" title="Attach up to 8 reference images to your request">Add images</button><input type="file" id="file" accept="image/*" multiple hidden>
+        <button id="newchat" title="Clear this conversation and start a new one">New chat</button>
+        <span class="dim" id="busy" role="status" aria-live="polite"></span>
       </div>
       <div id="examples" style="margin-top:6px"></div>
       <p class="director-privacy" id="directorPrivacy" hidden>For lighting matches, the reference and KeyShot previews go to your selected AI provider. Materials remain untouched. Save your scene in KeyShot to keep the result.</p>
@@ -145,24 +145,24 @@
   </section>
 
   <aside>
-    <section class="panel" aria-labelledby="frameTitle"><h2 id="frameTitle">Frame &amp; background</h2><p class="blurb">Choose what fills the frame. Detail close-up uses one selected KeyShot part when available.</p>
-      <div class="row"><button data-frame="hero">Full product</button><button data-frame="detail">Detail close-up</button><button data-frame="upper">Upper detail</button></div>
+    <section class="panel" aria-labelledby="frameTitle"><h2 id="frameTitle">Frame &amp; background</h2><p class="blurb">Choose how much of the product appears. A close-up uses one selected KeyShot part when available.</p>
+      <div class="row"><button data-frame="hero">Full product</button><button data-frame="detail">Close-up</button><button data-frame="upper">Upper product</button></div>
       <label for="frameAspect">Output shape</label><select id="frameAspect"><option value="1.7777777778">Landscape · 16:9</option><option value="1">Square · 1:1</option><option value="0.8">Portrait · 4:5</option></select>
       <details class="fold" id="environmentFold"><summary>Background &amp; ground</summary><label for="envColor">Backdrop color <input id="envColor" type="color" value="#f5f5f5"></label><label><input id="envShadows" type="checkbox" checked> Ground shadows</label><label><input id="envReflections" type="checkbox"> Ground reflections</label><button id="environmentApply">Apply background</button></details>
     </section>
     <div class="panel">
       <details class="fold" id="connectFold"><summary>Connect KeyShot</summary>
-        <div class="dim" style="margin:8px 0;text-transform:none;letter-spacing:0;font-size:11.5px">Save your scene. In KeyShot: <b>Window &rarr; Scripting</b>, click the console, paste, Enter. Run it again if the header says the bridge is not running (it lasts up to 4 hours).</div>
-        <div class="connectline"><code class="cline">...</code><button class="solid" data-copy>Copy</button></div>
+        <div class="dim" style="margin:8px 0;text-transform:none;letter-spacing:0;font-size:11.5px">Save the scene first. In KeyShot, open <b>Window &rarr; Scripting</b>, click the console, paste the command below, and press Enter. If the status says the bridge is not running, run the command again. The connection lasts up to 4 hours.</div>
+        <div class="connectline"><code class="cline">...</code><button class="solid" data-copy aria-label="Copy KeyShot setup command">Copy command</button></div>
       </details>
     </div>
 
     <div class="panel">
       <details class="fold" id="sceneContextFold">
-        <summary>What Director sees</summary>
-        <p class="blurb">A read-only snapshot of the open scene. Refresh when you change selection or materials.</p>
-        <div class="row scene-context-actions"><button id="sceneContextRefresh" type="button" disabled>Refresh scene facts</button><span id="sceneContextStatus" role="status" aria-live="polite">Connect KeyShot to inspect</span></div>
-        <div id="sceneContextOutput" class="scene-context-output"><p class="scene-context-empty">Check what KeyShot is exposing before you ask for a focused change.</p></div>
+        <summary>Scene details Director can read</summary>
+        <p class="blurb">Read-only details from the open KeyShot scene. Refresh after changing the selection or materials.</p>
+        <div class="row scene-context-actions"><button id="sceneContextRefresh" type="button" disabled>Refresh scene details</button><span id="sceneContextStatus" role="status" aria-live="polite">Connect KeyShot to inspect</span></div>
+        <div id="sceneContextOutput" class="scene-context-output"><p class="scene-context-empty">Review the scene details KeyShot shares with Director before requesting a targeted change.</p></div>
       </details>
     </div>
 
@@ -172,74 +172,74 @@
       <input type="file" id="vfile" accept="video/*" hidden>
       <div class="chk2"><label><input type="checkbox" id="vlight" checked> match lighting</label><label><input type="checkbox" id="vcam" checked> match camera</label></div>
       <div class="blurb">Point the camera at the <b>front of your product</b> first: that view becomes the video's opening shot.</div>
-      <div id="vlog" class="mono dim" style="margin-top:8px;white-space:pre-wrap"></div>
-      <div class="row" style="margin-top:8px"><button id="vplay">Play move</button><button id="vrender" class="solid">Render video</button><button id="vstop" disabled>Stop</button></div>
-      <div class="row" style="margin-top:8px"><select id="vsize"><option value="1280x720">1280 &times; 720</option><option value="1920x1080">1920 &times; 1080</option><option value="1080x1920">1080 &times; 1920 vertical</option><option value="1080x1080">1080 &times; 1080 square</option><option value="640x360">640 &times; 360 draft</option></select>
-        <select id="vfps"><option>24</option><option>30</option><option>12</option></select>
-        <select id="vq" title="Render time per frame"><option value="2">draft 2s/frame</option><option value="6" selected>good 6s/frame</option><option value="20">high 20s/frame</option><option value="60">final 60s/frame</option></select></div>
-      <div id="rlog" class="mono dim" style="margin-top:8px;white-space:pre-wrap"></div>
+      <div id="vlog" class="mono dim" role="status" aria-live="polite" style="margin-top:8px;white-space:pre-wrap"></div>
+      <div class="row" style="margin-top:8px"><button id="vplay">Preview camera move</button><button id="vrender" class="solid">Render video</button><button id="vstop" disabled>Stop render</button></div>
+      <div class="row" style="margin-top:8px"><select id="vsize" aria-label="Video dimensions"><option value="1280x720">1280 &times; 720</option><option value="1920x1080">1920 &times; 1080</option><option value="1080x1920">1080 &times; 1920 vertical</option><option value="1080x1080">1080 &times; 1080 square</option><option value="640x360">640 &times; 360 draft</option></select>
+        <select id="vfps" aria-label="Video frames per second"><option value="24">24 fps</option><option value="30">30 fps</option><option value="12">12 fps</option></select>
+        <select id="vq" aria-label="Render quality" title="Time to render each frame"><option value="2">Draft · 2 sec/frame</option><option value="6" selected>Good · 6 sec/frame</option><option value="20">High · 20 sec/frame</option><option value="60">Final · 60 sec/frame</option></select></div>
+      <div id="rlog" class="mono dim" role="status" aria-live="polite" style="margin-top:8px;white-space:pre-wrap"></div>
       <video id="rvid" controls loop style="display:none;width:100%;margin-top:8px;border:1px solid #fff"></video>
       </details>
     </div>
 
     <div class="panel" id="studioPanel">
       <h2>Lighting setup</h2>
-      <div class="lighting-section-heading"><b>Studio rig</b><span>Lighting recipe</span></div>
+      <div class="lighting-section-heading"><b>Studio lighting setup</b><span>Preset</span></div>
       <div class="row" id="rigs"></div>
       <div class="blurb" id="rigBlurb"></div>
-      <label class="rig-target-toggle"><input id="rigSelectedTarget" type="checkbox"> Target this rig at one selected part</label>
-      <p class="blurb rig-target-note">Select one visible part in KeyShot first. Exposure meters its visible bounds when possible; environment fill remains global.</p>
+      <label class="rig-target-toggle"><input id="rigSelectedTarget" type="checkbox"> Aim this setup at one selected part</label>
+      <p class="blurb rig-target-note">Select one visible part in KeyShot first. When possible, Director measures exposure from that part’s visible bounds. Environment fill still affects the whole scene.</p>
       <label for="envFill">Environment brightness <span id="venvfill" aria-live="polite">1.00&times;</span></label><input type="range" id="envFill" min="0" max="2" step="0.01" value="1" aria-label="Environment brightness">
       <div class="range-captions" aria-hidden="true"><span>Deeper shadows</span><span>Brighter fill</span></div>
-      <p class="blurb environment-fill-help">Adjust the scene fill from the KeyShot environment. Added lights and the visible background stay independent.</p>
+      <p class="blurb environment-fill-help">Change light coming from the KeyShot environment. Added lights and the visible background are controlled separately.</p>
       <details class="secondary-control"><summary>Exposure &amp; orientation</summary>
         <label>Exposure <span id="vexp">1.00&times;</span></label><input type="range" id="exp" min="-2" max="2" step="0.05" value="0">
         <label class="mirror-control"><input type="checkbox" id="mirror"> mirror left / right</label>
       </details>
       <div class="lighting-section-heading lights-heading"><b>Lights</b><span>Native KeyShot lights</span></div>
-      <canvas id="stagecv" width="300" height="270" title="Top-down stage. Camera is at the bottom. Drag a light to move it."></canvas>
-      <p class="blurb stage-help">Drag a light, or open it below to adjust position, brightness and tint. RGB tint and color temperature are alternate color modes.</p>
+      <canvas id="stagecv" width="300" height="270" role="img" aria-label="Lighting map. Product at center; camera at bottom. Drag a light to reposition it." title="Lighting map: product at center, camera at bottom. Drag a light to reposition it."></canvas>
+      <p class="blurb stage-help">Drag a light to reposition it, or open it below to adjust its position, brightness, and color. Choose either RGB color or color temperature.</p>
       <div id="lightlist"></div>
-      <p class="blurb">Light behavior controls whether a Director light appears to the camera, in reflections, or in shadows while it continues lighting the scene. KeyShot's native per-part Light Layers are not exposed by its scripting bridge; set those in KeyShot's Light Layers panel.</p>
-      <div class="row" style="margin-top:8px"><button id="addlight">Add light</button><button id="studiooff" title="Remove every light this app made and restore your original environment">Studio off</button></div>
-      <div id="lightStatus" class="blurb"></div>
+      <p class="blurb">Visibility settings control whether a Director light appears in the camera view, reflections, or shadows; it still lights the scene. KeyShot’s per-part Light Layers are not available through the connection. Set those in KeyShot’s Light Layers panel.</p>
+      <div class="row" style="margin-top:8px"><button id="addlight">Add light</button><button id="studiooff" title="Remove every light created by Director and restore the original KeyShot environment">Remove Director lights</button></div>
+      <div id="lightStatus" class="blurb" role="status" aria-live="polite"></div>
       <details class="fold" id="lightingApiLab" style="margin-top:12px">
         <summary>Lighting capability lab</summary>
-        <p class="blurb">Scene snapshots and graph inspection are read-only. Pass capture makes one bounded preview render and saves diagnostic files locally; it does not edit or save the scene. Capture once, adjust the lighting, then capture again to compare product and non-product pixels.</p>
-        <div class="row" style="margin-top:8px"><button id="lightingLabSnapshot" type="button">Snapshot scene state</button></div>
-        <div class="row" style="margin-top:8px"><button id="lightingLabSurface" type="button">Inspect lighting control API</button></div>
+        <p class="blurb">These diagnostics do not edit or save your scene. Scene snapshots and lighting graph inspection are read-only. A render pass is a separate image of part of the render, such as shadows or reflections. Each capture makes one small preview and saves its files on this computer. Capture before and after a lighting change to compare the results.</p>
+        <div class="row" style="margin-top:8px"><button id="lightingLabSnapshot" type="button">Capture scene settings</button></div>
+        <div class="row" style="margin-top:8px"><button id="lightingLabSurface" type="button">Inspect available KeyShot lighting controls</button></div>
         <div class="row" style="margin-top:8px">
-          <select id="lightingLabType" aria-label="Light type to inspect"><option value="area">Area</option><option value="point">Point</option><option value="ies">IES</option><option value="spotlight">Spotlight</option></select>
-          <button id="lightingLabInspect" type="button">Inspect</button>
-          <button id="lightingLabReplay" type="button" disabled>Replay with selected type</button>
+          <select id="lightingLabType" aria-label="Light type to inspect"><option value="area">Area</option><option value="point">Point</option><option value="ies">IES (profile light)</option><option value="spotlight">Spotlight</option></select>
+          <button id="lightingLabInspect" type="button">Inspect light graph</button>
+          <button id="lightingLabReplay" type="button" disabled>Repeat with this light type</button>
         </div>
         <div class="chk2" id="lightingLabPasses" aria-label="Diagnostic render passes">
-          <label><input type="checkbox" value="clown" checked> Clown mask</label>
-          <label><input type="checkbox" value="reflection" checked> Reflection</label>
-          <label><input type="checkbox" value="shadow" checked> Shadow</label>
-          <label><input type="checkbox" value="direct"> Direct</label>
-          <label><input type="checkbox" value="indirect"> Indirect</label>
-          <label><input type="checkbox" value="raw"> Raw</label>
-          <label><input type="checkbox" value="depth"> Depth</label>
-          <label><input type="checkbox" value="normals"> Normals</label>
+          <label title="A flat color mask that separates objects"><input type="checkbox" value="clown" checked> Clown mask (object IDs)</label>
+          <label title="Image contribution from reflected light"><input type="checkbox" value="reflection" checked> Reflection</label>
+          <label title="Image contribution from cast shadows"><input type="checkbox" value="shadow" checked> Shadow</label>
+          <label title="Direct light reaching the surface"><input type="checkbox" value="direct"> Direct light</label>
+          <label title="Light that bounced off other surfaces"><input type="checkbox" value="indirect"> Bounced light</label>
+          <label title="Unprocessed render output"><input type="checkbox" value="raw"> Raw image</label>
+          <label title="Distance from the camera"><input type="checkbox" value="depth"> Depth</label>
+          <label title="Surface direction at each pixel"><input type="checkbox" value="normals"> Surface normals</label>
         </div>
-        <div class="row" style="margin-top:8px"><button id="lightingLabCapture" type="button">Capture selected passes</button><button id="lightingLabReplayCapture" type="button" disabled>Capture again + compare</button></div>
+        <div class="row" style="margin-top:8px"><button id="lightingLabCapture" type="button">Capture selected render passes</button><button id="lightingLabReplayCapture" type="button" disabled>Capture again and compare</button></div>
         <div id="lightingLabStatus" class="blurb" aria-live="polite"></div>
-        <pre id="lightingLabOutput" class="mono" style="max-height:220px;overflow:auto;white-space:pre-wrap;border:1px solid var(--line);padding:8px;margin:8px 0 0"></pre>
+        <pre id="lightingLabOutput" class="mono" aria-label="Detailed lighting diagnostic report" style="max-height:220px;overflow:auto;white-space:pre-wrap;border:1px solid var(--line);padding:8px;margin:8px 0 0"></pre>
         <div id="lightingLabImages" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"></div>
       </details>
     </div>
 
     <div class="panel">
       <div class="material-inspector-content">
-        <p class="blurb">Inspect the live scene material. Make a copy before changing a finish that is shared by other parts.</p>
-        <div class="row"><select id="materialSelect" aria-label="Scene material"></select><button id="materialRefresh">Refresh</button><button type="button" id="materialSceneEditContext">Edit with chat</button></div>
-        <div id="materialEditControls" class="material-edit-controls" hidden><div><b id="materialEditTitle">Scene material is read-only</b><p id="materialEditHelp">Enable edits to change exposed values on this material in the live KeyShot scene.</p></div><button type="button" id="materialEditToggle">Enable edits</button></div>
-        <p class="material-map-note">Source material graphs stay protected in the copy workflow. Imported image maps can be applied to the independent copy below, or used to build a new unassigned material.</p>
-        <div class="row" style="margin-top:8px"><input id="materialName" placeholder="New material name" aria-label="New material name"><button id="materialCreate">Create</button></div>
+        <p class="blurb">Inspect a material in the open scene. Copy it first to change the finish on only one part; editing a shared material can affect every part that uses it.</p>
+        <div class="row"><select id="materialSelect" aria-label="Scene material"></select><button id="materialRefresh" title="Reload materials from the open KeyShot scene">Refresh materials</button><button type="button" id="materialSceneEditContext">Use in Material Director</button></div>
+        <div id="materialEditControls" class="material-edit-controls" hidden><div><b id="materialEditTitle">Scene material is read-only</b><p id="materialEditHelp">Enabling edits changes values on this material in the open KeyShot scene. Every part sharing it can change.</p></div><button type="button" id="materialEditToggle">Edit shared material</button></div>
+        <p class="material-map-note">Copying protects the source material. Apply imported image maps to the copy below, or build a new material that is not assigned to a part.</p>
+        <div class="row" style="margin-top:8px"><input id="materialName" placeholder="New material name" aria-label="New material name"><button id="materialCreate" title="Create and save a new material; it will not be assigned to a part">Create unassigned</button></div>
         <div id="materialNodes" class="blurb"></div>
-        <div class="row" style="margin-top:8px"><button id="materialUndo">Undo edit</button><button id="materialSave">Save package</button><button id="materialDiscard">Discard</button></div>
-        <div id="materialStatus" class="blurb"></div>
+        <div class="row" style="margin-top:8px"><button id="materialUndo">Undo last edit</button><button id="materialSave">Save to library and package</button><button id="materialDiscard" title="Remove this Director-created material from the current scene. Saved .kmp files remain on this computer.">Remove from scene</button></div>
+        <div id="materialStatus" class="blurb" role="status" aria-live="polite"></div>
       </div>
     </div>
 
@@ -248,17 +248,17 @@
         <p class="blurb">Collect images into a named style, then select it beside your Director prompt.</p>
         <label for="styleName">Style name</label><input id="styleName" placeholder="e.g. Brushed metal campaign" maxlength="64">
         <button type="button" id="styleDrop" class="workspace-drop">Drop or paste reference images <span>PNG, JPEG or WebP · up to 8 at a time</span></button><input id="styleFiles" type="file" accept="image/png,image/jpeg,image/webp" multiple hidden>
-        <div id="styleThumbs" class="workspace-thumbs"></div><div class="row"><button id="styleSave" class="solid">Save images to style</button><button id="styleClear">Clear selection</button></div><p id="styleUploadStatus" class="blurb" role="status"></p>
-        <div id="styles"></div><div id="matchlog" class="mono dim" style="margin-top:8px;white-space:pre-wrap"></div>
+        <div id="styleThumbs" class="workspace-thumbs"></div><div class="row"><button id="styleSave" class="solid" title="Save the selected images to this named style">Save references</button><button id="styleClear" title="Remove the images selected for the next style save">Clear added images</button></div><p id="styleUploadStatus" class="blurb" role="status" aria-live="polite"></p>
+        <div id="styles"></div><div id="matchlog" class="mono dim" role="status" aria-live="polite" style="margin-top:8px;white-space:pre-wrap"></div>
       </details>
     </div>
 
     <div class="panel">
       <details class="fold" id="motion"><summary>Camera motion</summary>
-        <div class="dim" style="margin:8px 0;text-transform:none;letter-spacing:0;font-size:11.5px">Live previews of camera moves. (KeyShot's timeline can't be written by script; render the move from here, or key it in KeyShot.)</div>
+        <div class="dim" id="motionHelp" style="margin:8px 0;text-transform:none;letter-spacing:0;font-size:11.5px">Preview and render camera moves here. Director cannot write to KeyShot’s timeline. To add timeline keys, create them in KeyShot.</div>
         <div class="row" id="presets"></div>
-        <div class="row" style="margin-top:8px"><button id="rec">Record</button><button id="smooth">Smooth</button><button id="play" class="solid">Play</button><button id="stop">Stop</button></div>
-        <textarea id="recipe" class="mono" rows="7" spellcheck="false" style="margin-top:8px"></textarea>
+        <div class="row" style="margin-top:8px"><button id="rec">Record camera move</button><button id="smooth">Smooth move</button><button id="play" class="solid">Preview move</button><button id="stop">Stop preview</button></div>
+        <label for="recipe">Camera move data (JSON)</label><textarea id="recipe" class="mono" rows="7" spellcheck="false" style="margin-top:8px" aria-describedby="motionHelp"></textarea>
       </details>
     </div>
 
@@ -271,40 +271,40 @@
 </main>
 
 <section id="materialsWorkspace" class="workspace-page" hidden aria-labelledby="materialsTitle">
-  <div class="workspace-heading"><div><h2 id="materialsTitle">Materials</h2><p>Build and tune finishes on your current KeyShot scene.</p></div><span class="scene-tag">Live scene</span></div>
-  <section id="libraryMaterialCopyCard" class="workspace-card library-material-quick" aria-label="Quick copy from the KeyShot library">
-    <details class="quick-library-details"><summary>Quick copy to current KeyShot selection</summary>
-      <p class="blurb">Search the real KeyShot library, select your target part in KeyShot, then create an independent copy. The library source stays unchanged.</p>
-      <div class="texture-import-flow"><div><label for="libraryMaterialSearch">Find a material</label><input id="libraryMaterialSearch" type="search" placeholder="Search material or library folder"></div><div><label for="libraryMaterialSelect">KeyShot library result</label><select id="libraryMaterialSelect" aria-label="KeyShot library material"><option value="">Search the library to load materials</option></select></div></div>
-      <div class="row"><button type="button" id="libraryMaterialSearchButton">Search KeyShot library</button><button type="button" id="libraryMaterialCopyButton" class="solid" disabled>Copy to selected part</button></div>
-      <p id="libraryMaterialStatus" class="blurb" role="status" aria-live="polite">Select the part(s) in KeyShot before creating the copy. Then tell Material Director how you want the copy changed.</p>
+  <div class="workspace-heading"><div><h2 id="materialsTitle">Materials</h2><p>Create a finish, edit a copy, or apply a library material to your KeyShot scene.</p></div><span class="scene-tag" id="materialsSceneTag">Checking scene</span></div>
+  <section id="libraryMaterialCopyCard" class="workspace-card library-material-quick" aria-label="Copy a material from the KeyShot library">
+    <details class="quick-library-details"><summary>Quick copy from the KeyShot library</summary>
+      <p class="blurb">Search the KeyShot library, choose a part in KeyShot, then create a separate copy on that part. The library material stays unchanged.</p>
+      <div class="texture-import-flow"><div><label for="libraryMaterialSearch">Find a material</label><input id="libraryMaterialSearch" type="search" placeholder="Search material names or folders"></div><div><label for="libraryMaterialSelect">Library material</label><select id="libraryMaterialSelect" aria-label="KeyShot library material"><option value="">Search the library to see materials</option></select></div></div>
+      <div class="row"><button type="button" id="libraryMaterialSearchButton">Search library</button><button type="button" id="libraryMaterialCopyButton" class="solid" disabled>Copy to selected part</button></div>
+      <p id="libraryMaterialStatus" class="blurb" role="status" aria-live="polite">Select one or more parts in KeyShot before making a copy. Then describe the finish change to Material Director.</p>
     </details>
   </section>
   <div class="materials-workbench">
     <div class="materials-primary">
       <section class="workspace-card materials-preview-card" aria-labelledby="materialsPreviewTitle">
-        <div class="materials-preview-heading"><div><h3 id="materialsPreviewTitle">Current scene</h3><p>Your live KeyShot preview stays in sync with Studio.</p></div><span class="scene-tag">Live preview</span></div>
+        <div class="materials-preview-heading"><div><h3 id="materialsPreviewTitle">Scene preview</h3><p>This is the same render preview shown in Studio.</p></div><div class="materials-preview-actions"><button type="button" class="preview-toggle" data-preview-toggle aria-controls="stage" aria-expanded="true">Hide preview</button><span class="scene-tag">KeyShot render</span></div></div>
         <div id="materialsStageHost"></div>
       </section>
     <div class="workspace-card material-chat">
-      <div class="material-chat-heading"><div><h3>Material Director</h3><p>Describe the finish, add reference photos, or bring in a Poliigon texture set.</p></div></div>
-      <div id="materialContext" class="material-context" hidden><div><span class="material-context-label">Working on</span><strong id="materialContextName"></strong><small id="materialContextNote"></small></div><button type="button" id="materialContextClear" class="text-button">Clear</button></div>
-      <div id="materialChatLog" role="log" aria-live="polite" aria-label="Material Director conversation"><p class="chat-empty">Your conversation and build results will appear here. Start with a finish description or add a reference below.</p></div>
+      <div class="material-chat-heading"><div><h3>Material Director</h3><p>Describe a finish, add reference images, or import a Poliigon texture folder.</p></div></div>
+      <div id="materialContext" class="material-context" hidden><div><span class="material-context-label">Current material task</span><strong id="materialContextName"></strong><small id="materialContextNote"></small></div><button type="button" id="materialContextClear" class="text-button" title="Stop using this item as context">Clear task</button></div>
+      <div id="materialChatLog" role="log" aria-live="polite" aria-label="Material Director conversation"><p class="chat-empty">Your conversation and material results will appear here. Describe a finish or add a reference image to begin.</p></div>
       <div class="material-composer">
-      <label for="materialPrompt">Your direction</label>
+      <label for="materialPrompt">Describe the finish or change</label>
       <textarea id="materialPrompt" rows="3" placeholder="Fine bead-blasted aluminum, cool silver, a soft satin sheen…"></textarea>
-      <button type="button" id="materialDrop" class="workspace-drop"><span id="materialDropText">Add references or a Poliigon folder <small>Drop the texture folder and loose reference pictures together, or choose images</small></span></button><input id="materialFile" type="file" accept="image/png,image/jpeg,image/webp" multiple hidden>
+      <button type="button" id="materialDrop" class="workspace-drop" aria-label="Add material reference images or a Poliigon texture folder"><span id="materialDropText">Add reference images or a Poliigon folder <small>Drop a texture folder and reference images together, or click to choose images</small></span></button><input id="materialFile" type="file" accept="image/png,image/jpeg,image/webp" multiple hidden>
       <p id="materialDropStatus" class="material-drop-status" role="status" aria-live="polite"></p>
-      <div class="material-reference-heading"><span id="materialImageCount" aria-live="polite">No references added</span><button type="button" id="materialClearImages" class="text-button" hidden>Clear all</button></div><div id="materialThumbs" class="material-reference-grid" aria-label="Material reference images"></div>
-      <div class="material-ratio-row"><label for="materialImageAspect">Generated material image ratio</label><select id="materialImageAspect" aria-describedby="materialImageAspectNote"><option value="original">Match reference</option><option value="1:1">Square · 1:1</option><option value="4:3">Landscape · 4:3</option><option value="3:2">Landscape · 3:2</option><option value="16:9">Wide · 16:9</option><option value="3:4">Portrait · 3:4</option><option value="2:3">Portrait · 2:3</option><option value="9:16">Tall · 9:16</option></select><small id="materialImageAspectNote">Saved as a preference for future material image generation. Image generation is not available yet.</small></div>
-      <div class="row"><button id="materialSend" class="solid">Ask Material Director</button><button id="materialStop" disabled hidden>Stop</button><button id="materialNewChat">New chat</button></div>
-      <p class="blurb">Source materials stay unchanged in copy workflows. Reference photos are sent to your selected AI provider for this request and aren’t saved as training data.</p>
+      <div class="material-reference-heading"><span id="materialImageCount" aria-live="polite">No material reference images added</span><button type="button" id="materialClearImages" class="text-button" title="Remove all attached material reference images" hidden>Clear all</button></div><div id="materialThumbs" class="material-reference-grid" aria-label="Material reference images"></div>
+      <div class="material-ratio-row"><label for="materialImageAspect">Image shape for future material generation</label><select id="materialImageAspect" aria-describedby="materialImageAspectNote"><option value="original">Match reference</option><option value="1:1">Square · 1:1</option><option value="4:3">Landscape · 4:3</option><option value="3:2">Landscape · 3:2</option><option value="16:9">Wide · 16:9</option><option value="3:4">Portrait · 3:4</option><option value="2:3">Portrait · 2:3</option><option value="9:16">Tall · 9:16</option></select><small id="materialImageAspectNote">This saves your preference only. Material image generation is not available yet.</small></div>
+      <div class="row"><button id="materialSend" class="solid">Send to Material Director</button><button id="materialStop" disabled hidden>Stop</button><button id="materialNewChat" title="Clear this conversation and its attached images. Keep the current material task.">New chat</button></div>
+      <p class="blurb">Copy workflows leave the source material unchanged. Reference images are sent to your selected AI provider for this request and are not saved as training data.</p>
       </div>
     </div>
     </div>
     <aside class="materials-inspector-column">
       <section class="workspace-card materials-inspector-card" aria-labelledby="materialsInspectorTitle">
-        <div class="materials-inspector-heading"><div><h3 id="materialsInspectorTitle">Material inspector</h3><p>Live scene values and connected map signals.</p></div></div>
+        <div class="materials-inspector-heading"><div><h3 id="materialsInspectorTitle">Material inspector</h3><p>Values and texture maps connected to the selected material.</p></div></div>
         <div id="materialInspectorHost"></div>
       </section>
     </aside>
@@ -317,21 +317,21 @@
   </nav>
   <div id="materialToolPanels">
   <section id="materialTexturePanel" class="workspace-card material-subpanel material-texture-import" role="tabpanel" aria-labelledby="materialTextureTitle" hidden>
-    <div class="material-assets-heading"><div><h3 id="materialTextureTitle">Texture sets</h3><p>Import Poliigon maps, review channels, then build a separate KeyShot material.</p></div><span class="scene-tag">Source maps stay unchanged</span></div>
+    <div class="material-assets-heading"><div><h3 id="materialTextureTitle">Texture sets</h3><p>Import Poliigon maps, review their channels, then build a separate KeyShot material.</p></div><span class="scene-tag">Source files stay unchanged</span></div>
     <div class="texture-import-card">
-      <div class="texture-import-card-heading"><div><h4>Import a Poliigon asset</h4><p>Choose the downloaded asset folder. The original files are copied into Material Lab and kept unchanged.</p></div><span class="scene-tag">Folder import</span></div>
+      <div class="texture-import-card-heading"><div><h4>Import a Poliigon asset</h4><p>Choose the downloaded folder. Director copies its maps into the working folder; your downloaded files stay unchanged.</p></div><span class="scene-tag">Folder import</span></div>
       <div class="texture-import-flow">
-        <div><label for="textureSetName">Name this texture set <span class="dim">(optional)</span></label><input id="textureSetName" type="text" placeholder="Uses the folder name if blank" maxlength="100"></div>
+        <div><label for="textureSetName">Texture set name <span class="dim">(optional)</span></label><input id="textureSetName" type="text" placeholder="Use the folder name" maxlength="100"></div>
         <div class="texture-import-action"><button type="button" id="textureSetChoose" class="solid">Import Poliigon folder</button><input id="textureSetFiles" type="file" multiple webkitdirectory directory hidden accept=".png,.jpg,.jpeg,.webp,.tif,.tiff,.exr,.hdr,.mtlx"></div>
       </div>
-      <p class="texture-import-note">Recognizes Base Color, Roughness, Metallic, Normal, Displacement, Bump, Specular and AO maps. MaterialX files are kept as conversion hints.</p>
-      <p id="textureSetStatus" class="blurb" role="status" aria-live="polite">Select the Poliigon folder that contains the downloaded maps.</p>
+      <p class="texture-import-note">Recognized map types: Base Color, Roughness, Metallic, Normal, Displacement, Bump, Specular, and Ambient Occlusion (AO). MaterialX files are kept as conversion hints.</p>
+      <p id="textureSetStatus" class="blurb" role="status" aria-live="polite">Choose the downloaded Poliigon folder that contains the maps.</p>
     </div>
     <p id="textureBuildStatus" class="blurb" role="status" aria-live="polite"></p>
     <div id="textureSetList" class="material-asset-list" role="list"><p class="chat-empty">No texture sets imported yet.</p></div>
   </section>
   <section id="materialLibraryPanel" class="workspace-card material-subpanel material-assets" role="tabpanel" aria-labelledby="materialCopyTitle" hidden>
-    <div class="material-assets-heading"><div><h3 id="materialCopyTitle">KeyShot Material Library</h3><p>Browse the loaded KeyShot library, copy a material onto one part, then edit the copy’s image maps. The library entry stays untouched.</p></div><button type="button" id="materialLibraryRefresh">Refresh library</button></div>
+    <div class="material-assets-heading"><div><h3 id="materialCopyTitle">KeyShot Material Library</h3><p>Choose a library material and a scene part. Director applies a separate copy, so the library material stays unchanged.</p></div><button type="button" id="materialLibraryRefresh">Refresh library</button></div>
     <div id="libraryQuickCopyHost"></div>
     <div class="texture-import-flow">
       <div><label for="materialLibrarySearch">Find a material</label><input id="materialLibrarySearch" type="search" placeholder="Search library names"></div>
@@ -339,18 +339,18 @@
       <div class="material-context-action"><span>Selected library material</span><button type="button" id="materialLibraryEditContext">Edit with Material Director</button></div>
       <div><label for="materialCopyPart">Apply copy to this part</label><select id="materialCopyPart" aria-label="Scene part to receive the library copy"></select></div>
       <div><label for="materialCopyName">Copy label</label><input id="materialCopyName" type="text" value="Director Library Copy" maxlength="80"></div>
-      <div><label for="materialMapRole">Image channel</label><select id="materialMapRole"><option value="bump">Bump</option><option value="normal">Normal</option><option value="base-color">Base Color</option><option value="roughness">Roughness</option></select></div>
-      <div><label for="materialMapSet">Use imported map</label><select id="materialMapSet" aria-label="Imported material map"><option value="">No imported maps yet</option></select></div>
+      <div><label for="materialMapRole">Map type</label><select id="materialMapRole"><option value="bump">Bump</option><option value="normal">Normal</option><option value="base-color">Base Color</option><option value="roughness">Roughness</option></select></div>
+      <div><label for="materialMapSet">Imported image map</label><select id="materialMapSet" aria-label="Imported material map"><option value="">No imported maps yet</option></select></div>
       <div><label for="materialMapFile">Choose image</label><input id="materialMapFile" type="file" accept="image/png,image/jpeg,image/webp,image/tiff,.tif,.exr,.hdr"></div>
       <div><label for="materialBumpStrength">Bump strength (Bump/Normal only)</label><input id="materialBumpStrength" type="number" step="any" placeholder="Keep current"></div>
     </div>
-    <div class="row"><button type="button" id="materialCopyMake" class="solid">Copy library material to part</button><button type="button" id="materialBumpApply" disabled>Apply channel map / bump</button><button type="button" id="materialCopySave" disabled>Save copy to library</button></div>
-    <p id="materialCopyStatus" class="blurb" role="status" aria-live="polite">Search for a library material and select the part to receive its independent copy.</p>
+    <div class="row"><button type="button" id="materialCopyMake" class="solid">Copy library material to part</button><button type="button" id="materialBumpApply" disabled>Apply map or set bump strength</button><button type="button" id="materialCopySave" disabled>Save copy to library and package</button></div>
+    <p id="materialCopyStatus" class="blurb" role="status" aria-live="polite">Search for a library material, then select the part that should receive its separate copy.</p>
   </section>
   <section id="materialSavedPanel" class="workspace-card material-subpanel material-assets" role="tabpanel" aria-labelledby="materialAssetsTitle" hidden>
-    <div class="material-assets-heading"><div><h3 id="materialAssetsTitle">Your material files</h3><p>Finished materials are saved here automatically as reusable KeyShot library entries and portable packages.</p></div><div class="row"><button type="button" id="materialOpenFolder">Show in folder</button><button type="button" id="materialAssetsRefresh">Refresh</button></div></div>
-    <p class="material-folder mono" id="materialFolderPath" aria-live="polite"></p>
-    <div id="materialAssetList" class="material-asset-list" role="list"><p class="chat-empty">Loading material packages…</p></div>
+    <div class="material-assets-heading"><div><h3 id="materialAssetsTitle">Saved materials</h3><p>Materials saved to the KeyShot Library and their downloadable .kmp files appear here.</p></div><div class="row"><button type="button" id="materialOpenFolder">Open materials folder</button><button type="button" id="materialAssetsRefresh">Refresh list</button></div></div>
+    <details class="texture-set-folder material-folder-details"><summary>Show materials folder location</summary><code class="material-folder mono" id="materialFolderPath" aria-live="polite"></code></details>
+    <div id="materialAssetList" class="material-asset-list" role="list"><p class="chat-empty">Loading saved materials…</p></div>
   </section>
   </div>
   </section>
@@ -358,22 +358,22 @@
 
 <dialog id="settings">
   <h2>Settings</h2>
-  <div class="dim" style="text-transform:none;letter-spacing:0;font-size:12px;margin-bottom:10px">Pick what answers your prompts. No API key needed for the first two: <b>your signed-in Claude CLI</b> (Claude subscription), <b>your signed-in Codex CLI</b> (ChatGPT account), or <b>your own Anthropic API key</b> (stored only on this computer). With none, the prompt box runs in offline mode for basic commands.</div>
-  <label>Engine</label><select id="engine" style="width:100%"><option value="auto">Automatic (Claude CLI, then ChatGPT Codex CLI, then API key, then offline)</option><option value="cli">Claude CLI only</option><option value="codex">ChatGPT (Codex CLI) only</option><option value="api">API key only</option><option value="offline">Offline</option></select>
+  <div class="dim" style="text-transform:none;letter-spacing:0;font-size:12px;margin-bottom:10px">Choose which assistant handles your requests. You can use your signed-in Claude CLI, your signed-in Codex CLI (ChatGPT), or your own Anthropic API key. Your API key is saved only on this computer. Without an assistant, Director can still run basic commands in offline mode.</div>
+  <label for="engine">Assistant</label><select id="engine" style="width:100%"><option value="auto">Automatic: Claude CLI, Codex CLI, API key, then offline</option><option value="cli">Claude CLI only</option><option value="codex">Codex CLI (ChatGPT) only</option><option value="api">Anthropic API key only</option><option value="offline">Offline only</option></select>
   <div id="cliState" class="mono" style="white-space:pre-wrap;margin:10px 0 6px"></div>
-  <label>Claude CLI path (only if it was not found)</label><input type="text" id="cliPath" style="width:100%" placeholder="C:\...\claude.exe">
+  <label for="cliPath">Claude CLI path (only if not found automatically)</label><input type="text" id="cliPath" style="width:100%" placeholder="C:\...\claude.exe">
   <div id="codexState" class="mono" style="white-space:pre-wrap;margin:10px 0 6px"></div>
-  <label>Codex (ChatGPT) CLI path (only if it was not found)</label><input type="text" id="codexPath" style="width:100%" placeholder="C:\...\codex.exe">
+  <label for="codexPath">Codex CLI path (only if not found automatically)</label><input type="text" id="codexPath" style="width:100%" placeholder="C:\...\codex.exe">
   <label for="codexModel">ChatGPT / Codex model</label><input type="text" id="codexModel" style="width:100%" placeholder="Use your Codex default"><div class="dim" style="text-transform:none;letter-spacing:0;font-size:11.5px;margin-top:5px">Optional model ID passed to Codex CLI. Leave blank to use the model selected by your Codex account. Examples depend on your account and CLI version.</div>
-  <div class="row" style="margin-top:6px"><button class="sm" id="cliRecheck">Check again</button></div>
-  <label>API key</label><input type="password" id="apikey" style="width:100%" placeholder="sk-ant-..." autocomplete="off">
+  <div class="row" style="margin-top:6px"><button class="sm" id="cliRecheck">Check for assistants again</button></div>
+  <label for="apikey">Anthropic API key</label><input type="password" id="apikey" style="width:100%" placeholder="sk-ant-..." autocomplete="off">
   <label for="model">Claude API model</label><input type="text" id="model" style="width:100%">
-  <div class="row" style="margin-top:14px"><button class="solid" id="saveSettings">Save</button><button id="closeSettings">Close</button></div>
-  <div class="dim" style="margin:16px 0 6px;text-transform:uppercase">Stop / restart</div>
-  <div class="row"><button id="disconnectBtn" title="Tells the bridge running inside KeyShot to stop, so you can run the launcher again">Disconnect KeyShot</button><button id="restartBtn">Restart app</button><button id="quitBtn">Quit app</button></div>
-  <div class="dim" style="text-transform:none;letter-spacing:0;font-size:11.5px;margin-top:6px">Disconnect ends the bridge in KeyShot (run the launcher again to reconnect). Restart / Quit act on this app's server window.</div>
+  <div class="row" style="margin-top:14px"><button class="solid" id="saveSettings">Save settings</button><button id="closeSettings">Close</button></div>
+  <div class="dim" style="margin:16px 0 6px;text-transform:uppercase">App and KeyShot connection</div>
+  <div class="row"><button id="disconnectBtn" title="Stops the Director connection inside KeyShot; use the launcher to start it again">Stop KeyShot bridge</button><button id="restartBtn">Restart Director</button><button id="quitBtn">Quit Director</button></div>
+  <div class="dim" style="text-transform:none;letter-spacing:0;font-size:11.5px;margin-top:6px">Stop the bridge in KeyShot to run the setup command again. Restart or Quit affects the Director app, not your KeyShot scene.</div>
 </dialog>
-<div class="toast" id="toast"></div>
+<div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script>
 const $ = id => document.getElementById(id);
@@ -382,8 +382,13 @@ let P = null, sending = false, dirty = false, qrDone = false, ST = null, CFG = {
 
 function toast(m) { const t = $('toast'); t.textContent = m; t.style.display = 'block'; clearTimeout(toast.t); toast.t = setTimeout(() => (t.style.display = 'none'), 5000); }
 async function api(path, body) {
-  const r = await fetch(path, body === undefined ? {} : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-  const j = await r.json(); if (!r.ok) throw new Error(j.error || r.status); return j;
+  let r;
+  try { r = await fetch(path, body === undefined ? {} : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); }
+  catch { throw new Error('Could not reach Director. Check that the app is open, then try again.'); }
+  let j;
+  try { j = await r.json(); } catch { throw new Error('Director returned an unreadable response. Restart the app and try again.'); }
+  if (!r.ok) throw new Error(j.error || `Director could not complete this action (${r.status}). Check the KeyShot connection and try again.`);
+  return j;
 }
 function sceneContextFact(label, value) {
   if (value === undefined || value === null || value === '') return null;
@@ -439,9 +444,28 @@ function renderSceneContext(context) {
 }
 // Studio holds the scene, reference, saved style, and Director request in one flow.
 const materialPanel = $('materialSelect').closest('.panel');
-$('materialInspectorHost').appendChild(materialPanel);
-materialPanel.querySelector('.material-inspector-content').insertAdjacentHTML('afterbegin', '<p class="material-advanced-note">Only exposed values can be adjusted here. Connected texture maps stay read-only; use KeyShot for graph rewiring.</p>');
+  $('materialInspectorHost').appendChild(materialPanel);
+materialPanel.querySelector('.material-inspector-content').insertAdjacentHTML('afterbegin', '<p class="material-advanced-note">Change the values shown here. To add, remove, or reconnect nodes in the material graph, use KeyShot.</p>');
 const sceneStage = $('stage'), studioStageHome = $('studioStageHome'), materialsStageHost = $('materialsStageHost');
+const previewToggleButtons = [...document.querySelectorAll('[data-preview-toggle]')];
+function syncPreviewDisclosure() {
+  const expanded = !sceneStage.hidden;
+  previewToggleButtons.forEach(button => {
+    button.textContent = expanded ? 'Hide preview' : 'Show preview';
+    button.setAttribute('aria-expanded', String(expanded));
+    button.setAttribute('aria-label', `${expanded ? 'Hide' : 'Show'} live KeyShot preview`);
+    button.title = `${expanded ? 'Collapse' : 'Expand'} the live KeyShot preview`;
+  });
+}
+function setPreviewExpanded(expanded) {
+  sceneStage.hidden = !expanded;
+  try { localStorage.setItem('director.preview.collapsed', String(!expanded)); } catch { /* storage can be unavailable in restricted browser contexts */ }
+  syncPreviewDisclosure();
+  if (expanded) nextFrame();
+}
+try { sceneStage.hidden = localStorage.getItem('director.preview.collapsed') === 'true'; } catch { /* default to showing the live preview */ }
+previewToggleButtons.forEach(button => button.addEventListener('click', () => setPreviewExpanded(sceneStage.hidden)));
+syncPreviewDisclosure();
 $('studioWorkspace').querySelector('aside').prepend($('studioPanel'));
 $('libraryQuickCopyHost').appendChild($('libraryMaterialCopyCard'));
 function showWorkspace(name) {
@@ -533,7 +557,7 @@ async function loadStudio() {
       const target = ST.studio.rigSubject?.models?.[0], meter = result.auto?.measurement_scope;
       lstatus(`${r.label} applied${target ? ` to ${target}` : ''}${meter ? ` · exposure measured from ${meter}` : ''}.`);
     }); box.appendChild(b); }
-  const cur = ST.rigs.find(r => r.id === ST.studio.rig), targetPart = ST.studio.rigSubject?.models?.[0]; $('rigBlurb').textContent = cur ? cur.blurb + (targetPart ? ` Lighting target: ${targetPart}.` : '') : 'Pick a rig. Everything it adds is removed by Studio off.';
+  const cur = ST.rigs.find(r => r.id === ST.studio.rig), targetPart = ST.studio.rigSubject?.models?.[0]; $('rigBlurb').textContent = cur ? cur.blurb + (targetPart ? ` Lighting target: ${targetPart}.` : '') : 'Choose a preset. Remove Director lights to clear every light this workspace added.';
   const envMultiplier = Number.isFinite(ST.studio.envMultiplier) ? ST.studio.envMultiplier : 1;
   $('envFill').value = envMultiplier; $('venvfill').innerHTML = envMultiplier.toFixed(2) + '&times;';
   renderLights(); drawStage();
@@ -543,7 +567,16 @@ function kelvinRgb(k) { const t = Math.max(10, Math.min(400, k / 100)), c = [t <
 const rgbHex = rgb => '#' + rgb.slice(0, 3).map(v => Math.round(Math.max(0, Math.min(1, v)) * 255).toString(16).padStart(2, '0')).join('');
 const hexRgb = hex => [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255);
 const htmlText = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const lightLabel = l => l.id.startsWith('photo_') ? (l.role || 'Photo light') : l.id;
+const lightRole = l => {
+  const role = String(l.role || '').trim();
+  return role && role.toLowerCase() !== 'unknown' ? role : '';
+};
+const lightLabel = l => {
+  const id = String(l.id || ''), role = lightRole(l);
+  if (id.startsWith('photo_')) return role || 'Reference light';
+  if (id && id.toLowerCase() !== 'unknown') return id;
+  return role ? `${role[0].toUpperCase()}${role.slice(1)} light` : 'Director light';
+};
 function slider(label, key, l, min, max, step) { return `<label>${label} <span>${fmts[key](l[key])}</span></label><input type="range" aria-label="${htmlText(lightLabel(l))} ${htmlText(label)}" data-id="${htmlText(l.id)}" data-k="${key}" min="${min}" max="${max}" step="${step}" value="${l[key]}">`; }
 function renderLights() {
   const box = $('lightlist'); const open = new Set([...box.querySelectorAll('details[open]')].map(d => d.dataset.id)); box.innerHTML = '';
@@ -554,10 +587,11 @@ function renderLights() {
     const beamControls = type === 'spotlight' ? `${slider('Beam angle', 'angle', l, 1, 120, 1)}${slider('Falloff', 'falloff', l, 0, 1, 0.01)}<div class="chk"><label><input type="checkbox" data-id="${htmlText(l.id)}" data-k="constant_output" ${l.constant_output !== false ? 'checked' : ''}> constant light output</label></div>` : '';
     const visibilityControls = type === 'area' ? `<div class="chk"><label><input type="checkbox" data-id="${htmlText(l.id)}" data-k="refl" ${l.refl ? 'checked' : ''}> in reflections</label><label><input type="checkbox" data-id="${htmlText(l.id)}" data-k="eye" ${l.eye ? 'checked' : ''}> visible to camera</label><label><input type="checkbox" data-id="${htmlText(l.id)}" data-k="shadows" ${l.shadows !== false ? 'checked' : ''}> in shadows</label></div>` : '';
     const tempKelvin = Number.isFinite(l.kelvin) ? l.kelvin : (Number.isFinite(l.profile_kelvin_hint) ? l.profile_kelvin_hint : 5600);
-    const tempControl = slider(type === 'ies' ? 'Temperature override' : 'Color temp', 'kelvin', { ...l, kelvin: tempKelvin }, 2000, 9000, 50);
+    const tempControl = slider(type === 'ies' ? 'Color temperature override (K)' : 'Color temperature (K)', 'kelvin', { ...l, kelvin: tempKelvin }, 2000, 9000, 50);
     const iesOverride = Number.isFinite(l.kelvin) || Array.isArray(l.rgb);
     const iesInfo = type === 'ies' && l.ies_asset_id ? `<p class="dim">Fixture: ${htmlText(l.ies_asset_id.split('/').pop())}${l.profile_kelvin_hint ? ` · nominal ${l.profile_kelvin_hint} K` : ''}</p><p class="dim">${iesOverride ? 'Color override active' : 'Using native profile color'} unless changed below.</p>` : '';
-    d.innerHTML = `<summary><span class="sw"></span><b>${htmlText(lightLabel(l))}</b><span class="dim">${htmlText(typeName + ' · ' + (l.id.startsWith('photo_') ? 'reference' : l.role))}</span><button class="rm sm" data-rm="${htmlText(l.id)}">Remove</button></summary><div class="body">
+    const lightKind = String(l.id || '').startsWith('photo_') ? 'reference' : lightRole(l) || 'Director';
+    d.innerHTML = `<summary><span class="sw"></span><b>${htmlText(lightLabel(l))}</b><span class="dim">${htmlText(typeName + ' · ' + lightKind)}</span><button class="rm sm" data-rm="${htmlText(l.id)}" aria-label="Remove ${htmlText(lightLabel(l))}">Remove</button></summary><div class="body">
       ${slider('Brightness', 'gain', l, 0.05, 4, 0.05)}${tempControl}${iesInfo}<label>RGB tint <input type="color" aria-label="${htmlText(lightLabel(l))} RGB tint" data-id="${htmlText(l.id)}" data-k="rgb" value="${rgbHex(l.rgb || (Number.isFinite(l.kelvin) ? kelvinRgb(l.kelvin) : l.profile_rgb || kelvinRgb(tempKelvin)))}"></label>${slider('Azimuth', 'az', l, -180, 180, 1)}${slider('Elevation', 'el', l, -10, 90, 1)}
       ${slider('Distance', 'd', l, 1.2, 6, 0.05)}${shapeControls}${beamControls}${visibilityControls}</div>`;
     box.appendChild(d);
@@ -593,20 +627,20 @@ function materialContextLabel(context) {
   return context.kind === 'texture-set' ? `Texture set · ${context.name}`
     : context.kind === 'scene-material' ? `Scene material · ${context.name}`
     : context.kind === 'library-material' ? `KeyShot library · ${context.name}`
-    : `Saved package · ${context.name}`;
+    : `Saved material · ${context.name}`;
 }
 function selectMaterialContext(context, scrollToChat = true) {
   materialWorkContext = context;
   $('materialContextName').textContent = materialContextLabel(context);
-  $('materialContextNote').textContent = context.kind === 'texture-set' ? `${context.files.length} source maps are in context; originals remain unchanged.`
-    : context.kind === 'scene-material' ? 'The source graph is selected. Chat will inspect it before suggesting changes.'
-    : context.kind === 'library-material' ? 'This library source stays unchanged; choose a scene part before making an editable copy.'
-    : context.source_texture_set ? `Using source set · ${context.source_texture_set.name}. Chat can build a new package from its imported maps; it cannot edit this KMP in place. The original stays unchanged.`
-      : 'This saved KMP package has no confidently matched source texture set. Select its source set below or load it in KeyShot to edit its graph.';
+  $('materialContextNote').textContent = context.kind === 'texture-set' ? `${context.files.length} source maps are ready to use. The imported files stay unchanged.`
+    : context.kind === 'scene-material' ? 'Director will inspect this scene material before suggesting changes.'
+    : context.kind === 'library-material' ? 'The library material stays unchanged. Choose a scene part before making an editable copy.'
+    : context.source_texture_set ? `Source texture set: ${context.source_texture_set.name}. Director can build a new KeyShot material file from these maps; it cannot edit this saved .kmp file in place. The original stays unchanged.`
+      : 'Director could not match this saved .kmp file to an imported texture set. Select the source set below, or load the material in KeyShot so Director can inspect it.';
   $('materialContext').hidden = false;
   $('materialPrompt').placeholder = context.kind === 'material-package'
-    ? `Ask about ${context.name} or select its source texture set…`
-    : `Ask Material Director about ${context.name}…`;
+    ? `Describe a change to ${context.name}, or choose its source texture set…`
+    : `Describe a finish or change for ${context.name}…`;
   if (scrollToChat) document.querySelector('.material-chat-heading').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 function clearMaterialContext() {
@@ -650,17 +684,17 @@ async function loadMaterials(selected) {
 async function inspectMaterial() {
   const name = $('materialSelect').value, box = $('materialNodes');
   const editControls = $('materialEditControls');
-  if (!name) { box.textContent = 'No scene materials yet.'; inspectedMaterial = null; editControls.hidden = true; activeMaterialEditTarget = null; return; }
+  if (!name) { box.textContent = 'No materials are available in this scene.'; inspectedMaterial = null; editControls.hidden = true; activeMaterialEditTarget = null; return; }
   const graph = await api('/api/material/inspect', { name }); inspectedMaterial = graph;
   activeMaterialEditTarget = graph.edit_enabled ? name : null;
-  if (!materialWorkContext) $('materialPrompt').placeholder = graph.edit_enabled ? 'Describe how to adjust this selected material…' : 'Fine bead-blasted aluminum, cool silver, a soft satin sheen…';
+  if (!materialWorkContext) $('materialPrompt').placeholder = graph.edit_enabled ? 'Describe how to change this shared scene material…' : 'Fine bead-blasted aluminum, cool silver, a soft satin sheen…';
   editControls.hidden = graph.director_created;
   if (!graph.director_created) {
-    $('materialEditTitle').textContent = graph.edit_enabled ? 'Editing this KeyShot material' : 'Scene material is read-only';
+    $('materialEditTitle').textContent = graph.edit_enabled ? 'Editing a shared KeyShot material' : 'Scene material is read-only';
     $('materialEditHelp').textContent = graph.edit_enabled
-      ? 'Changes update the live scene and can affect every part sharing this material. Save the scene in KeyShot to keep them.'
-      : 'This only unlocks the selected material. Linked parts that share it will change together.';
-    $('materialEditToggle').textContent = graph.edit_enabled ? 'Stop editing' : 'Enable edits';
+      ? 'Changes apply in the open scene and can affect every part using this material. Save the scene in KeyShot to keep them.'
+      : 'Editing changes the scene material itself. Every part using it may change together; make a copy to edit only one part.';
+    $('materialEditToggle').textContent = graph.edit_enabled ? 'Stop editing' : 'Edit shared material';
     $('materialEditToggle').classList.toggle('solid', graph.edit_enabled);
   }
   $('materialDiscard').disabled = !graph.director_created;
@@ -669,11 +703,11 @@ async function inspectMaterial() {
   for (const channel of graph.root_channels || []) {
     const line = document.createElement('p'); line.className = 'material-readonly-input';
     const type = channel.source_type;
-    line.textContent = `${channel.socket}: ${channel.error ? 'inspection unavailable' : channel.source_node_id == null ? 'not connected' : `${type?.display_name || type?.name || 'node'} · ${channel.source_node_id}${channel.enabled === false ? ' (disabled)' : ''}`} — ${channel.meaning}`;
+    line.textContent = `${channel.socket}: ${channel.error ? 'could not inspect this connection' : channel.source_node_id == null ? 'no map connected' : `${type?.display_name || type?.name || 'node'} · ${channel.source_node_id}${channel.enabled === false ? ' (disabled)' : ''}`} — ${channel.meaning}`;
     box.appendChild(line);
   }
   const undoScope = document.createElement('p'); undoScope.className = 'material-readonly-input';
-  undoScope.textContent = graph.undo?.scope || 'Undo applies to supported edits in this bridge session.';
+  undoScope.textContent = graph.undo?.scope || 'Undo is available for supported material edits made during this KeyShot connection.';
   box.appendChild(undoScope);
   for (const node of graph.nodes) {
     if (node.type.name === '__root') continue;
@@ -684,19 +718,19 @@ async function inspectMaterial() {
       if (incoming) {
         const note = document.createElement('div'); note.className = 'material-readonly-input';
         const sourceNode = graph.nodes.find(candidate => candidate.id === incoming.source_node_id);
-        note.textContent = `${p.name}: driven by ${sourceNode?.type.display_name || sourceNode?.type.name || 'connected node'} (connected input)`;
+        note.textContent = `${p.name}: controlled by ${sourceNode?.type.display_name || sourceNode?.type.name || 'a connected node'}; change it in that node`;
         section.appendChild(note); continue;
       }
       if (p.value === null || typeof p.value === 'string' || (typeof p.value === 'object' && !Array.isArray(p.value))) {
         const note = document.createElement('div'); note.className = 'material-readonly-input';
-        note.textContent = `${p.name}: ${typeof p.value === 'string' ? p.value : 'no independent readable value'} (read-only here)`; section.appendChild(note); continue;
+        note.textContent = `${p.name}: ${typeof p.value === 'string' ? p.value : 'KeyShot does not expose this value here'} (read-only)`; section.appendChild(note); continue;
       }
       const row = document.createElement('div'); row.className = 'row'; row.style.marginTop = '6px';
       const label = document.createElement('label'); label.textContent = p.name; label.style.minWidth = '90px'; row.appendChild(label);
       const input = document.createElement('input'); input.style.width = Array.isArray(p.value) ? '155px' : '95px'; input.value = Array.isArray(p.value) ? p.value.join(', ') : String(p.value); input.disabled = !graph.editable;
       if (typeof p.value === 'number') { input.type = 'number'; input.step = Number.isInteger(p.value) ? '1' : 'any'; }
       if (typeof p.value === 'boolean') { input.type = 'checkbox'; input.checked = p.value; }
-      input.onchange = async () => { try { const value = Array.isArray(p.value) ? input.value.split(',').map(x => Number(x.trim())) : typeof p.value === 'boolean' ? input.checked : Number(input.value); const result = await api('/api/material/set', { name, node_id: node.id, parameter: p.name, value, expected_value: p.value }); p.value = result.after; if (typeof p.value === 'boolean') input.checked = p.value; else input.value = Array.isArray(p.value) ? p.value.join(', ') : String(p.value); $('materialStatus').textContent = `${p.name} read back from KeyShot. Undo restores the last supported material operation in this session.`; } catch (e) { toast(e.message); await inspectMaterial(); } };
+      input.onchange = async () => { try { const value = Array.isArray(p.value) ? input.value.split(',').map(x => Number(x.trim())) : typeof p.value === 'boolean' ? input.checked : Number(input.value); const result = await api('/api/material/set', { name, node_id: node.id, parameter: p.name, value, expected_value: p.value }); p.value = result.after; if (typeof p.value === 'boolean') input.checked = p.value; else input.value = Array.isArray(p.value) ? p.value.join(', ') : String(p.value); $('materialStatus').textContent = `${p.name} was verified in KeyShot. Undo can restore the last supported material operation from this connection.`; } catch (e) { toast(e.message); await inspectMaterial(); } };
       row.appendChild(input); section.appendChild(row);
     }
     box.appendChild(section);
@@ -710,7 +744,7 @@ $('libraryMaterialSearchButton').onclick = e => busy(e.target, async () => {
   const sel = $('libraryMaterialSelect'); sel.innerHTML = '';
   for (const name of result.materials) { const option = document.createElement('option'); option.value = option.textContent = name; sel.appendChild(option); }
   $('libraryMaterialCopyButton').disabled = !result.materials.length;
-  $('libraryMaterialStatus').textContent = result.materials.length ? `${result.materials.length} materials loaded${query ? ` for “${query}”` : ''}. Choose one, select your target part in KeyShot, and make the copy.` : 'No matches. Try a shorter name or a library folder such as Metal or Plastic.';
+  $('libraryMaterialStatus').textContent = result.materials.length ? `${result.materials.length} materials found${query ? ` for “${query}”` : ''}. Choose one, select the target part in KeyShot, then make the copy.` : 'No materials found. Try a shorter name or a library folder such as Metal or Plastic.';
 });
 $('libraryMaterialCopyButton').onclick = e => busy(e.target, async () => {
   const source = $('libraryMaterialSelect').value;
@@ -718,7 +752,7 @@ $('libraryMaterialCopyButton').onclick = e => busy(e.target, async () => {
   $('libraryMaterialStatus').textContent = `Copying “${source}” onto the selected KeyShot part(s)…`;
   const result = await api('/api/material/library-copy', { name: source });
   await loadMaterials(result.name);
-  $('libraryMaterialStatus').textContent = `Created “${result.name}” from “${source}” and applied it to ${result.objects.length} selected part(s). The source library material is unchanged. Describe your variation to Material Director; it will edit and save this copy.`;
+  $('libraryMaterialStatus').textContent = `Applied “${result.name}” to ${result.objects.length} selected part${result.objects.length === 1 ? '' : 's'}. It is a separate copy; “${source}” in the library is unchanged. Describe the finish change to edit and save this copy.`;
   $('materialPrompt').placeholder = `Describe how to change ${result.name}…`;
   $('materialPrompt').focus();
 });
@@ -731,15 +765,15 @@ $('materialSceneEditContext').onclick = () => {
 };
 $('materialEditToggle').onclick = e => busy(e.target, async () => {
   const name = $('materialSelect').value, enabling = !inspectedMaterial?.edit_enabled;
-  if (enabling && !confirm(`Enable live edits for “${name}”? Every part sharing this material may change. The original material will not be cloned.`)) return;
+  if (enabling && !confirm(`Edit “${name}” in the open scene? Every part using this material may change together. Director will edit the shared material itself, not make a copy.`)) return;
   await api('/api/material/edit-target', { name, enabled: enabling });
   await inspectMaterial();
-  $('materialStatus').textContent = enabling ? `Edits enabled for ${name}. Only exposed value fields can be changed; texture-map connections stay read-only.` : `Edits stopped for ${name}.`;
+  $('materialStatus').textContent = enabling ? `Editing enabled for ${name}. Only values shown here can be changed; texture-map connections must be changed in KeyShot.` : `Editing stopped for ${name}.`;
 });
-$('materialCreate').onclick = e => busy(e.target, async () => { const raw = $('materialName').value.trim(); const name = raw.startsWith('Director ') ? raw : 'Director ' + raw; await api('/api/material/create', { name }); await loadMaterials(name); const saved = await api('/api/material/save', { name }); $('materialStatus').textContent = `Created and saved ${name}. It is not applied to the product. ${saved.path}`; await loadMaterialAssets(); });
-$('materialUndo').onclick = e => busy(e.target, async () => { const r = await api('/api/material/undo', {}); await loadMaterials(r.name); $('materialStatus').textContent = `${r.parameter} restored.`; });
-$('materialSave').onclick = e => busy(e.target, async () => { const name = $('materialSelect').value; const r = await api('/api/material/save', { name }); $('materialStatus').textContent = `Saved ${r.path}`; await loadMaterialAssets(); });
-$('materialDiscard').onclick = e => busy(e.target, async () => { const name = $('materialSelect').value; if (!inspectedMaterial?.editable || !confirm(`Discard the unassigned material “${name}” from this KeyShot scene? Saved packages are not deleted.`)) return; await api('/api/material/discard', { name }); await loadMaterials(); $('materialStatus').textContent = `${name} discarded from the scene.`; });
+$('materialCreate').onclick = e => busy(e.target, async () => { const raw = $('materialName').value.trim(); if (!raw) throw new Error('Enter a name for the new material.'); const name = raw.startsWith('Director ') ? raw : 'Director ' + raw; await api('/api/material/create', { name }); await loadMaterials(name); const saved = await api('/api/material/save', { name }); $('materialStatus').textContent = `Created and saved ${name}. It is not assigned to a part. .kmp material file: ${saved.path}`; await loadMaterialAssets(); });
+$('materialUndo').onclick = e => busy(e.target, async () => { const r = await api('/api/material/undo', {}); await loadMaterials(r.name); $('materialStatus').textContent = `${r.parameter} restored in KeyShot.`; });
+$('materialSave').onclick = e => busy(e.target, async () => { const name = $('materialSelect').value; const r = await api('/api/material/save', { name }); $('materialStatus').textContent = `Saved to the KeyShot library and as a .kmp material file: ${r.path}`; await loadMaterialAssets(); });
+$('materialDiscard').onclick = e => busy(e.target, async () => { const name = $('materialSelect').value; if (!inspectedMaterial?.editable || !confirm(`Remove the Director-created material “${name}” from the current KeyShot scene? Saved .kmp files on this computer will remain.`)) return; await api('/api/material/discard', { name }); await loadMaterials(); $('materialStatus').textContent = `${name} removed from the scene. Saved .kmp files remain on this computer.`; });
 let materialCopyName = null;
 let materialSceneObjects = [];
 const textureSetsMaxFileBytes = 80 * 1024 * 1024;
@@ -760,7 +794,7 @@ async function loadMaterialSceneObjects() {
   const result = await api('/api/scene/parts');
   appendObjects(result.objects);
   $('materialCopyMake').disabled = materialSceneObjects.length === 0 || !$('materialLibrarySelect').value;
-  if (!materialSceneObjects.length) $('materialCopyStatus').textContent = 'No unlocked scene parts are available.';
+  if (!materialSceneObjects.length) $('materialCopyStatus').textContent = 'No visible, unlocked parts are available to receive a material copy.';
 }
 async function loadMaterialLibrary(query = '') {
   $('materialLibrarySelect').innerHTML = '<option>Loading KeyShot library…</option>';
@@ -769,8 +803,8 @@ async function loadMaterialLibrary(query = '') {
   for (const name of result.materials) { const option = document.createElement('option'); option.value = option.textContent = name; select.appendChild(option); }
   $('materialCopyMake').disabled = !select.value || !materialSceneObjects.length;
   $('materialCopyStatus').textContent = result.total
-    ? `${result.materials.length} of ${result.total} loaded library materials shown. Select a part, then make an independent copy.`
-    : 'No matching materials found in the loaded KeyShot library.';
+    ? `Showing ${result.materials.length} of ${result.total} library materials. Select a material and a part, then make a separate copy.`
+    : 'No matching materials found in the KeyShot library.';
 }
 $('materialLibraryRefresh').onclick = e => busy(e.target, async () => { await loadMaterialLibrary($('materialLibrarySearch').value.trim()); });
 $('materialLibraryEditContext').onclick = () => {
@@ -782,16 +816,16 @@ $('materialLibrarySearch').oninput = () => { clearTimeout($('materialLibrarySear
 $('materialLibrarySelect').onchange = () => { $('materialCopyMake').disabled = !$('materialLibrarySelect').value || !materialSceneObjects.length; };
 $('materialCopyPart').onchange = () => { $('materialCopyMake').disabled = !$('materialLibrarySelect').value || !$('materialCopyPart').value; };
 async function uploadMaterialMap(file) {
-  if (!file || !file.size || file.size > textureSetsMaxFileBytes) throw new Error('Choose a non-empty image no larger than 80 MB.');
+  if (!file || !file.size || file.size > textureSetsMaxFileBytes) throw new Error('Choose an image file larger than 0 bytes and no larger than 80 MB.');
   const ext = '.' + file.name.split('.').pop().toLowerCase();
-  if (!['.png','.jpg','.jpeg','.webp','.tif','.tiff','.exr','.hdr'].includes(ext)) throw new Error('Choose a supported image file, not MaterialX or a document.');
+  if (!['.png','.jpg','.jpeg','.webp','.tif','.tiff','.exr','.hdr'].includes(ext)) throw new Error('Choose a supported image file (PNG, JPG, WebP, TIFF, EXR, or HDR). MaterialX files and documents are not accepted here.');
   const made = await api('/api/material/texture-sets', { name: `Material Library Editor Maps ${Date.now()}` });
   let set = { id: made.id };
   const response = await fetch(`/api/material/texture-file?id=${encodeURIComponent(set.id)}&name=${encodeURIComponent(file.name)}`, { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: file });
   const result = await response.json(); if (!response.ok) throw new Error(result.error || 'Could not import this map.');
   await loadTextureSets();
   const fileRecord = materialTextureSets.find(item => item.id === set.id)?.files.find(item => item.name === file.name);
-  if (!fileRecord) throw new Error('Map uploaded, but its imported file entry could not be reloaded.');
+  if (!fileRecord) throw new Error('The image was uploaded, but it is missing from the refreshed map list. Refresh the list and check the import.');
   return { ...fileRecord, path: `${made.path}/${file.name}` };
 }
 function refreshMaterialMapChoices() {
@@ -812,40 +846,43 @@ $('materialCopyMake').onclick = e => busy(e.target, async () => {
   selectMaterialContext({ kind: 'scene-material', name: result.name });
   $('materialBumpApply').disabled = false; $('materialCopySave').disabled = false;
   $('materialMapFile').value = ''; $('materialBumpStrength').value = '';
-  $('materialCopyStatus').textContent = `Copied “${source}” as ${result.name} on the selected part. The KeyShot library original is unchanged.`;
+  $('materialCopyStatus').textContent = `Applied “${result.name}” to the selected part as a separate copy. The KeyShot library original is unchanged.`;
 });
 $('materialBumpApply').onclick = e => busy(e.target, async () => {
   if (!materialCopyName) throw new Error('Create an independent material copy first.');
   const file = $('materialMapFile').files[0], selectedMap = $('materialMapSet').selectedOptions[0], role = $('materialMapRole').value, raw = $('materialBumpStrength').value;
-  if (!file && !selectedMap?.dataset.path && raw === '') throw new Error('Choose an image map or enter a bump strength.');
+  if (!file && !selectedMap?.dataset.path && raw === '') throw new Error('Choose an image map or enter a bump strength before applying changes.');
   const imported = file ? await uploadMaterialMap(file) : null;
   const result = await api('/api/material/bump', { name: materialCopyName, path: imported?.path || selectedMap?.dataset.path, role, ...(raw !== '' ? { strength: Number(raw) } : {}) });
   $('materialMapFile').value = ''; $('materialMapSet').value = '';
-  $('materialCopyStatus').textContent = `${result.name} ${role} settings updated. The KeyShot library original is unchanged.`;
+  $('materialCopyStatus').textContent = `Updated ${result.name} with the ${role} map settings. The KeyShot library original is unchanged.`;
   await inspectMaterial();
 });
 $('materialCopySave').onclick = e => busy(e.target, async () => {
   if (!materialCopyName) throw new Error('Create an independent material copy first.');
   const result = await api('/api/material/save', { name: materialCopyName });
-  $('materialCopyStatus').textContent = `Saved ${materialCopyName} to the KeyShot library and package ${result.path}.`;
+  $('materialCopyStatus').textContent = `Saved ${materialCopyName} to the KeyShot library and as a .kmp material file: ${result.path}`;
   await loadMaterialAssets();
 });
 async function loadMaterialAssets() {
   const result = await api('/api/material/assets'), list = $('materialAssetList');
   $('materialFolderPath').textContent = result.directory;
   list.innerHTML = '';
-  if (!result.assets.length) { list.innerHTML = '<p class="chat-empty">No packages yet. Ask Material Director to create a finish; completed results will appear here.</p>'; return; }
+  if (!result.assets.length) { list.innerHTML = '<p class="chat-empty">No saved materials yet. Ask Material Director to create a finish; saved materials will appear here.</p>'; return; }
   for (const asset of result.assets) {
     const item = document.createElement('article'); item.className = 'material-asset'; item.setAttribute('role', 'listitem');
     const info = document.createElement('div'); info.className = 'material-asset-info';
     const title = document.createElement('b'); title.textContent = asset.name.replace(/\.kmp$/i, '');
     const meta = document.createElement('span'); meta.textContent = `${(asset.size / 1024).toFixed(0)} KB · ${new Date(asset.modified).toLocaleString()}`;
+    const location = document.createElement('details'); location.className = 'texture-set-folder';
+    const locationSummary = document.createElement('summary'); locationSummary.textContent = 'Show file location';
     const pathLine = document.createElement('code'); pathLine.textContent = asset.path;
-    info.append(title, meta, pathLine);
+    location.append(locationSummary, pathLine);
+    info.append(title, meta, location);
     const actions = document.createElement('div'); actions.className = 'row';
-    const download = document.createElement('a'); download.className = 'asset-download'; download.href = `/api/material/file?name=${encodeURIComponent(asset.name)}`; download.download = asset.name; download.textContent = 'Download KMP';
-    const show = document.createElement('button'); show.type = 'button'; show.className = 'sm'; show.textContent = 'Show in folder'; show.onclick = async () => { try { await api('/api/material/open-folder', {}); } catch (err) { toast(err.message); } };
-    const edit = document.createElement('button'); edit.type = 'button'; edit.className = 'sm'; edit.textContent = 'Edit with chat';
+    const download = document.createElement('a'); download.className = 'asset-download'; download.href = `/api/material/file?name=${encodeURIComponent(asset.name)}`; download.download = asset.name; download.textContent = 'Download .kmp'; download.setAttribute('aria-label', `Download ${asset.name} KeyShot material file`);
+    const show = document.createElement('button'); show.type = 'button'; show.className = 'sm'; show.textContent = 'Open materials folder'; show.onclick = async () => { try { await api('/api/material/open-folder', {}); } catch (err) { toast(err.message); } };
+    const edit = document.createElement('button'); edit.type = 'button'; edit.className = 'sm'; edit.textContent = 'Use in Material Director';
     edit.onclick = () => selectMaterialContext({ kind: 'material-package', name: asset.name.replace(/\.kmp$/i, ''), file: asset.name,
       source_texture_set: asset.source_texture_set });
     actions.append(edit, download, show); item.append(info, actions); list.appendChild(item);
@@ -864,25 +901,44 @@ async function loadTextureSets() {
     const title = document.createElement('b'); title.textContent = set.name;
     const meta = document.createElement('span'); meta.textContent = `${set.files.length} source files · ${(set.bytes / 1048576).toFixed(1)} MB · imported ${new Date(set.imported).toLocaleString()}`;
     const roles = document.createElement('span'); roles.className = 'texture-set-roles';
-    roles.textContent = set.files.map(file => `${file.role}: ${file.name}`).join('  ·  ');
+    const reviewCount = set.files.filter(file => String(file.role).startsWith('unassigned')).length;
+    const previewCount = set.files.filter(file => String(file.role).startsWith('preview')).length;
+    const mapTypes = [...new Set(
+      set.files
+        .filter(file => !String(file.role).startsWith('unassigned') && !String(file.role).startsWith('preview') && !String(file.role).startsWith('MaterialX metadata'))
+        .map(file => String(file.role).split('-').map(word => word ? word[0].toUpperCase() + word.slice(1) : word).join(' '))
+    )];
+    roles.textContent = `Maps found: ${mapTypes.length ? mapTypes.join(', ') : 'none'}${reviewCount ? ` · ${reviewCount} file${reviewCount === 1 ? '' : 's'} need review` : ''}${previewCount ? ` · ${previewCount} preview image${previewCount === 1 ? '' : 's'}` : ''}`;
+    const inventory = document.createElement('details'); inventory.className = 'texture-set-inventory';
+    const inventorySummary = document.createElement('summary'); inventorySummary.textContent = `Show source files (${set.files.length})`;
+    const inventoryList = document.createElement('ul');
+    for (const file of set.files) {
+      const entry = document.createElement('li');
+      const role = String(file.role).startsWith('unassigned') ? 'Needs review' : String(file.role).startsWith('preview') ? 'Preview image' : file.role;
+      entry.textContent = `${role}: ${file.name}`; inventoryList.append(entry);
+    }
+    inventory.append(inventorySummary, inventoryList);
+    const folderDetails = document.createElement('details'); folderDetails.className = 'texture-set-folder';
+    const folderSummary = document.createElement('summary'); folderSummary.textContent = 'Show folder location';
     const folder = document.createElement('code'); folder.textContent = set.path;
+    folderDetails.append(folderSummary, folder);
     info.append(title, meta, roles);
     if (set.missing?.length) {
       const missing = document.createElement('span'); missing.className = 'texture-set-roles';
-      missing.textContent = `Import unfinished · ${set.missing.length} map${set.missing.length === 1 ? '' : 's'} still expected: ${set.missing.join(', ')}`;
+      missing.textContent = `Import incomplete · Missing ${set.missing.length} map${set.missing.length === 1 ? '' : 's'}: ${set.missing.join(', ')}`;
       info.append(missing);
     }
     if (set.materialx) {
-      const recipe = document.createElement('span'); recipe.className = 'texture-set-roles';
+    const recipe = document.createElement('span'); recipe.className = 'texture-set-roles';
       const links = set.materialx.connections.map(edge => `${edge.input} ← ${edge.source}`);
       const disabled = [];
       if (set.materialx.values.AO_Mix_Strength === 0) disabled.push('AO blend 0');
       if (set.materialx.values.displacementScale === 0) disabled.push('displacement scale 0');
-      recipe.textContent = `MaterialX recipe hint: ${links.join(' · ') || 'no channel links found'}${disabled.length ? ` · ${disabled.join(' · ')}` : ''}`;
-      recipe.title = set.materialx.note;
+      recipe.textContent = `MaterialX conversion hints (not applied directly): ${links.join(' · ') || 'no map connections found'}${disabled.length ? ` · ${disabled.join(' · ')}` : ''}`;
+      recipe.title = set.materialx.note || 'MaterialX files help identify map connections but are not applied directly.';
       info.append(recipe);
     }
-    info.append(folder);
+    info.append(inventory, folderDetails);
     const supportedRoles = new Set(['base-color','roughness','metallic','normal','bump','displacement']);
     const canBuild = set.files.some(file => supportedRoles.has(file.role));
     const options = document.createElement('div'); options.className = 'row';
@@ -892,13 +948,13 @@ async function loadTextureSets() {
       wrap.append(input, document.createTextNode(` ${label}`)); options.append(wrap); return input;
     };
     const ao = set.files.some(file => file.role === 'ambient-occlusion')
-      ? choice('Blend AO into Base Color') : null;
+      ? choice('Blend Ambient Occlusion into Base Color') : null;
     const displacement = set.files.some(file => file.role === 'displacement')
       ? choice('Add displacement geometry') : null;
     let height = null;
     if (displacement) {
       const wrap = document.createElement('label'); wrap.className = 'texture-set-roles';
-      wrap.textContent = 'Height (mm; 0.001–0.1) ';
+      wrap.textContent = 'Displacement height (mm; 0.001–0.1) ';
       height = document.createElement('input'); height.type = 'number'; height.min = '0.001'; height.max = '0.1';
       height.step = '0.001'; height.value = '0.01'; height.style.width = '5em';
       height.title = 'Default 0.01 mm; supported range 0.001–0.1 mm';
@@ -907,7 +963,7 @@ async function loadTextureSets() {
     if (options.childNodes.length) info.append(options);
     const build = document.createElement('button'); build.type = 'button'; build.className = 'solid'; build.textContent = 'Build KeyShot material';
     build.disabled = !canBuild || !!set.missing?.length;
-    build.title = set.missing?.length ? 'This set is incomplete. Add the missing maps first for a fuller material.' : canBuild ? 'Supported AO and displacement maps are included by default; uncheck a map to omit it.' : 'Add a Base Color, Roughness, Metallic, Normal, Bump or Displacement map to build a material.';
+    build.title = set.missing?.length ? 'This set is incomplete. Add the missing maps before building a material.' : canBuild ? 'Ambient Occlusion and displacement maps are included by default when available. Uncheck either to leave it out.' : 'Add a Base Color, Roughness, Metallic, Normal, Bump, or Displacement map to build a material.';
     build.onclick = async () => {
       build.disabled = true; build.textContent = 'Building…';
       $('textureBuildStatus').textContent = `Building ${set.name} in the connected KeyShot scene…`;
@@ -922,8 +978,8 @@ async function loadTextureSets() {
         const used = result.used_files.map(file => channelNames[file.role] || file.role).join(', ');
         const roleNames = { 'ambient-occlusion':'AO', metallic:'Metallic', displacement:'Displacement', specular:'Specular', glossiness:'Glossiness' };
         const skipped = [...new Set(result.skipped_files.map(file => roleNames[file.role]).filter(Boolean))];
-        $('textureBuildStatus').textContent = `${result.name} (${result.material?.model || result.recipe?.material?.model || 'KeyShot material'}) is in KeyShot’s Material Library and saved as a KMP. Connected: ${used}.${skipped.length ? ` Skipped: ${skipped.join(', ')}.` : ''} It is unassigned—drag it onto your chosen part in KeyShot.${result.used_files.some(file => file.role === 'displacement') ? ' Execute Geometry in KeyShot after assigning it to see displacement.' : ''} Package: ${result.path}`;
-        $('materialStatus').textContent = `Built ${result.name}. It is not applied to the product; drag it from KeyShot’s Material Library onto the part you choose.`;
+        $('textureBuildStatus').textContent = `Built ${result.name} with ${used}. Saved it to KeyShot’s Material Library and as a .kmp material file.${skipped.length ? ` These map types were skipped: ${skipped.join(', ')}.` : ''} The material is not assigned to a part. Drag it from the library onto your chosen part in KeyShot.${result.used_files.some(file => file.role === 'displacement') ? ' After assigning it, enable Execute Geometry in KeyShot to see displacement.' : ''} File: ${result.path}`;
+        $('materialStatus').textContent = `Built ${result.name}. It is saved but not assigned to a part. Apply it from KeyShot’s Material Library.`;
       } catch (error) {
         $('textureBuildStatus').textContent = `${error.message} Your imported source maps are unchanged. Check the KeyShot connection and try again.`;
       } finally { build.disabled = !canBuild || !!set.missing?.length; build.textContent = 'Build KeyShot material'; }
@@ -931,7 +987,7 @@ async function loadTextureSets() {
     const open = document.createElement('button'); open.type = 'button'; open.className = 'sm'; open.textContent = 'Open this set'; open.onclick = async () => { try { await api('/api/material/open-folder', { textureSet: set.id }); } catch (err) { toast(err.message); } };
     const addMore = document.createElement('button'); addMore.type = 'button'; addMore.className = 'sm'; addMore.textContent = 'Add missing maps'; addMore.onclick = () => { $('textureSetFiles').dataset.setId = set.id; $('textureSetFiles').click(); };
     const actions = document.createElement('div'); actions.className = 'row';
-    const edit = document.createElement('button'); edit.type = 'button'; edit.className = 'sm'; edit.textContent = 'Edit with chat';
+    const edit = document.createElement('button'); edit.type = 'button'; edit.className = 'sm'; edit.textContent = 'Use in Material Director';
     edit.onclick = () => selectMaterialContext({ kind: 'texture-set', id: set.id, name: set.name, files: set.files.map(file => ({ name: file.name, role: file.role })), missing: set.missing || [] });
     actions.append(edit, build, addMore, open); item.append(info, actions); host.appendChild(item);
   }
@@ -1066,27 +1122,27 @@ cv.addEventListener('pointerup', () => { if (dragLight) { dragLight = null; rend
 async function loadStyles() {
   const list = (await api('/api/styles')).filter(s => !s.name.startsWith('_')); const box = $('styles'); box.innerHTML = '';
   const selectedStyle = $('directorStyle').value;
-  $('directorStyle').replaceChildren(new Option('None selected', ''), ...list.filter(s => s.images > 0).map(s => new Option(s.name, s.name)));
+  $('directorStyle').replaceChildren(new Option('No style selected', ''), ...list.filter(s => s.images > 0).map(s => new Option(s.name, s.name)));
   $('directorStyle').value = list.some(s => s.name === selectedStyle && s.images > 0) ? selectedStyle : '';
-  if (!list.length) box.innerHTML = '<div class="dim" style="margin-top:8px">No style folders yet.</div>';
+  if (!list.length) box.innerHTML = '<div class="dim" style="margin-top:8px">No saved styles yet. Add reference images above and save them with a name.</div>';
   for (const s of list) {
     const d = document.createElement('div'); d.className = 'style';
-    d.innerHTML = `<div class="row"><b>${htmlText(s.name)}</b><span class="dim">${s.images} image${s.images === 1 ? '' : 's'}${s.analyzed ? ' &middot; ' + s.looks.map(l => htmlText(l.id) + ' ' + l.count).join(', ') : s.images ? ' &middot; ready to analyze' : ' &middot; add images to use'}</span></div>
+    d.innerHTML = `<div class="row"><b>${htmlText(s.name)}</b><span class="dim">${s.images} reference image${s.images === 1 ? '' : 's'}${s.analyzed ? ' · analyzed: ' + s.looks.map(l => htmlText(l.id) + ' (' + l.count + ')').join(', ') : s.images ? ' · ready to analyze' : ' · add images to use'}</span></div>
       <div class="style-previews">${(s.previews || []).map(file => `<img loading="lazy" alt="${htmlText(s.name)} reference" src="/api/styles/image?name=${encodeURIComponent(s.name)}&file=${encodeURIComponent(file)}">`).join('')}</div>
-      <div class="row" style="margin-top:6px"><button class="sm" data-an="${htmlText(s.name)}" ${s.images ? '' : 'disabled'}>Analyze</button><button class="sm" data-use="${htmlText(s.name)}" ${s.images ? '' : 'disabled'}>Use in Director</button></div>`;
+      <div class="row" style="margin-top:6px"><button class="sm" data-an="${htmlText(s.name)}" ${s.images ? '' : 'disabled'}>Analyze style</button><button class="sm" data-use="${htmlText(s.name)}" ${s.images ? '' : 'disabled'}>Select for Director</button></div>`;
     box.appendChild(d);
   }
 }
 $('styles').addEventListener('click', e => {
   const an = e.target.dataset.an, use = e.target.dataset.use;
-  if (an) busy(e.target, async () => { $('matchlog').textContent = 'Analyzing ' + an + '...'; const r = await api('/api/styles/analyze', { name: an }); $('matchlog').textContent = `${r.analyzed} images -> ${r.looks.map(l => l.id + ' (' + l.images + ')').join(', ')}`; await loadStyles(); });
+  if (an) busy(e.target, async () => { $('matchlog').textContent = `Analyzing reference images in “${an}”…`; const r = await api('/api/styles/analyze', { name: an }); $('matchlog').textContent = `Analysis complete: ${r.analyzed} image${r.analyzed === 1 ? '' : 's'} analyzed. Profiles: ${r.looks.map(l => `${l.id} (${l.images} images)`).join(', ') || 'none found'}.`; await loadStyles(); });
   if (use) { $('directorStyle').value = use; $('prompt').focus(); document.querySelector('.promptbar').scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }
 });
 /* ---------- prompt box ---------- */
 let attached = [], running = false;
 const log = $('log');
 function add(cls, text) { const p = document.createElement('div'); p.className = cls; p.textContent = text; log.appendChild(p); log.scrollTop = log.scrollHeight; return p; }
-function renderThumbs() { const t = $('thumbs'); t.innerHTML = ''; attached.forEach((d, i) => { const w = document.createElement('div'); w.innerHTML = `<img src="${d}"><button class="sm" data-x="${i}">x</button>`; t.appendChild(w); }); }
+function renderThumbs() { const t = $('thumbs'); t.innerHTML = ''; attached.forEach((d, i) => { const w = document.createElement('div'); w.innerHTML = `<img src="${d}" alt="Attached reference image ${i + 1}"><button class="sm" data-x="${i}" aria-label="Remove attached reference image ${i + 1}" title="Remove this image">Remove</button>`; t.appendChild(w); }); }
 $('thumbs').addEventListener('click', e => { const i = e.target.dataset.x; if (i != null) { attached.splice(+i, 1); renderThumbs(); } });
 async function readImage(file) {                 // shrink client-side: the AI does not need 8 MB, and the request stays small
   const url = URL.createObjectURL(file); const img = new Image(); img.src = url; await img.decode();
@@ -1098,12 +1154,12 @@ let styleImages = [], materialImages = [], materialImageQueue = Promise.resolve(
 async function addStyleImages(files) {
   for (const file of files) {
     if (!/^image\/(png|jpeg|webp)$/.test(file.type)) continue;
-    if (styleImages.length >= 8) { toast('A collection upload accepts up to 8 images at once.'); break; }
-    try { styleImages.push(await readStyleImage(file)); } catch { toast('Could not read ' + file.name); }
+    if (styleImages.length >= 8) { toast('A saved style can contain up to 8 reference images.'); break; }
+    try { styleImages.push(await readStyleImage(file)); } catch { toast(`Could not read ${file.name}. Choose another image file.`); }
   }
   const box = $('styleThumbs'); box.innerHTML = '';
   styleImages.forEach((src, i) => { const im = document.createElement('img'); im.src = src; im.alt = `Reference ${i + 1}`; box.appendChild(im); });
-  $('styleUploadStatus').textContent = styleImages.length ? `${styleImages.length} image${styleImages.length === 1 ? '' : 's'} ready to save.` : '';
+  $('styleUploadStatus').textContent = styleImages.length ? `${styleImages.length} reference image${styleImages.length === 1 ? '' : 's'} ready to save.` : 'No reference images selected.';
 }
 async function readStyleImage(file) {
   const url = URL.createObjectURL(file), img = new Image();
@@ -1120,9 +1176,9 @@ $('styleDrop').ondragleave = e => e.currentTarget.classList.remove('dragover');
 $('styleDrop').ondrop = e => { e.preventDefault(); e.currentTarget.classList.remove('dragover'); addStyleImages(e.dataTransfer.files); };
 $('styleClear').onclick = () => { styleImages = []; addStyleImages([]); };
 $('styleSave').onclick = e => busy(e.target, async () => {
-  const name = $('styleName').value.trim(); if (!name || !styleImages.length) throw new Error('Name the collection and add at least one image.');
+  const name = $('styleName').value.trim(); if (!name || !styleImages.length) throw new Error('Enter a style name and add at least one reference image.');
   const r = await api('/api/styles/save', { name, images: styleImages }); styleImages = []; addStyleImages([]);
-  $('styleUploadStatus').textContent = `Saved ${r.added} image${r.added === 1 ? '' : 's'} to ${r.name}. Choose Analyze below to prepare the look.`;
+  $('styleUploadStatus').textContent = `Saved ${r.added} reference image${r.added === 1 ? '' : 's'} to ${r.name}. Choose Analyze style to calculate its image profile.`;
   await loadStyles();
 });
 const MAX_MATERIAL_IMAGES = 8, MAX_MATERIAL_IMAGE_BYTES = 4 * 1024 * 1024, MAX_MATERIAL_PACK_BYTES = 10 * 1024 * 1024;
@@ -1136,9 +1192,9 @@ function renderMaterialImages() {
     const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'material-reference-remove'; remove.textContent = 'Remove'; remove.setAttribute('aria-label', `Remove ${item.name}`); remove.onclick = () => { materialImages.splice(i, 1); renderMaterialImages(); };
     card.append(img, caption, remove); host.appendChild(card);
   });
-  $('materialImageCount').textContent = materialImages.length ? `${materialImages.length} of ${MAX_MATERIAL_IMAGES} reference images` : 'No references added';
+  $('materialImageCount').textContent = materialImages.length ? `${materialImages.length} of ${MAX_MATERIAL_IMAGES} material reference images` : 'No material reference images added';
   $('materialClearImages').hidden = materialImages.length === 0;
-  $('materialDropText').innerHTML = materialImages.length ? `Add references or a Poliigon folder <small>${MAX_MATERIAL_IMAGES - materialImages.length} reference images remaining · folder maps and loose pictures can be dropped together</small>` : 'Add references or a Poliigon folder <small>Drop the texture folder and loose reference pictures together, or choose images</small>';
+  $('materialDropText').innerHTML = materialImages.length ? `Add reference images or a Poliigon folder <small>${MAX_MATERIAL_IMAGES - materialImages.length} reference images remaining · drop a texture folder and loose reference images together</small>` : 'Add reference images or a Poliigon folder <small>Drop a texture folder and reference images together, or click to choose images</small>';
 }
 async function readMaterialImage(file) {
   const url = URL.createObjectURL(file), img = new Image();
@@ -1216,7 +1272,7 @@ $('styleLibraryFold').addEventListener('paste', e => { const f = [...e.clipboard
 function materialLine(kind, value) { const p = document.createElement('p'); p.className = `material-line ${kind}`; p.textContent = value; $('materialChatLog').querySelector('.chat-empty')?.remove(); $('materialChatLog').appendChild(p); p.scrollIntoView({ block: 'nearest' }); }
 async function sendMaterialPrompt() {
   const text = $('materialPrompt').value.trim(); if ((!text && !materialImages.length) || materialRunning) return;
-  materialRunning = true; $('materialSend').disabled = true; $('materialStop').disabled = false; $('materialStop').hidden = false;
+  materialRunning = true; $('materialSend').disabled = true; $('materialStop').disabled = false; $('materialStop').hidden = false; $('materialNewChat').disabled = true;
   const countLabel = materialImages.length ? ` · ${materialImages.length} reference image${materialImages.length === 1 ? '' : 's'}` : '';
   materialLine('user', (text || 'Use these references as the material direction.') + countLabel);
   try {
@@ -1233,18 +1289,18 @@ async function sendMaterialPrompt() {
     }
     await loadMaterials(); await loadMaterialAssets();
   } catch (err) { materialLine('error', err.message); }
-  finally { materialRunning = false; $('materialSend').disabled = false; $('materialStop').disabled = true; $('materialStop').hidden = true; }
+  finally { materialRunning = false; $('materialSend').disabled = false; $('materialStop').disabled = true; $('materialStop').hidden = true; $('materialNewChat').disabled = false; }
 }
 $('materialSend').onclick = sendMaterialPrompt;
 $('materialPrompt').onkeydown = e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMaterialPrompt(); } };
 $('materialStop').onclick = () => api('/api/material/prompt/stop', {}).catch(err => toast(err.message));
-$('materialNewChat').onclick = async () => { await api('/api/material/prompt/reset', {}); $('materialChatLog').innerHTML = '<p class="chat-empty">Your conversation and build results will appear here. Start with a finish description or add a reference below.</p>'; materialImages = []; renderMaterialImages(); };
+$('materialNewChat').onclick = e => busy(e.target, async () => { await api('/api/material/prompt/reset', {}); $('materialChatLog').innerHTML = '<p class="chat-empty">Your conversation and material results will appear here. Describe a finish or add a reference image to begin.</p>'; materialImages = []; renderMaterialImages(); });
 async function addFiles(files) { for (const f of files) { if (!f.type.startsWith('image/')) continue; if (attached.length >= 8) break; try { attached.push(await readImage(f)); } catch { toast('Could not read ' + f.name); } } renderThumbs(); }
 $('attach').onclick = () => $('file').click(); $('file').onchange = e => { addFiles(e.target.files); e.target.value = ''; };
 $('prompt').addEventListener('paste', e => { const f = [...e.clipboardData.files]; if (f.length) { e.preventDefault(); addFiles(f); } });
 document.querySelector('.promptbar').addEventListener('dragover', e => e.preventDefault());
 document.querySelector('.promptbar').addEventListener('drop', e => { e.preventDefault(); addFiles([...e.dataTransfer.files]); });
-function setRunning(v) { running = v; $('send').disabled = v; $('stopBtn').disabled = !v; $('busy').textContent = v ? 'starting…' : ''; }
+function setRunning(v) { running = v; $('send').disabled = v; $('stopBtn').disabled = !v; $('newchat').disabled = v; $('busy').textContent = v ? 'Starting request…' : ''; }
 async function sendPrompt(text) {
   text = (text ?? $('prompt').value).trim();
   const reference = window.directorPhoto?.image || null;
@@ -1284,7 +1340,7 @@ async function sendPrompt(text) {
     since = j.next;
     for (const ev of j.events) {
       if (ev.type === 'text') add('msg a', ev.text);
-      else if (ev.type === 'mode') $('busy').textContent = ev.mode === 'ChatGPT (Codex CLI)' ? 'ChatGPT is thinking…' : ev.mode === 'claude (signed-in CLI)' ? 'Claude is thinking…' : 'working…';
+      else if (ev.type === 'mode') $('busy').textContent = ev.mode === 'ChatGPT (Codex CLI)' ? 'ChatGPT is thinking…' : ev.mode === 'claude (signed-in CLI)' ? 'Claude is thinking…' : 'Working…';
       else if (ev.type === 'tool') { $('busy').textContent = `Using ${ev.name.replaceAll('_',' ')}…`; add('tl', '> ' + ev.name + ' ' + (Object.keys(ev.input || {}).length ? JSON.stringify(ev.input) : '')); }
       else if (ev.type === 'result') { add('tl' + (ev.ok ? '' : ' err'), (ev.ok ? '  ok: ' : '  failed: ') + ev.summary); if (ev.image) { const im = document.createElement('img'); im.src = ev.image; log.appendChild(im); log.scrollTop = log.scrollHeight; } }
       else if (ev.type === 'error') add('tl err', ev.message);
@@ -1296,15 +1352,15 @@ async function sendPrompt(text) {
 $('send').onclick = () => sendPrompt();
 $('prompt').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendPrompt(); } });
 $('stopBtn').onclick = () => window.directorPhoto?.running ? window.directorPhoto.stop() : api('/api/prompt/stop', {});
-$('newchat').onclick = async () => { await api('/api/prompt/reset', {}); log.innerHTML = ''; showExamples(); };
-const EXAMPLES = ['Soft studio light with crisp edges', 'A close-up of the top detail', 'Duplicate my product for a three-piece composition', 'Dark, cinematic reflections', 'Slow hero push-in'];
+$('newchat').onclick = e => busy(e.target, async () => { await api('/api/prompt/reset', {}); log.innerHTML = ''; showExamples(); });
+const EXAMPLES = ['Soft studio light with crisp edges', 'Close up on the product’s top detail', 'Duplicate my product for a three-piece composition', 'Dark, cinematic reflections', 'Slow hero push-in'];
 function showExamples() { const e = $('examples'); e.innerHTML = ''; for (const t of EXAMPLES) { const b = document.createElement('button'); b.className = 'sm ex'; b.textContent = t; b.onclick = () => { $('prompt').value = t; $('prompt').focus(); }; e.appendChild(b); } }
 
 /* ---------- reference video: pull frames out in the browser, send them to be matched ---------- */
 async function videoFrames(file, n = 12, maxW = 640) {
   const v = document.createElement('video'); v.muted = true; v.playsInline = true; v.preload = 'auto'; v.src = URL.createObjectURL(file);
   await new Promise((ok, no) => { v.onloadedmetadata = ok; v.onerror = () => no(new Error('This browser cannot play that video file (try mp4 / H.264)')); });
-  const dur = v.duration; if (!isFinite(dur) || dur <= 0) throw new Error('Could not read the video length');
+  const dur = v.duration; if (!isFinite(dur) || dur <= 0) throw new Error('Could not read this video’s duration. Try an MP4 using H.264.');
   n = Math.max(6, Math.min(n, Math.round(dur * 3)));
   const s = Math.min(1, maxW / v.videoWidth), c = document.createElement('canvas'); c.width = Math.round(v.videoWidth * s); c.height = Math.round(v.videoHeight * s);
   const g = c.getContext('2d'), frames = [];
@@ -1391,13 +1447,19 @@ $('saveSettings').onclick = async () => { const b = { model: $('model').value, c
 let booted = false;
 const sceneContextRefresh = $('sceneContextRefresh');
 let sceneContextRefreshing = false;
+function updateSceneTags(connected, unavailable = false) {
+  const hasPreview = $('shot').naturalWidth > 0 && $('shot').style.display !== 'none';
+  const text = connected ? 'Scene connected' : hasPreview ? 'Last preview' : unavailable ? 'Connection unavailable' : 'No preview';
+  $('studioSceneTag').textContent = text;
+  $('materialsSceneTag').textContent = text;
+}
 sceneContextRefresh.onclick = async () => {
   sceneContextRefreshing = true;
   sceneContextRefresh.disabled = true;
   $('sceneContextStatus').textContent = 'Reading the current scene…';
   try {
     renderSceneContext(await api('/api/scene-context'));
-    $('sceneContextStatus').textContent = 'Snapshot refreshed';
+    $('sceneContextStatus').textContent = 'Scene details refreshed';
   } catch (error) {
     $('sceneContextOutput').replaceChildren();
     delete $('sceneContextOutput').dataset.loaded;
@@ -1408,21 +1470,22 @@ async function tick() {
   try {
     const s = await api('/api/status'); $('dot').className = 'dot' + (s.bridge.alive ? ' ok' : '');
     $('status').textContent = s.bridge.alive ? 'KeyShot connected' : 'KeyShot bridge not running';
+    updateSceneTags(s.bridge.alive);
     sceneContextRefresh.disabled = !s.bridge.alive;
-    if (!s.bridge.alive) $('sceneContextStatus').textContent = $('sceneContextOutput').dataset.loaded ? 'Disconnected · last snapshot may be stale' : 'Connect KeyShot to inspect';
+    if (!s.bridge.alive) $('sceneContextStatus').textContent = $('sceneContextOutput').dataset.loaded ? 'Disconnected. The last snapshot may be out of date.' : 'Connect KeyShot to inspect';
     else if (!sceneContextRefreshing && $('sceneContextStatus').textContent === 'Connect KeyShot to inspect') $('sceneContextStatus').textContent = 'Ready to inspect';
     else if (!sceneContextRefreshing && $('sceneContextStatus').textContent.startsWith('Disconnected')) $('sceneContextStatus').textContent = 'Connection restored · refresh the snapshot';
     $('connectQuick').hidden = s.bridge.alive;
     if (!s.bridge.alive && !tick.opened) { tick.opened = true; $('connectFold').open = true; } if (s.bridge.alive) tick.opened = false;
     if (s.bridge.alive && !booted) { booted = true; await syncPose(); loadMotions().catch(() => {}); $('recipe').value = $('recipe').value || ''; }
     if (!qrDone && s.ips.length) { qrDone = true; const u = `http://${s.ips[0]}:${s.port}`; try { new QRCode($('qr'), { text: u, width: 120, height: 120 }); } catch { /* offline: no QR library */ } $('qrurl').textContent = u; }
-  } catch { $('dot').className = 'dot'; $('status').textContent = 'server not reachable'; sceneContextRefresh.disabled = true; }
+  } catch { $('dot').className = 'dot'; $('status').textContent = 'Director app not reachable'; sceneContextRefresh.disabled = true; updateSceneTags(false, true); }
 }
 setInterval(tick, 1500); tick();
 const img = $('shot');
-function nextFrame() { img.src = '/api/preview.png?t=' + Date.now(); }
-img.onload = () => { $('empty').style.display = 'none'; img.style.display = 'block'; setTimeout(nextFrame, 3000); };
-img.onerror = () => { img.style.display = 'none'; $('empty').style.display = 'block'; setTimeout(nextFrame, 2000); };
+function nextFrame() { if (sceneStage.hidden) return; img.src = '/api/preview.png?t=' + Date.now(); }
+img.onload = () => { if (sceneStage.hidden) return; $('empty').style.display = 'none'; img.style.display = 'block'; updateSceneTags($('status').textContent === 'KeyShot connected'); setTimeout(nextFrame, 3000); };
+img.onerror = () => { if (sceneStage.hidden) return; img.style.display = 'none'; $('empty').style.display = 'block'; updateSceneTags($('status').textContent === 'KeyShot connected'); setTimeout(nextFrame, 2000); };
 nextFrame();
 loadStudio().catch(() => {}); loadMaterials().catch(() => {}); loadMaterialAssets().catch(() => {}); loadTextureSets().catch(() => {}); loadMaterialLibrary().catch(() => {}); loadMaterialSceneObjects().catch(() => {}); loadStyles().catch(() => {}); loadConfig().catch(() => {}); showExamples(); drawStage();
 setInterval(() => { if (ST === null) loadStudio().catch(() => {}); }, 3000);

@@ -26,7 +26,7 @@ If **KeyShot Director** is not in KeyShot's script list, run the installer once 
 
 The release ZIP contains the prebuilt material compiler, so users do not need Rust. A source checkout needs Rust stable and the `wasm32-unknown-unknown` target only when rebuilding Material Lab.
 
-See the [2.0 release notes](docs/RELEASE_NOTES_2.0.md) for new features and current limits.
+See the [2.2 release notes](docs/RELEASE_NOTES_2.2.md) for this release's features and current limits.
 
 The working checkout adds [measured lighting refinement](docs/MEASURED_REFINEMENT.md) and [material edit recovery](docs/MATERIAL_EDIT_RECEIPTS.md). Set an explicit reference rectangle and objective to enable measured candidates; missing or incompatible evidence retains the first look. A disposable KeyShot 2026.2 calibration measured material mapping and displacement behavior; its [results](docs/MATERIAL_CALIBRATION_RESULTS.md) refine the [calibration plan](docs/MATERIAL_CALIBRATION_PLAN.md). Broader end-to-end verification of these new lighting and material workflows is still needed in KeyShot.
 
