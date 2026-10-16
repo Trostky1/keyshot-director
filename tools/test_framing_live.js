@@ -1,4 +1,5 @@
 // Opt-in cropped-detail smoke test; native checkpoint always restores the user's view.
+if (process.env.KD_RUN_LIVE_TESTS !== '1') { console.log('Skipped live KeyShot smoke test; set KD_RUN_LIVE_TESTS=1 to run it.'); process.exit(0); }
 const assert=require('node:assert/strict');
 const path=require('path');
 const fs=require('fs');

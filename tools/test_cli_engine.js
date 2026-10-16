@@ -16,7 +16,8 @@ cli.ask = async ({ system, prompt, dir }) => {
 };
 const agent = require('../server/agent');
 const video = require('../server/video');
-const png = fs.readFileSync(process.argv[2]);
+const png = process.argv[2] ? fs.readFileSync(process.argv[2]) : Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/F9sAAAAASUVORK5CYII=', 'base64');
 (async () => {
   const eng = await agent.pickEngine({}); console.log('engine:', eng.engine);
   const job = { events: [], done: false }; const called = [];

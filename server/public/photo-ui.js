@@ -29,7 +29,7 @@
     } finally { URL.revokeObjectURL(url); }
   }
   const drop = byId('photoDrop'); drop.onclick = () => byId('photoFile').click();
-  byId('photoFile').onchange = e => choose(e.target.files[0]).catch(e => message(e.message));
+  byId('photoFile').onchange = e => { const file = e.target.files[0]; e.target.value = ''; if (file) choose(file).catch(error => message(error.message)); };
   drop.ondragover = e => { e.preventDefault(); drop.classList.add('dragover'); };
   drop.ondragleave = () => drop.classList.remove('dragover');
   drop.ondrop = e => { e.preventDefault(); drop.classList.remove('dragover'); choose(e.dataTransfer.files[0]).catch(e => message(e.message)); };

@@ -1,5 +1,6 @@
 // Opt-in native integration test: touches the live scene and restores each step.
 // Run only with the user's KeyShot scene saved/available and no active jobs.
+if (process.env.KD_RUN_LIVE_TESTS !== '1') { console.log('Skipped live KeyShot staging test; set KD_RUN_LIVE_TESTS=1 to run it.'); process.exit(0); }
 const assert = require('node:assert/strict');
 const bridge = require('../server/bridge');
 const send = (op, payload = {}) => bridge.send(op, payload, 60000);

@@ -248,4 +248,4 @@ CONTEXT_FILE = os.path.join(os.path.dirname(SHOTS), "cc_scene_context.py")
 with open(CONTEXT_FILE, "r", encoding="utf-8-sig") as _f:
     exec(compile(_f.read(), CONTEXT_FILE, "exec"), globals())
 OPS.update(SCENE_CONTEXT_OPS)
-# edit stamp for companion modules: 105 (omit unavailable active context labels)
+# edit stamp for companion modules: 113 (legacy Generic profile compatibility)

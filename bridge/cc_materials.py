@@ -281,10 +281,14 @@ def op_material_inspect(c):
                            "connected": edge is not None,
                            "source_node_id": edge.get("source_node_id") if edge else None,
                            "source_type": edge.get("source_type") if edge else None})
-        nodes.append({"id": n.getID(), "type": n.getType(), "parameters": params})
+        try:
+            node_name = n.getName()
+        except Exception:
+            node_name = None
+        nodes.append({"id": n.getID(), "name": node_name, "type": n.getType(), "parameters": params})
     created = name in MATERIAL_CREATED
     channels = []
-    for socket, meaning in (("surface", "Surface shading"), ("label", "Label shading and coverage"),
+    for socket, meaning in (("surface", "Surface shading"), ("labels", "Label shading and coverage"),
                             ("geometry", "Geometry processing; execution is a separate action")):
         try:
             edge = g.getRoot().getInputEdge(socket)
@@ -293,7 +297,11 @@ def op_material_inspect(c):
                              "source_type": source.getType() if source else None,
                              "enabled": edge.isEnabled() if edge is not None else None})
         except Exception as error:
-            channels.append({"socket": socket, "meaning": meaning, "error": repr(error)})
+            if "No input edge" in str(error):
+                channels.append({"socket": socket, "meaning": meaning, "source_node_id": None,
+                                 "source_type": None, "enabled": None})
+            else:
+                channels.append({"socket": socket, "meaning": meaning, "error": repr(error)})
     return {"name": name, "editable": created or name == MATERIAL_EDIT_TARGET,
             "director_created": created, "edit_enabled": name == MATERIAL_EDIT_TARGET,
             "nodes": nodes, "edges": edges, "root_channels": channels,
@@ -323,12 +331,24 @@ def op_material_create(c):
         raise ValueError("Use a name beginning with 'Director ' (12–80 characters)")
     if name in _material_names():
         raise ValueError("A material with this name already exists")
-    if not lux.createSceneMaterial(name):
-        raise RuntimeError("KeyShot could not create the material")
+    # KeyShot documents createSceneMaterial as a creation call, but does not
+    # document a return value. Verify success from the resulting graph instead
+    # of interpreting a version-dependent return value as a boolean.
+    create_result = lux.createSceneMaterial(name)
+    lux.sync()
+    try:
+        graph = lux.getMaterialGraph(name)
+        if graph is None:
+            raise RuntimeError("KeyShot returned no material graph")
+        graph.getRoot()
+        graph.getNodes()
+    except Exception as error:
+        raise RuntimeError(
+            "KeyShot did not expose a usable graph for the new material "
+            "(createSceneMaterial returned %r): %s" % (create_result, str(error)[:240]))
     MATERIAL_EDIT_TARGET = None
     MATERIAL_CREATED.add(name)
     _save_created_registry()
-    lux.sync()
     return op_material_inspect({"name": name})
 
 
@@ -514,10 +534,15 @@ def op_material_save(c):
     in_library_after_save = name in lux.getLibraryMaterials()
     if not library_saved and not already_in_library and not in_library_after_save:
         raise RuntimeError("KeyShot could not confirm this material in its Director library folder")
-    if not lux.saveMaterialPackage(name, dst) or not os.path.isfile(dst):
-        raise RuntimeError("KeyShot saved the library material but package export failed")
+    package_result = lux.saveMaterialPackage(name, dst)
+    # KeyShot scripting return values vary by release; the exported artifact is
+    # the authoritative check. Reject absent and empty files, but don't treat a
+    # false-like API return as failure when the package is actually complete.
+    if not os.path.isfile(dst) or os.path.getsize(dst) <= 0:
+        raise RuntimeError("KeyShot saved the library material but package export did not create a non-empty KMP")
     return {"name": name, "path": dst, "library": library_saved or already_in_library or in_library_after_save,
-            "library_folder": library_folder}
+            "library_folder": library_folder, "package_bytes": os.path.getsize(dst),
+            "package_api_result": package_result}
 
 
 def op_material_discard(c):
@@ -587,20 +612,13 @@ def op_material_texture_apply(c):
     if not isinstance(requested, list) or not requested or len(requested) > 8:
         raise ValueError("Provide one to eight supported texture maps")
     model = str(c.get("model", "Plastic"))
-    if model not in ("Plastic", "Generic"):
-        raise ValueError("The selected graph profile is not supported yet")
-    height_mm = c.get("displacement_height_mm", DISPLACEMENT_HEIGHT_DEFAULT_MM)
-    if isinstance(height_mm, bool) or not isinstance(height_mm, (int, float)) or not math.isfinite(height_mm) or not DISPLACEMENT_HEIGHT_MIN_MM <= height_mm <= DISPLACEMENT_HEIGHT_MAX_MM:
-        raise ValueError("Displacement height must be between 0.001 and 0.1 mm")
-    midpoint_neutral = c.get("midpoint_neutral", False)
-    if not isinstance(midpoint_neutral, bool):
-        raise ValueError("Displacement midpoint selection must be true or false")
+    if model != "Plastic":
+        raise ValueError("Only the simple Plastic material workflow is enabled")
+    tile_mm = c.get("tile_size_mm", 41.0)
+    if isinstance(tile_mm, bool) or not isinstance(tile_mm, (int, float)) or not math.isfinite(tile_mm) or not 1.0 <= tile_mm <= 2000.0:
+        raise ValueError("Texture tile size must be between 1 and 2000 mm")
 
-    supported = {"base-color", "ambient-occlusion", "roughness", "metallic", "normal", "bump", "displacement"}
-    targets = {"base-color": ("diffuse", "base_color", "basecolor"),
-               "roughness": ("roughness", "specular_roughness"),
-               "metallic": ("metallic", "metalness"),
-               "normal": ("bumpmap", "bump"), "bump": ("bumpmap", "bump")}
+    supported = {"base-color", "ambient-occlusion", "roughness", "normal", "bump"}
     clean = []
     roles = set()
     for item in requested:
@@ -621,8 +639,6 @@ def op_material_texture_apply(c):
     if "normal" in roles and "bump" in roles:
         clean = [(role, file_path) for role, file_path in clean if role != "bump"]
         roles.remove("bump")
-    if "metallic" in roles and model != "Generic":
-        raise ValueError("Metallic maps require the Generic material profile")
     if "ambient-occlusion" in roles and "base-color" not in roles:
         raise ValueError("AO needs a Base Color map for its Multiply composite")
 
@@ -632,20 +648,15 @@ def op_material_texture_apply(c):
     if surface_edge is None:
         raise ValueError("Director material has no surface shader")
     original_shader = surface_edge.getSourceNode()
-    type_info = original_shader.getType()
-    original_type = type_info.get("name") if isinstance(type_info, dict) else str(type_info)
-    if original_type != str(getattr(lux, "SHADER_TYPE_DIFFUSE", "")) or original_shader.getInputEdges():
-        raise ValueError("Only a fresh, empty Director Diffuse material can receive an imported texture set")
-    if "displacement" in roles:
-        try:
-            if root.getInputEdge("geometry") is not None:
-                raise ValueError("This Director material already has a geometry node")
-        except ValueError:
-            raise
-        except Exception:
-            pass
-
-    shader_constant = getattr(lux, "SHADER_TYPE_GENERIC" if model == "Generic" else "SHADER_TYPE_PLASTIC", None)
+    # createSceneMaterial may populate its Diffuse shader with default input
+    # connections. The material is created by Director immediately before this
+    # operation, and the registry check above establishes ownership. Do not
+    # mistake KeyShot's defaults for a previously edited material.
+    original_type = _material_node_type(original_shader)
+    if original_type != str(lux.SHADER_TYPE_DIFFUSE):
+        raise ValueError("The new Director material has an unexpected surface shader: " + original_type)
+    shader_key = "SHADER_TYPE_PLASTIC"
+    shader_constant = getattr(lux, shader_key, None)
     if shader_constant is None:
         raise ValueError("KeyShot does not expose the requested " + model + " material node")
     shader = graph.newNode(shader_constant)
@@ -655,14 +666,6 @@ def op_material_texture_apply(c):
     linked = []
     surface_switched = False
     try:
-        parameters = {parameter.getName(): parameter for parameter in shader.getParameters()}
-        resolved = {}
-        for role in roles - {"ambient-occlusion", "displacement"}:
-            target = next((candidate for candidate in targets[role] if candidate in parameters), None)
-            if target is None:
-                raise ValueError("The " + model + " shader does not expose a " + role + " input")
-            resolved[role] = target
-
         map_nodes = {}
         for role, file_path in clean:
             node = graph.newNode(lux.SHADER_TYPE_TEXTURE_MAP)
@@ -679,73 +682,68 @@ def op_material_texture_apply(c):
                 params["normal"].setValue(role == "normal")
             if "texture_use_srgb" in params:
                 params["texture_use_srgb"].setValue(role == "base-color")
-            if role != "base-color" and "texture_use_profile" in params:
+            if "texture_use_profile" in params:
                 params["texture_use_profile"].setValue(False)
             if role == "normal" and "bump_height" in params:
                 params["bump_height"].setValue(1.0)
+            if "uv_mapping" not in params:
+                raise RuntimeError("KeyShot Texture Map has no Mapping Type control")
+            # Use direct physical-size mapping for the single simple graph.
+            params["uv_mapping"].setValue(1)
+            params["uv_scale_mode"].setValue(0)
+            params["uv_scale_u"].setValue(float(tile_mm) / 1000.0)
+            params["uv_scale_v"].setValue(float(tile_mm) / 1000.0)
 
-        if "ambient-occlusion" in roles:
-            composite = graph.newNode(lux.SHADER_TYPE_COLOR_COMPOSITE)
-            if composite is None:
-                raise RuntimeError("KeyShot could not create a Color Composite node for AO")
-            made.append(composite)
-            composite_params = {parameter.getName(): parameter for parameter in composite.getParameters()}
-            if not all(key in composite_params for key in ("source", "background", "blend_mode")):
-                raise RuntimeError("KeyShot Color Composite lacks the inputs needed for AO")
-            composite_params["blend_mode"].setValue(1)  # Normal=0, Multiply=1 in KeyShot's Color Composite node.
-            graph.newEdge(map_nodes["base-color"], composite, "background")
-            graph.newEdge(map_nodes["ambient-occlusion"], composite, "source")
-            graph.newEdge(composite, shader, resolved["base-color"])
-            linked.append({"role": "ambient-occlusion", "target": "diffuse via Color Composite Multiply",
-                           "node_id": map_nodes["ambient-occlusion"].getID(), "utility_node_id": composite.getID()})
+        # Keep the imported Base Color map intact and blend optional AO before
+        # the Plastic diffuse input.
+        color_source = map_nodes.get("base-color")
+        composite = None
+        try:
+            if "ambient-occlusion" in roles:
+                composite = graph.newNode(lux.SHADER_TYPE_COLOR_COMPOSITE)
+                if composite is None:
+                    raise RuntimeError("KeyShot could not create a Color Composite node for AO")
+                made.append(composite)
+                composite_params = {parameter.getName(): parameter for parameter in composite.getParameters()}
+                if not all(key in composite_params for key in ("source", "background", "blend_mode")):
+                    raise RuntimeError("KeyShot Color Composite lacks the inputs needed for AO")
+                composite_params["blend_mode"].setValue(1)
+                graph.newEdge(color_source, composite, "background")
+                graph.newEdge(map_nodes["ambient-occlusion"], composite, "source")
 
-        if "displacement" in roles:
-            displace = graph.newNode(lux.SHADER_TYPE_DISPLACE)
-            if displace is None:
-                raise RuntimeError("KeyShot could not create a Displace geometry node")
-            made.append(displace)
-            displace_params = {parameter.getName(): parameter for parameter in displace.getParameters()}
-            required = ("displace", "displacement height", "resolution", "max triangles (millions)")
-            if any(key not in displace_params for key in required):
-                raise RuntimeError("KeyShot Displace node is missing a required input")
-            height_m = float(height_mm) / 1000.0
-            displace_params["displacement height"].setValue(height_m)
-            displace_params["resolution"].setValue(0.0002)
-            displace_params["max triangles (millions)"].setValue(1.0)
-            if midpoint_neutral:
-                # REA confirms the graph parameter key is "offset"; the visible label is localized separately.
-                zero_height = displace_params.get("offset")
-                if zero_height is None:
-                    raise RuntimeError("KeyShot does not expose the Displace node's zero-height offset needed for a mid-gray-neutral map")
-                # The control defines the input value that should remain at zero height.
-                # Poliigon defines 0.5 as its flat point; confirm on a controlled render.
-                zero_height.setValue(0.5)
-            graph.newEdge(map_nodes["displacement"], displace, "displace")
-            graph.newEdge(displace, root, "geometry")
-            linked.append({"role": "displacement", "target": "root geometry", "node_id": map_nodes["displacement"].getID(),
-                           "utility_node_id": displace.getID(), "height_mm": height_mm,
-                           "midpoint_neutral": midpoint_neutral, "executed": False})
+            for role in roles:
+                node = map_nodes[role]
+                if role == "ambient-occlusion":
+                    linked.append({"role": role, "target": "diffuse via Color Composite Multiply",
+                                   "node_id": node.getID(), "utility_node_id": composite.getID()})
+                elif role == "base-color" and composite is not None:
+                    linked.append({"role": role, "target": "diffuse via Color Composite Multiply", "node_id": node.getID()})
+                elif role == "roughness":
+                    utility = graph.newNode(lux.SHADER_TYPE_COLOR_TO_NUMBER)
+                    if utility is None:
+                        raise RuntimeError("KeyShot could not create Color To Number for Roughness")
+                    made.append(utility)
+                    utility_params = {parameter.getName(): parameter for parameter in utility.getParameters()}
+                    if "input" not in utility_params:
+                        raise RuntimeError("KeyShot Color To Number has no color input")
+                    graph.newEdge(node, utility, "input")
+                    graph.newEdge(utility, shader, "roughness")
+                    linked.append({"role": role, "target": "surface roughness", "node_id": node.getID(),
+                                   "utility_node_id": utility.getID(), "utility": "Color To Number"})
+                elif role == "base-color":
+                    graph.newEdge(node, shader, "diffuse")
+                    linked.append({"role": role, "target": "surface diffuse", "node_id": node.getID()})
+                elif role != "ambient-occlusion":
+                    graph.newEdge(node, shader, "bumpmap")
+                    linked.append({"role": role, "target": "surface bump", "node_id": node.getID()})
 
-        for role in roles - {"ambient-occlusion", "displacement"}:
-            node = map_nodes[role]
-            if role == "base-color" and "ambient-occlusion" in roles:
-                linked.append({"role": role, "target": "diffuse via Color Composite Multiply", "node_id": node.getID()})
-                continue
-            if role == "roughness":
-                utility = graph.newNode(lux.SHADER_TYPE_COLOR_TO_NUMBER)
-                if utility is None:
-                    raise RuntimeError("KeyShot could not create Color To Number for Roughness")
-                made.append(utility)
-                utility_params = {parameter.getName(): parameter for parameter in utility.getParameters()}
-                if "input" not in utility_params:
-                    raise RuntimeError("KeyShot Color To Number has no color input")
-                graph.newEdge(node, utility, "input")
-                graph.newEdge(utility, shader, resolved[role])
-                linked.append({"role": role, "target": resolved[role], "node_id": node.getID(),
-                               "utility_node_id": utility.getID(), "utility": "Color To Number"})
-            else:
-                graph.newEdge(node, shader, resolved[role])
-                linked.append({"role": role, "target": resolved[role], "node_id": node.getID()})
+            if composite is not None:
+                graph.newEdge(composite, shader, "diffuse")
+        except Exception:
+            if composite is not None:
+                try: graph.removeNode(composite)
+                except Exception: pass
+            raise
 
         graph.removeEdge(surface_edge)
         try:
@@ -755,6 +753,8 @@ def op_material_texture_apply(c):
             graph.newEdge(original_shader, root, "surface")
             raise
         lux.sync()
+        if root.getInputEdge("surface").getSourceNode().getID() != shader.getID():
+            raise RuntimeError("KeyShot did not retain the surface connection")
         try:
             graph.removeNode(original_shader)
         except Exception:
@@ -778,7 +778,8 @@ def op_material_texture_apply(c):
         except Exception:
             pass
         raise
-    return {"name": name, "model": model, "maps": linked,
+    return {"name": name, "model": model, "maps": linked, "shared_mapping": False,
+            "tile_size_mm": tile_mm,
             "note": "Material is unassigned; source maps and product parts remain unchanged."}
 
 
@@ -1167,9 +1168,7 @@ MATERIAL_OPS = {"materials_list": op_materials_list, "material_inspect": op_mate
                 "material_set": op_material_set,
                 "material_undo": op_material_undo, "material_save": op_material_save,
                 "material_discard": op_material_discard,
-                "material_texture_apply": op_material_texture_apply,
-                "material_execute_geometry": op_material_execute_geometry,
-                "material_add_geometry_template": op_material_add_geometry_template}
+                "material_texture_apply": op_material_texture_apply}
 MATERIAL_OPS["material_copy"] = op_material_copy
 MATERIAL_OPS["material_bump_set"] = op_material_bump_set
 MATERIAL_OPS["material_library"] = op_material_library

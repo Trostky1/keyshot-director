@@ -1,4 +1,5 @@
 // Opt-in checks against a running local Director. All writes are intentionally invalid; scene stays unchanged.
+if (process.env.KD_RUN_LIVE_TESTS !== '1') { console.log('Skipped running-server smoke test; set KD_RUN_LIVE_TESTS=1 to run it.'); process.exit(0); }
 const assert = require('node:assert/strict');
 const base='http://localhost:8787';
 (async()=>{

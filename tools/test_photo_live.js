@@ -1,4 +1,5 @@
 // Opt-in live smoke test. Captures its own reference render, then restores the scene.
+if (process.env.KD_RUN_LIVE_TESTS !== '1') { console.log('Skipped live KeyShot smoke test; set KD_RUN_LIVE_TESTS=1 to run it.'); process.exit(0); }
 const assert = require('node:assert/strict');
 const fs = require('fs');
 const bridge = require('../server/bridge');

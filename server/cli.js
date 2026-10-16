@@ -95,25 +95,44 @@ function codexStatus(cfgPath, force = false) {
 }
 
 // One call. opts: { provider: 'claude' | 'codex', bin, system, prompt, dir (folder the model may read), images: [file paths], model, signal, timeoutMs }
+function buildInvocation({ provider = 'claude', bin, system, prompt, dir, images = [], model, platform = process.platform }) {
+  const cwd = dir || os.tmpdir();
+  let args, outFile = null, stdin = prompt;
+  if (provider === 'codex') {
+    outFile = path.join(cwd, '.codex_reply_' + process.pid + '_' + Date.now() + '.txt');
+    args = ['exec', '--skip-git-repo-check', '-s', 'read-only', '--ephemeral', '--color', 'never', '-C', cwd, '-o', outFile];
+    if (model) args.push('-m', model);
+    for (const f of images) args.push('-i', f);
+    args.push('--', '-');
+    stdin = (system ? system + '\n\n---\n\n' : '') + prompt;            // codex has no separate system-prompt flag
+  } else {
+    args = ['-p', '--output-format', 'json', '--no-session-persistence', '--tools', 'Read', '--allowedTools', 'Read', '--permission-mode', 'default'];
+    if (system) args.push('--system-prompt', system);
+    if (dir) args.push('--add-dir', dir);
+    if (model) args.push('--model', model);
+  }
+
+  // Windows CreateProcess has a ~32K UTF-16 command-line ceiling. Scene
+  // snapshots and the Material Director tool catalog can make Claude's
+  // --system-prompt argument exceed it. Keep the CLI args small and stream the
+  // same instructions through stdin when the command approaches that limit.
+  if (provider !== 'codex' && platform === 'win32') {
+    const commandChars = [String(bin || ''), ...args].reduce((total, value) => total + String(value).length + 3, 0);
+    if (commandChars > 24000 && system) {
+      const at = args.indexOf('--system-prompt');
+      if (at >= 0) args.splice(at, 2);
+      stdin = 'DIRECTOR SYSTEM INSTRUCTIONS (follow these for this request):\n' + system +
+        '\n\n--- USER REQUEST AND CONTEXT ---\n' + (prompt || '');
+    }
+  }
+  return { args, stdin, outFile, cwd };
+}
+
 function ask({ provider = 'claude', bin, system, prompt, dir, images = [], model, signal, timeoutMs = 5 * 60 * 1000 }) {
   return new Promise((resolve, reject) => {
     if (signal?.aborted) return reject(new Error('Stopped.'));
     const who = provider === 'codex' ? 'Codex (ChatGPT)' : 'Claude';
-    const cwd = dir || os.tmpdir();
-    let args, outFile = null, stdin = prompt;
-    if (provider === 'codex') {
-      outFile = path.join(cwd, '.codex_reply_' + process.pid + '_' + Date.now() + '.txt');
-      args = ['exec', '--skip-git-repo-check', '-s', 'read-only', '--ephemeral', '--color', 'never', '-C', cwd, '-o', outFile];
-      if (model) args.push('-m', model);
-      for (const f of images) args.push('-i', f);
-      args.push('--', '-');
-      stdin = (system ? system + '\n\n---\n\n' : '') + prompt;            // codex has no separate system-prompt flag
-    } else {
-      args = ['-p', '--output-format', 'json', '--no-session-persistence', '--tools', 'Read', '--allowedTools', 'Read', '--permission-mode', 'default'];
-      if (system) args.push('--system-prompt', system);
-      if (dir) args.push('--add-dir', dir);
-      if (model) args.push('--model', model);
-    }
+    const { args, stdin, outFile, cwd } = buildInvocation({ provider, bin, system, prompt, dir, images, model });
     const p = spawn(bin, args, { cwd, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
     let out = '', err = '', killed = false;
     const t = setTimeout(() => { killed = true; p.kill(); }, timeoutMs);
@@ -121,7 +140,12 @@ function ask({ provider = 'claude', bin, system, prompt, dir, images = [], model
     if (signal) signal.addEventListener('abort', abort, { once: true });
     p.stdout.on('data', d => (out = (out + d).slice(-2000000))); p.stderr.on('data', d => (err = (err + d).slice(-2000000)));
     p.stdin.on('error', () => {});
-    p.on('error', e => { clearTimeout(t); signal?.removeEventListener('abort', abort); reject(e); });
+    p.on('error', e => {
+      clearTimeout(t); signal?.removeEventListener('abort', abort);
+      reject(e && e.code === 'ENAMETOOLONG'
+        ? new Error(`${who} could not start because Windows rejected an oversized command line. Director now streams long prompt context through stdin; restart the app if this message persists.`)
+        : e);
+    });
     p.on('close', code => {
       clearTimeout(t);
       signal?.removeEventListener('abort', abort);
@@ -155,4 +179,4 @@ function extractJson(text) {
 function tmpDir(tag) { return fs.mkdtempSync(path.join(os.tmpdir(), 'kd_' + tag + '_')); }
 function rmDir(d) { try { fs.rmSync(d, { recursive: true, force: true }); } catch { /* best effort */ } }
 
-module.exports = { findCli, status, findCodex, codexStatus, ask, extractJson, tmpDir, rmDir };
+module.exports = { findCli, status, findCodex, codexStatus, ask, buildInvocation, extractJson, tmpDir, rmDir };

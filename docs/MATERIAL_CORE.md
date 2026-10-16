@@ -1,34 +1,26 @@
-# Rust material recipe core
+# Material recipe core
 
-`material-core/` is the typed, renderer-independent layer for turning an imported texture set into a KeyShot graph plan. The Node app passes a material name and the set's relative file names and classified roles to the WebAssembly module. Rust checks the recipe, selects a surface model, chooses one map per supported socket, records color-space intent, and emits a graph description plus skipped-file reasons. A Metallic map selects Generic; otherwise explicit plastic/rubber/resin/vinyl names select Plastic and other PBR texture sets default to Generic.
+`server/material-core.js` validates imported texture-set names, channel roles, and conflicts, then builds the small recipe used by the KeyShot bridge. It runs in Node and ships as ordinary JavaScript. Installing and packaging KeyShot Director do not require Rust, Cargo, a WebAssembly target, or a generated compiler file.
 
-The first compiler profile is intentionally narrow and evidence-based:
+The current supported graph is one Plastic surface. Advanced graphs, metallic layering, procedural relief, and geometry displacement are paused.
 
-| Texture role | Color space | KeyShot graph connection |
+| Texture role | Handling | KeyShot connection |
 | --- | --- | --- |
-| Base Color | sRGB | Texture Map → Diffuse |
-| Roughness | Linear | Texture Map → Color To Number → Roughness |
-| Normal | Linear | Texture Map → Bump |
-| Bump | Linear | Texture Map → Bump, used when no Normal map wins |
-| Metallic | Linear | Texture Map → Generic Metallic |
-| AO, when present by default | Linear | Texture Map → Color Composite Multiply with Base Color → Diffuse |
-| Displacement, when present by default | Linear | Texture Map → Displace → Root Geometry |
+| Base Color | sRGB color | Texture Map → Plastic Diffuse |
+| Roughness | Linear scalar | Texture Map → Color To Number → Plastic Roughness |
+| Normal | Linear vector | Texture Map → Plastic Bump |
+| Bump | Linear scalar | Texture Map → Plastic Bump (used when no Normal map is selected) |
+| AO | Optional linear scalar; requires Base Color | Texture Map → Color Composite Multiply with Base Color → Plastic Diffuse |
+| Metallic, Displacement, and other channels | Reported as skipped | Not connected in the current workflow |
 
-The table records intended source semantics; it does not mean KeyShot's current Texture Map path has been verified to honor those semantics for every channel.
+The planner selects one file per supported role. When both Normal and Bump are present, Normal wins. Additional conflicting files, unsupported maps, and absent MaterialX-referenced files are reported. AO without Base Color is skipped; if no usable map remains, the planner returns a clear error.
 
-The live KeyShot graph is created by `bridge/cc_materials.py`. It verifies imported-file paths, creates a new Director-owned material, and keeps it unassigned. The Rust plan describes the intended graph; it does not call KeyShot or infer unsupported sockets. AO and displacement are included by default when their maps exist. Geometric displacement defaults to 0.01 mm and is limited to 0.001–0.1 mm. On the calibrated synthetic fixture, native resolution values 0.0002 and 0.0004 produced 822,656 and 413,056 total scene triangles respectively, with the same height bounds; this does not establish a universal tessellation density. The 2026.2 live test also found that assigning a displacement material already reevaluated the mesh before `MaterialGraph.executeGeometryNodes()` was called. That explicit, material-scoped call succeeded but did not change the tested bounds or triangle count. The test's 16-bit scalar maps followed an x² input transfer, so `offset=0.5` did not make a stored 0.5 pixel flat; do not treat it as a source-file-independent neutral value. See [MATERIAL_CALIBRATION_RESULTS.md](MATERIAL_CALIBRATION_RESULTS.md). The bridge still verifies one visible, unlocked part and refuses shared assignments because the API is graph-scoped. Surface bump and root Label bump/opacity remain separate from geometry displacement.
+The live graph is created by `bridge/cc_materials.py`. New materials stay unassigned until the user drags them onto a part in KeyShot. Source maps are left unchanged. Map textures use KeyShot's direct physical-size mapping controls; the current default tile size is 41 mm and still needs visual checks against the target model. Base Color enables sRGB, while data maps disable texture profiles. The bridge creates one Plastic surface and only the utility nodes required by selected maps.
 
-## Rebuilding
+## Legacy compiler prototype
 
-Install Rust stable, then add the WebAssembly target once:
+`material-core/` contains an earlier Rust/WebAssembly implementation retained for reference. The application and release package no longer load or build it. Changes to supported recipe behavior belong in `server/material-core.js` and its offline tests.
 
-```powershell
-rustup target add wasm32-unknown-unknown
-.\material-core\build.ps1
-```
+## Verification boundary
 
-On macOS or Linux, use `rustup target add wasm32-unknown-unknown` followed by `sh material-core/build.sh`. The build writes `server/material-core.wasm`, which the Node app loads on demand. Release packaging runs this build automatically and includes the generated module, so users of the packaged app do not need Rust installed.
-
-## Next material research steps
-
-The disposable calibration verified Texture Map mapping value 4 against authored UVs on the test plane and cylinder. It also confirmed Texture Map parameters for U/V scale, U/V shift, angle, texture space, repeats, and mapping/scale enums. Scale mode 2 displayed Width/Height; doubling a scale doubled repeats, a 0.5 shift moved half a UV tile, and 90 degrees rotated the pattern. The meanings of remaining enums, physical-size metadata, and reliable mapping on meshes without UVs remain open. Higher-priority work is a verified data-linearization path for Roughness and Displacement, followed by per-map mapping controls, Specular, AO strength, ORM splitting, and broader MaterialX hints. Continue to use importer bit depth and source metadata; a filename alone does not prove the runtime's decoded value.
+Offline tests validate recipe selection and mock graph wiring. They do not prove that every map decodes with the intended color transfer or that KeyShot renders the same result across GPUs and model UV layouts. KeyShot Studio 2026.2 is the current target; live material creation, color-space readback, KMP export, and import on another computer remain integration checks.

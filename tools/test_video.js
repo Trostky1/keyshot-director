@@ -1,5 +1,6 @@
 // test_video.js - drive the "match a video" pipeline without a browser, from PNG frames on disk.
 //   node tools/test_video.js <duration> [lighting=0|1] [render=WxH@fps:secs] frame1.png frame2.png ...
+if (process.env.KD_RUN_LIVE_TESTS !== '1') { console.log('Skipped running-server video integration test; set KD_RUN_LIVE_TESTS=1 to run it.'); process.exit(0); }
 const fs = require('fs');
 const [duration, lighting, render, ...files] = process.argv.slice(2);
 const post = (p, b) => fetch('http://localhost:' + (process.env.PORT || 8787) + p, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(b) }).then(r => r.json());

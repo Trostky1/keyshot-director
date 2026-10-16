@@ -8,6 +8,7 @@ const { send, heartbeat, markStopped, BASE, SHOTS } = require('./bridge');
 const { poseToEye, eyeToPose, sample, presets } = require('./shots');
 const agent = require('./agent');
 const { execFile } = require('child_process');
+const { listenWithFallback } = require('./listen-with-fallback');
 const { resizeJpeg } = require('./image-tools');
 const textureSets = require('./material-textures');
 const textureEdit = require('./texture-edit');
@@ -25,6 +26,10 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 const lightingLab = createLightingLab({ send, heartbeat, SHOTS });
 const MATERIAL_PACKAGE_DIR = path.resolve(__dirname, '..', 'materials');
 const packageEntryCache = new Map();
+
+function normalizeMaterialGraphPreset(value) {
+  return 'simple_plastic';
+}
 
 function kmpEntryNames(filePath, stat) {
   const cached = packageEntryCache.get(filePath);
@@ -399,7 +404,7 @@ async function applyRig(name, opts = {}) {
   return out;
 }
 
-const PORT = +(process.env.PORT || 8787);
+let PORT = +(process.env.PORT || 8787);
 const PUBLIC = path.join(__dirname, 'public');
 const VIEWS_FILE = path.join(BASE, 'views.json');
 
@@ -803,12 +808,16 @@ const actions = {
     return { summary: `Created ${imported.name} as a derived map; the original ${filename} is unchanged. You can now wire it as the ${imported.role} channel.`,
       ...edited, path: path.join(set.path, imported.name), name: imported.name, role: imported.role };
   },
-  async build_material_from_texture_set({ texture_set_id, name, allow_partial = false, use_ao = true,
-    use_displacement = true, displacement_height_mm = 0.01, geometry_template, procedural_strength = 0.2 }) {
+  async build_material_from_texture_set({ texture_set_id, name, graph_preset, use_ao = true,
+    use_displacement = false, geometry_template }) {
     assertSceneAvailable(false);
     const set = textureSets.listTextureSets().find(item => item.id === String(texture_set_id || ''));
     if (!set) throw new Error('That texture set is no longer available. Refresh Material Lab and try again.');
-    if (set.missing?.length && !allow_partial) throw new Error(`This Poliigon set is incomplete. Drop the same folder again to import: ${set.missing.join(', ')}. To build only the available maps, explicitly choose a partial build.`);
+    graph_preset = normalizeMaterialGraphPreset(graph_preset);
+    const supportedRoles = new Set(['base-color', 'roughness', 'normal', 'bump']);
+    const hasUsableMap = set.files.some(file => supportedRoles.has(file.role));
+    if (!hasUsableMap)
+      throw new Error('Add a Base Color, Roughness, Normal, or Bump map to build a material.');
     const scene = await send('materials_list', {}, 15000);
     const existing = new Set(scene.materials || []);
     const rawBase = String(name || `Director ${set.name}`).trim();
@@ -820,41 +829,22 @@ const actions = {
       const ending = ` (${suffix++})`;
       materialName = baseName.slice(0, 80 - ending.length).trimEnd() + ending;
     }
-    if (typeof use_ao !== 'boolean' || typeof use_displacement !== 'boolean') throw new Error('AO and displacement selections must be on or off.');
-    const heightMm = Number(displacement_height_mm);
-    if (use_displacement && (!Number.isFinite(heightMm) || heightMm < 0.001 || heightMm > 0.1))
-      throw new Error('Choose a displacement height from 0.001 to 0.1 mm.');
-    const reliefStrength = Number(procedural_strength);
-    if (geometry_template && (!Number.isFinite(reliefStrength) || reliefStrength < 0.01 || reliefStrength > 1))
-      throw new Error('Procedural displacement blend strength must be from 0.01 to 1.');
+    if (typeof use_ao !== 'boolean') throw new Error('AO selection must be on or off.');
+    if (use_displacement || geometry_template) throw new Error('Geometry displacement is paused for reliability. Remove that option and build the supported Plastic maps.');
     const plan = await compileTexturePlan({ name: materialName,
       files: set.files.filter(file => (use_ao || file.role !== 'ambient-occlusion') &&
-        (use_displacement || file.role !== 'displacement')).map(file => ({ name: file.name, role: file.role })) });
+        (supportedRoles.has(file.role) || file.role === 'ambient-occlusion')).map(file => ({ name: file.name, role: file.role })) });
     const filesByName = new Map(set.files.map(file => [file.name, file]));
     const selected = plan.maps.map(map => {
       const file = filesByName.get(map.path);
       if (!file) throw new Error(`Material recipe referenced a missing texture: ${map.path}`);
       return { role: map.role, path: path.join(set.path, file.name), filename: file.name, metadata: file.metadata || null };
     });
-    await send('material_create', { name: materialName }, 20000);
     let wiring;
-    // Poliigon's height maps use mid-gray as their flat point. Keep that signed
-    // interpretation for its named exports; other folders retain KeyShot's
-    // black-at-zero convention unless their source says otherwise.
-    const displacementSource = selected.find(map => map.role === 'displacement');
-    const midpointNeutral = !!displacementSource &&
-      (/^Poliigon_/i.test(displacementSource.filename) || /(?:^|_)DISP16(?:_|\.|$)/i.test(displacementSource.filename));
     try {
-      wiring = await send('material_texture_apply', { name: materialName, model: plan.material.model,
-        displacement_height_mm: heightMm, midpoint_neutral: midpointNeutral,
+      await send('material_create', { name: materialName }, 20000);
+      wiring = await send('material_texture_apply', { name: materialName, model: 'Plastic',
         maps: selected.map(({ role, path: filePath }) => ({ role, path: filePath })) }, 30000);
-      if (geometry_template) {
-        if (!use_displacement || !selected.some(map => map.role === 'displacement'))
-          throw new Error('Procedural relief needs the imported displacement map to remain connected.');
-        wiring.procedural_geometry = await send('material_add_geometry_template', {
-          name: materialName, template: String(geometry_template), procedural_strength: reliefStrength
-        }, 30000);
-      }
     } catch (error) {
       try { await send('material_discard', { name: materialName }, 15000); } catch { /* preserve the material if KeyShot says it is no longer safe to discard */ }
       throw new Error(`KeyShot could not build this texture set: ${error.message}`);
@@ -868,22 +858,27 @@ const actions = {
     const wiredRoles = new Set(wiring.maps.map(map => map.role));
     const usedFiles = selected.filter(({ role }) => wiredRoles.has(role)).map(({ role, filename, metadata }) => ({ role, name: filename, metadata }));
     const usedNames = new Set(usedFiles.map(file => file.name));
-    const skipped = set.files.filter(file => !usedNames.has(file.name)).map(file => ({ name: file.name, role: file.role,
-      reason: file.role === 'ambient-occlusion' && !use_ao ? 'AO blend not enabled' :
-        file.role === 'displacement' && !use_displacement ? 'Displacement not enabled' :
-        plan.skipped.find(item => item.name === file.name)?.reason || 'No supported connection' }));
+    const skipped = [...set.files.filter(file => !usedNames.has(file.name)).map(file => ({ name: file.name, role: file.role,
+      reason: file.role === 'metallic' ? 'Metallic layering is paused' :
+        file.role === 'ambient-occlusion' && !use_ao ? 'AO blend not enabled' :
+        file.role === 'displacement' ? 'Geometry displacement is paused' :
+        plan.skipped.find(item => item.name === file.name)?.reason || 'No supported connection' })),
+      ...(set.missing || []).map(name => ({ name, role: null, reason: 'Source file is missing; the material was built from available maps.' }))];
     const channels = wiring.maps.map(map => map.role).join(', ');
-    const reliefSummary = wiring.procedural_geometry ? ' with Advanced Plastic procedural relief blended into the displacement map' : '';
-    const geometrySummary = wiring.maps.some(map => map.role === 'displacement')
-      ? ` Geometric displacement is wired at ${heightMm} mm${midpointNeutral ? ' with Poliigon mid-gray as the provisional zero-height value' : ''}; assign this material to one visible, unlocked part, then ask Director to execute its geometry nodes.` : '';
-    return { summary: `${materialName} built as an unassigned ${wiring.model || plan.material.model} material from ${channels}${reliefSummary}; saved to the KeyShot library and as a portable KMP.${geometrySummary}`,
+    const manualGraphSteps = [
+      'Open the saved material in KeyShot Material Graph and confirm the built connections.',
+      'Check the texture mapping scale and placement on the intended model.'
+    ];
+    const graphPresetName = 'Simple Plastic';
+    return { summary: `${materialName} built as an unassigned ${wiring.model || plan.material.model} material using the ${graphPresetName} preset from ${channels}; saved to the KeyShot library and as a portable KMP.`,
       name: materialName, path: saved.path, library: saved.library, material: wiring, used_files: usedFiles, skipped_files: skipped,
+      graph_preset,
+      manual_graph_steps: manualGraphSteps,
       recipe: plan,
       assignment: 'Not applied to any product part. Drag it from KeyShot’s Material Library onto the chosen part.' };
   },
   async execute_material_geometry({ name }) {
-    const result = await send('material_execute_geometry', { name: cleanName(name) }, 60000);
-    return { summary: `Executed geometric displacement for ${result.assigned_objects.length} assigned part${result.assigned_objects.length === 1 ? '' : 's'}.`, ...result };
+    throw new Error('Geometry displacement is paused for reliability.');
   },
   async inspect_material({ name }) { return await send('material_inspect', { name }, 15000); },
   async create_material({ name }) { const r = await send('material_create', { name }, 15000); return { summary: `${name} created but not applied to the product`, ...r }; },
@@ -1157,6 +1152,7 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/material/prompt' && req.method === 'POST') {
       if (materialPromptJob && !materialPromptJob.done) return json(res, 409, { error: 'Material Director is still working.' });
       const b = await body(req), images = Array.isArray(b.images) ? b.images : [], context = resolveMaterialContext(b.context);
+      const graphPreset = normalizeMaterialGraphPreset(b.graph_preset);
       const aspectChoices = new Set(['original', '1:1', '4:3', '3:2', '16:9', '3:4', '2:3', '9:16']);
       const imageAspectRatio = String(b.imageAspectRatio || 'original');
       if (!aspectChoices.has(imageAspectRatio)) return json(res, 400, { error: 'Choose a supported material image aspect ratio.' });
@@ -1171,7 +1167,7 @@ const server = http.createServer(async (req, res) => {
       }
       if (imageBytes > 10 * 1024 * 1024) return json(res, 413, { error: 'The complete material reference pack must be under 10 MB.' });
       const job = materialPromptJob = { id: Date.now(), events: [], done: false };
-      agent.run(job, { text: String(b.text || ''), images, context: { ...(context || {}), imageAspectRatio } }, actions, 'material').catch(error => {
+      agent.run(job, { text: String(b.text || ''), images, context: { ...(context || {}), graph_preset: graphPreset, imageAspectRatio } }, actions, 'material').catch(error => {
         if (job.done) return;
         job.events.push({ type: 'error', message: error && error.message ? error.message : 'Material Director request failed unexpectedly.', t: Date.now() });
         job.done = true;
@@ -1234,10 +1230,8 @@ const server = http.createServer(async (req, res) => {
     }
     if (url.pathname === '/api/material/build-from-texture-set' && req.method === 'POST') {
       const b = await body(req), result = await actions.build_material_from_texture_set({ texture_set_id: b.texture_set_id, name: b.name,
-        allow_partial: b.allow_partial === true, use_ao: b.use_ao !== false, use_displacement: b.use_displacement !== false,
-        displacement_height_mm: b.displacement_height_mm ?? 0.01,
-        geometry_template: b.geometry_template,
-        procedural_strength: b.procedural_strength ?? 0.2 });
+        graph_preset: b.graph_preset, use_ao: b.use_ao !== false, use_displacement: b.use_displacement === true,
+        geometry_template: b.geometry_template });
       return json(res, 201, result);
     }
     if (url.pathname === '/api/material/edit-texture-map' && req.method === 'POST') {
@@ -1310,17 +1304,38 @@ const server = http.createServer(async (req, res) => {
   } catch (e) { json(res, e.status || 500, { error: e.message }); }
 });
 
-server.on('error', e => {
-  if (e.code === 'EADDRINUSE') console.log(`\nPort ${PORT} is already in use - KeyShot Director is probably already running.\nOpen http://localhost:${PORT} , or close the other window first.`);
-  else console.log('\nServer error: ' + e.message);
-  process.exit(1);
+listenWithFallback(server, {
+  host: '0.0.0.0',
+  port: PORT,
+  maxAttempts: 10,
+  onPort: port => { PORT = port; },
+  onListening: () => {
+    if (process.platform === 'win32') {
+      const marker = path.join(__dirname, '..', 'bridge', 'director-server.json');
+      try { fs.writeFileSync(marker, JSON.stringify({ pid: process.pid, port: PORT, started: Date.now(), entry: path.resolve(__filename) }), 'utf8'); }
+      catch (error) { console.warn(`[startup] Could not write the safe-stop marker: ${error.message}`); }
+    }
+    console.log(`KeyShot control server: http://localhost:${PORT}`);
+    if (process.env.KD_OPEN && process.platform === 'win32') execFile('cmd', ['/c', 'start', '""', `http://localhost:${PORT}`], { windowsHide: true }, () => {});
+    if (process.env.KD_OPEN && process.platform === 'darwin') execFile('open', [`http://localhost:${PORT}`], () => {});
+    for (const ip of lanIPs()) console.log(`  phone / other PC: http://${ip}:${PORT}`);
+  },
+  onError: (error, range) => {
+    if (error.code === 'EADDRINUSE')
+      console.log(`\nPorts ${range.firstPort}-${range.lastPort} are already in use. Close another KeyShot Director window, or set PORT to a free port and start again.`);
+    else console.log('\nServer error: ' + error.message);
+    process.exit(1);
+  },
 });
-server.listen(PORT, '0.0.0.0', () => {
-  console.log(`KeyShot control server: http://localhost:${PORT}`);
-  if (process.env.KD_OPEN && process.platform === 'win32') execFile('cmd', ['/c', 'start', '""', `http://localhost:${PORT}`], { windowsHide: true }, () => {});
-  if (process.env.KD_OPEN && process.platform === 'darwin') execFile('open', [`http://localhost:${PORT}`], () => {});
-  for (const ip of lanIPs()) console.log(`  phone / other PC: http://${ip}:${PORT}`);
-});
+function removeServerMarker() {
+  if (process.platform !== 'win32') return;
+  const marker = path.join(__dirname, '..', 'bridge', 'director-server.json');
+  try {
+    const record = JSON.parse(fs.readFileSync(marker, 'utf8'));
+    if (record.pid === process.pid && path.resolve(record.entry || '') === path.resolve(__filename)) fs.unlinkSync(marker);
+  } catch { /* already stopped or a different app instance owns the marker */ }
+}
+process.once('exit', removeServerMarker);
 const tidyOpts = { send, cameras: false, alive: () => heartbeat().alive, busy: () => !!(photoDirector.status().running || playing || matchJob.running || videoJob.running || renderJob.running || (promptJob && !promptJob.done) || (materialPromptJob && !materialPromptJob.done) || shotBusy) };
 let tidyTimer = null;
 function tidyLater() { clearTimeout(tidyTimer); tidyTimer = setTimeout(() => janitor.run(tidyOpts, 'job').catch(() => {}), 5000); }

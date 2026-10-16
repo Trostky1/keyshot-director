@@ -149,24 +149,19 @@ fn safe_relative_path(value: &str) -> bool {
 
 fn compile(name: String, mut files: Vec<TextureFile>) -> Result<Plan, String> {
     let name = name.trim().to_owned();
-    if name.is_empty() || name.len() > 120 || name.chars().any(char::is_control) { return Err("Material name must contain 1 to 120 printable characters.".into()); }
+    if name.is_empty() || name.len() > 80 || name.chars().any(char::is_control) { return Err("Material name must contain 1 to 80 printable characters.".into()); }
     if files.is_empty() || files.len() > 24 { return Err("A texture set must contain between 1 and 24 files.".into()); }
-    let lower_name = std::iter::once(name.as_str()).chain(files.iter().map(|file| file.name.as_str()))
-        .collect::<Vec<_>>().join(" ").to_lowercase();
-    let explicitly_plastic = ["plastic", "rubber", "resin", "vinyl", "polymer"].iter().any(|word| lower_name.contains(word));
-    let has_metalness = files.iter().any(|file| file.role == "metallic");
-    let model = if has_metalness || !explicitly_plastic { "Generic" } else { "Plastic" };
     files.sort_by_key(|file| match file.role.as_str() {
-        "base-color" => 0, "ambient-occlusion" => 1, "roughness" => 2, "metallic" => 3,
-        "normal" => 4, "bump" => 5, "displacement" => 6, _ => 7,
+        "base-color" => 0, "ambient-occlusion" => 1, "roughness" => 2,
+        "normal" => 3, "bump" => 4, _ => 5,
     });
     let mut chosen: Vec<TextureFile> = Vec::new();
     let mut warnings = Vec::new();
     let mut skipped = Vec::new();
     for file in files {
         if !safe_relative_path(&file.name) { return Err(format!("Unsafe texture path: {}", file.name)); }
-        if !matches!(file.role.as_str(), "base-color" | "ambient-occlusion" | "roughness" | "metallic" | "normal" | "bump" | "displacement") {
-            skipped.push(SkippedFile { name: file.name, role: file.role, reason: "No supported channel in the current graph profile.".into() });
+        if !matches!(file.role.as_str(), "base-color" | "ambient-occlusion" | "roughness" | "normal" | "bump") {
+            skipped.push(SkippedFile { name: file.name, role: file.role, reason: "This channel is outside the Simple Plastic material path.".into() });
             continue;
         }
         let conflict = chosen.iter().any(|current| current.role == file.role
@@ -176,14 +171,17 @@ fn compile(name: String, mut files: Vec<TextureFile>) -> Result<Plan, String> {
             skipped.push(SkippedFile { name: file.name, role: file.role, reason: "Another map already supplies this shader input.".into() });
         } else { chosen.push(file); }
     }
+    if chosen.is_empty() { return Err("No supported Base Color, Roughness, Normal or Bump maps were found.".into()); }
+    // AO without Base Color is ignored by the bridge, so report it explicitly.
     if chosen.iter().any(|f| f.role == "ambient-occlusion") && !chosen.iter().any(|f| f.role == "base-color") {
-        let ao = chosen.remove(chosen.iter().position(|f| f.role == "ambient-occlusion").unwrap());
-        skipped.push(SkippedFile { name: ao.name, role: ao.role, reason: "AO needs a Base Color map to multiply into Diffuse.".into() });
+        let index = chosen.iter().position(|f| f.role == "ambient-occlusion").unwrap();
+        let ao = chosen.remove(index);
+        skipped.push(SkippedFile { name: ao.name, role: ao.role, reason: "AO needs Base Color to blend into the Plastic diffuse color.".into() });
     }
-    if chosen.is_empty() { return Err("No supported Base Color, Roughness, Metallic, Normal, Bump or Displacement maps were found.".into()); }
+    if chosen.is_empty() { return Err("No supported Base Color, Roughness, Normal or Bump maps were found.".into()); }
     let use_ao = chosen.iter().any(|f| f.role == "ambient-occlusion");
     let mut maps = Vec::new();
-    let mut nodes = vec![NodeSpec { id: "root".into(), kind: "Material" }, NodeSpec { id: "surface".into(), kind: model }];
+    let mut nodes = vec![NodeSpec { id: "root".into(), kind: "Material" }, NodeSpec { id: "surface".into(), kind: "Plastic" }];
     let mut edges = vec![EdgeSpec { from: "surface".into(), to: "root".into(), input: "surface" }];
     if use_ao {
         nodes.push(NodeSpec { id: "composite:ao".into(), kind: "Color Composite Multiply" });
@@ -193,9 +191,7 @@ fn compile(name: String, mut files: Vec<TextureFile>) -> Result<Plan, String> {
         let (color_space, target) = match file.role.as_str() {
             "base-color" => ("srgb", if use_ao { "background" } else { "diffuse" }),
             "ambient-occlusion" => ("linear", "source"), "roughness" => ("linear", "roughness"),
-            "metallic" => ("linear", "metallic"),
-            "normal" | "bump" => ("linear", "bumpmap"),
-            "displacement" => ("linear", "displace"), _ => unreachable!(),
+            "normal" | "bump" => ("linear", "bumpmap"), _ => unreachable!(),
         };
         let id = format!("map:{}", file.role);
         nodes.push(NodeSpec { id: id.clone(), kind: "Texture Map" });
@@ -203,18 +199,16 @@ fn compile(name: String, mut files: Vec<TextureFile>) -> Result<Plan, String> {
             nodes.push(NodeSpec { id: "convert:roughness".into(), kind: "Color To Number" });
             edges.push(EdgeSpec { from: id.clone(), to: "convert:roughness".into(), input: "input" });
             edges.push(EdgeSpec { from: "convert:roughness".into(), to: "surface".into(), input: "roughness" });
-        } else if file.role == "base-color" && use_ao {
-            edges.push(EdgeSpec { from: id, to: "composite:ao".into(), input: "background" });
+        } else if file.role == "base-color" {
+            edges.push(EdgeSpec { from: id, to: if use_ao { "composite:ao" } else { "surface" }.into(), input: if use_ao { "background" } else { "diffuse" } });
         } else if file.role == "ambient-occlusion" {
             edges.push(EdgeSpec { from: id, to: "composite:ao".into(), input: "source" });
-        } else if file.role == "displacement" {
-            nodes.push(NodeSpec { id: "geometry:displace".into(), kind: "Displace" });
-            edges.push(EdgeSpec { from: id, to: "geometry:displace".into(), input: "displace" });
-            edges.push(EdgeSpec { from: "geometry:displace".into(), to: "root".into(), input: "geometry" });
-        } else { edges.push(EdgeSpec { from: id, to: "surface".into(), input: target }); }
+        } else {
+            edges.push(EdgeSpec { from: id, to: "surface".into(), input: target });
+        }
         maps.push(MapAssignment { role: file.role, path: file.name, color_space, target });
     }
-    Ok(Plan { name, model, maps, nodes, edges, warnings, skipped })
+    Ok(Plan { name, model: "Plastic", maps, nodes, edges, warnings, skipped })
 }
 
 fn quote(value: &str) -> String {

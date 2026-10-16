@@ -17,19 +17,42 @@ typography:
     fontWeight: 650
     lineHeight: 1.1
     letterSpacing: "-.025em"
+  headline-compact:
+    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif'
+    fontSize: "26px"
+    fontWeight: 650
+    lineHeight: 1.1
   title:
     fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif'
     fontSize: "20px"
     fontWeight: 650
     lineHeight: 1.2
+  conversation:
+    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif'
+    fontSize: "18px"
+    fontWeight: 600
+    lineHeight: 1.25
+  section:
+    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif'
+    fontSize: "16px"
+    fontWeight: 600
+    lineHeight: 1.3
   body:
     fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif'
     fontSize: "14px"
-    lineHeight: 1.45
+    lineHeight: 1.5
   label:
     fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif'
     fontSize: "12px"
     fontWeight: 550
+  reading:
+    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif'
+    fontSize: "13px"
+    lineHeight: 1.5
+  metadata:
+    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif'
+    fontSize: "11px"
+    lineHeight: 1.4
   mono:
     fontFamily: 'Consolas, "SF Mono", Menlo, monospace'
     fontSize: "11px"

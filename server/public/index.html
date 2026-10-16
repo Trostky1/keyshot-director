@@ -8,79 +8,79 @@
   :root { --bg:#fff; --fg:#000; --dim:#6e6e6e; --line:#d4d4d4; }
   * { box-sizing:border-box; }
   html, body { margin:0; background:var(--bg); color:var(--fg); }
-  body { font:13px/1.45 "Helvetica Neue", Helvetica, Arial, sans-serif; letter-spacing:.01em; }
+  body { font:14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif; letter-spacing:0; }
   header { display:flex; align-items:center; gap:14px; padding:10px 16px; border-bottom:1px solid var(--fg); }
-  header h1 { font-size:12px; margin:0; font-weight:700; letter-spacing:.22em; text-transform:uppercase; }
+  header h1 { font-size:16px; margin:0; font-weight:650; letter-spacing:-.025em; text-transform:none; }
   .dot { width:9px; height:9px; border:1px solid var(--fg); background:transparent; }
   .dot.ok { background:var(--fg); }
-  #status, .dim { color:var(--dim); font-size:11px; letter-spacing:.06em; text-transform:uppercase; }
+  #status, .dim { color:var(--dim); font-size:var(--type-meta); letter-spacing:.06em; text-transform:uppercase; }
   header .sp { flex:1; }
   main { display:grid; grid-template-columns:minmax(0,1fr) 360px; gap:0; }
   @media (max-width:900px) { main { grid-template-columns:1fr; } aside { border-left:0 !important; border-top:1px solid var(--fg); } }
   section.col { padding:16px; min-width:0; }
   aside { border-left:1px solid var(--fg); padding:0; min-width:0; }
-  h2 { font-size:10px; margin:0 0 10px; font-weight:700; letter-spacing:.22em; text-transform:uppercase; }
+  h2 { font-size:var(--type-meta); margin:0 0 10px; font-weight:700; letter-spacing:.22em; text-transform:uppercase; }
   .panel { padding:14px 16px; border-bottom:1px solid var(--line); }
   .panel:last-child { border-bottom:0; }
   /* controls: flat, square, white on black; hover inverts */
   button, select, input, textarea { font:inherit; color:var(--fg); background:var(--bg); border:1px solid var(--fg); padding:7px 11px; }
-  button { cursor:pointer; text-transform:uppercase; letter-spacing:.1em; font-size:10.5px; font-weight:600; }
+  button { cursor:pointer; text-transform:uppercase; letter-spacing:.1em; font-size:var(--type-meta); font-weight:600; }
   button:hover:not(:disabled) { background:var(--fg); color:var(--bg); }
   button.solid { background:var(--fg); color:var(--bg); }
   button.solid:hover:not(:disabled) { background:var(--bg); color:var(--fg); }
   button:disabled { opacity:.35; cursor:default; }
-  button.sm { padding:3px 8px; font-size:9.5px; }
+  button.sm { padding:3px 8px; font-size:var(--type-meta); }
   button.busy { opacity:.5; pointer-events:none; }
   .row { display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
-  label { display:flex; justify-content:space-between; font-size:10.5px; color:var(--dim); letter-spacing:.08em; text-transform:uppercase; margin-top:8px; }
+  label { display:flex; justify-content:space-between; font-size:var(--type-meta); color:var(--dim); letter-spacing:.08em; text-transform:uppercase; margin-top:8px; }
   input[type=range] { -webkit-appearance:none; appearance:none; width:100%; padding:0; border:0; background:transparent; height:16px; margin:2px 0; }
   input[type=range]::-webkit-slider-runnable-track { height:1px; background:var(--fg); }
   input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:9px; height:15px; background:var(--fg); border:0; margin-top:-7px; }
   input[type=checkbox] { accent-color:#000; padding:0; width:13px; height:13px; }
   textarea { width:100%; resize:vertical; }
-  .mono { font-family:Consolas, "SF Mono", Menlo, monospace; font-size:11px; }
+  .mono { font-family:Consolas, "SF Mono", Menlo, monospace; font-size:var(--type-meta); }
   /* stage / preview */
   .stage { position:relative; border:1px solid var(--fg); background:var(--bg); aspect-ratio:16/9; display:flex; align-items:center; justify-content:center; overflow:hidden; touch-action:none; cursor:grab; }
   .stage.drag { cursor:grabbing; }
   .stage img { width:100%; height:100%; object-fit:contain; user-select:none; -webkit-user-drag:none; display:none; }
-  .stage .empty { color:var(--dim); padding:24px; text-align:center; font-size:11px; letter-spacing:.08em; text-transform:uppercase; max-width:100%; }
+  .stage .empty { color:var(--dim); padding:24px; text-align:center; font-size:var(--type-meta); letter-spacing:.08em; text-transform:uppercase; max-width:100%; }
   .stage .empty b { color:var(--fg); }
   .connectline { display:flex; gap:8px; align-items:stretch; margin:12px auto 10px; max-width:640px; text-transform:none; letter-spacing:0; }
   .cline { flex:1; min-width:0; text-align:left; border:1px solid var(--fg); padding:8px 10px; font:11px/1.4 Consolas, "SF Mono", Menlo, monospace; color:var(--fg); background:var(--bg); word-break:break-all; user-select:all; cursor:text; }
   .connectline button { flex:none; }
   .livebar { position:absolute; right:0; top:0; display:flex; gap:8px; align-items:center; background:var(--bg); border-left:1px solid var(--fg); border-bottom:1px solid var(--fg); padding:3px 8px; z-index:2; }
   .livebar label { margin:0; gap:5px; align-items:center; justify-content:flex-start; }
-  .hint { position:absolute; left:0; bottom:0; font-size:9.5px; color:var(--bg); background:var(--fg); padding:3px 8px; letter-spacing:.08em; text-transform:uppercase; pointer-events:none; }
+  .hint { position:absolute; left:0; bottom:0; font-size:var(--type-meta); color:var(--bg); background:var(--fg); padding:3px 8px; letter-spacing:.08em; text-transform:uppercase; pointer-events:none; }
   /* prompt */
   #log { border:1px solid var(--fg); border-top:0; height:170px; overflow:auto; padding:10px 12px; }
   .msg { margin:0 0 10px; white-space:pre-wrap; word-wrap:break-word; }
   .msg.u { color:var(--dim); }
-  .msg.u::before { content:"YOU  "; letter-spacing:.14em; font-size:9.5px; font-weight:700; color:var(--fg); }
-  .msg.a::before { content:"AI  "; letter-spacing:.14em; font-size:9.5px; font-weight:700; }
-  .tl { font-family:Consolas, monospace; font-size:11px; color:var(--dim); margin:0 0 4px; }
+  .msg.u::before { content:"YOU  "; letter-spacing:.14em; font-size:var(--type-meta); font-weight:700; color:var(--fg); }
+  .msg.a::before { content:"AI  "; letter-spacing:.14em; font-size:var(--type-meta); font-weight:700; }
+  .tl { font-family:Consolas, monospace; font-size:var(--type-meta); color:var(--dim); margin:0 0 4px; }
   .tl.err { color:var(--fg); text-decoration:underline; }
   #log img { max-width:240px; border:1px solid var(--fg); display:block; margin:4px 0 10px; }
   .promptbar { border:1px solid var(--fg); border-top:0; padding:8px; }
   .thumbs { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:6px; }
   .thumbs div { position:relative; } .thumbs img { height:46px; border:1px solid var(--fg); display:block; }
-  .thumbs button { position:absolute; top:0; right:0; padding:0 4px; font-size:10px; }
+  .thumbs button { position:absolute; top:0; right:0; padding:0 4px; font-size:var(--type-meta); }
   .ex { margin:4px 6px 0 0; }
   /* studio */
   #stagecv { width:100%; max-width:300px; border:1px solid var(--fg); background:var(--bg); margin-top:10px; touch-action:none; display:block; }
   .lrow { border:1px solid var(--line); margin-top:6px; }
-  .lrow > summary { cursor:pointer; padding:6px 9px; display:flex; align-items:center; gap:8px; list-style:none; font-size:11px; }
+  .lrow > summary { cursor:pointer; padding:6px 9px; display:flex; align-items:center; gap:8px; list-style:none; font-size:var(--type-meta); }
   .lrow > summary::-webkit-details-marker { display:none; }
   .lrow .sw { width:8px; height:8px; background:var(--fg); flex:none; }
   .lrow .rm { margin-left:auto; }
   .lrow .body { padding:0 10px 10px; }
-  .lrow .chk { display:flex; gap:12px; margin-top:8px; font-size:10.5px; color:var(--dim); }
+  .lrow .chk { display:flex; gap:12px; margin-top:8px; font-size:var(--type-meta); color:var(--dim); }
   .lrow .chk label { margin:0; justify-content:flex-start; gap:5px; align-items:center; }
-  .blurb { font-size:11.5px; color:var(--dim); margin-top:8px; }
-  details.fold > summary { cursor:pointer; list-style:none; font-size:10px; font-weight:700; letter-spacing:.22em; text-transform:uppercase; }
+  .blurb { font-size:var(--type-label); color:var(--dim); margin-top:8px; }
+  details.fold > summary { cursor:pointer; list-style:none; font-size:var(--type-meta); font-weight:700; letter-spacing:.22em; text-transform:uppercase; }
   details.fold > summary::-webkit-details-marker { display:none; }
   details.fold > summary::after { content:" +"; } details.fold[open] > summary::after { content:" \2212"; }
   .style { border:1px solid var(--line); padding:8px 10px; margin-top:6px; }
-  .drop { border:1px dashed var(--fg); padding:18px 10px; text-align:center; cursor:pointer; font-size:11px; letter-spacing:.08em; text-transform:uppercase; }
+  .drop { border:1px dashed var(--fg); padding:18px 10px; text-align:center; cursor:pointer; font-size:var(--type-meta); letter-spacing:.08em; text-transform:uppercase; }
   .drop.over, .drop:hover { background:var(--fg); color:var(--bg); } .drop.over .dim, .drop:hover .dim { color:var(--bg); }
   .chk2 { display:flex; gap:14px; margin-top:8px; } .chk2 label { margin:0; justify-content:flex-start; gap:5px; align-items:center; }
   .toast { position:fixed; bottom:14px; left:50%; transform:translateX(-50%); background:var(--fg); color:var(--bg); padding:8px 14px; display:none; max-width:90vw; font-size:12px; z-index:9; }
@@ -152,7 +152,7 @@
     </section>
     <div class="panel">
       <details class="fold" id="connectFold"><summary>Connect KeyShot</summary>
-        <div class="dim" style="margin:8px 0;text-transform:none;letter-spacing:0;font-size:11.5px">Save the scene first. In KeyShot, open <b>Window &rarr; Scripting</b>, click the console, paste the command below, and press Enter. If the status says the bridge is not running, run the command again. The connection lasts up to 4 hours.</div>
+        <div class="dim" style="margin:8px 0;text-transform:none;letter-spacing:0;font-size:var(--type-label)">Save the scene first. In KeyShot, open <b>Window &rarr; Scripting</b>, click the console, paste the command below, and press Enter. If the status says the bridge is not running, run the command again. The connection lasts up to 4 hours.</div>
         <div class="connectline"><code class="cline">...</code><button class="solid" data-copy aria-label="Copy KeyShot setup command">Copy command</button></div>
       </details>
     </div>
@@ -255,7 +255,7 @@
 
     <div class="panel">
       <details class="fold" id="motion"><summary>Camera motion</summary>
-        <div class="dim" id="motionHelp" style="margin:8px 0;text-transform:none;letter-spacing:0;font-size:11.5px">Preview and render camera moves here. Director cannot write to KeyShot’s timeline. To add timeline keys, create them in KeyShot.</div>
+        <div class="dim" id="motionHelp" style="margin:8px 0;text-transform:none;letter-spacing:0;font-size:var(--type-label)">Preview and render camera moves here. Director cannot write to KeyShot’s timeline. To add timeline keys, create them in KeyShot.</div>
         <div class="row" id="presets"></div>
         <div class="row" style="margin-top:8px"><button id="rec">Record camera move</button><button id="smooth">Smooth move</button><button id="play" class="solid">Preview move</button><button id="stop">Stop preview</button></div>
         <label for="recipe">Camera move data (JSON)</label><textarea id="recipe" class="mono" rows="7" spellcheck="false" style="margin-top:8px" aria-describedby="motionHelp"></textarea>
@@ -291,6 +291,10 @@
       <div id="materialContext" class="material-context" hidden><div><span class="material-context-label">Current material task</span><strong id="materialContextName"></strong><small id="materialContextNote"></small></div><button type="button" id="materialContextClear" class="text-button" title="Stop using this item as context">Clear task</button></div>
       <div id="materialChatLog" role="log" aria-live="polite" aria-label="Material Director conversation"><p class="chat-empty">Your conversation and material results will appear here. Describe a finish or add a reference image to begin.</p></div>
       <div class="material-composer">
+      <div class="material-graph-preset">
+        <span>Texture material</span>
+        <small>Simple Plastic · Base Color · Roughness · Normal or Bump · optional AO</small>
+      </div>
       <label for="materialPrompt">Describe the finish or change</label>
       <textarea id="materialPrompt" rows="3" placeholder="Fine bead-blasted aluminum, cool silver, a soft satin sheen…"></textarea>
       <button type="button" id="materialDrop" class="workspace-drop" aria-label="Add material reference images or a Poliigon texture folder"><span id="materialDropText">Add reference images or a Poliigon folder <small>Drop a texture folder and reference images together, or click to choose images</small></span></button><input id="materialFile" type="file" accept="image/png,image/jpeg,image/webp" multiple hidden>
@@ -324,7 +328,7 @@
         <div><label for="textureSetName">Texture set name <span class="dim">(optional)</span></label><input id="textureSetName" type="text" placeholder="Use the folder name" maxlength="100"></div>
         <div class="texture-import-action"><button type="button" id="textureSetChoose" class="solid">Import Poliigon folder</button><input id="textureSetFiles" type="file" multiple webkitdirectory directory hidden accept=".png,.jpg,.jpeg,.webp,.tif,.tiff,.exr,.hdr,.mtlx"></div>
       </div>
-      <p class="texture-import-note">Recognized map types: Base Color, Roughness, Metallic, Normal, Displacement, Bump, Specular, and Ambient Occlusion (AO). MaterialX files are kept as conversion hints.</p>
+      <p class="texture-import-note">In Poliigon Download Settings, choose KeyShot as the render engine before downloading. Director reads Base Color, Roughness, Metallic, Normal, Displacement, Bump, Specular, and AO maps; MaterialX is used only as a conversion hint.</p>
       <p id="textureSetStatus" class="blurb" role="status" aria-live="polite">Choose the downloaded Poliigon folder that contains the maps.</p>
     </div>
     <p id="textureBuildStatus" class="blurb" role="status" aria-live="polite"></p>
@@ -364,14 +368,14 @@
   <label for="cliPath">Claude CLI path (only if not found automatically)</label><input type="text" id="cliPath" style="width:100%" placeholder="C:\...\claude.exe">
   <div id="codexState" class="mono" style="white-space:pre-wrap;margin:10px 0 6px"></div>
   <label for="codexPath">Codex CLI path (only if not found automatically)</label><input type="text" id="codexPath" style="width:100%" placeholder="C:\...\codex.exe">
-  <label for="codexModel">ChatGPT / Codex model</label><input type="text" id="codexModel" style="width:100%" placeholder="Use your Codex default"><div class="dim" style="text-transform:none;letter-spacing:0;font-size:11.5px;margin-top:5px">Optional model ID passed to Codex CLI. Leave blank to use the model selected by your Codex account. Examples depend on your account and CLI version.</div>
+  <label for="codexModel">ChatGPT / Codex model</label><input type="text" id="codexModel" style="width:100%" placeholder="Use your Codex default"><div class="dim" style="text-transform:none;letter-spacing:0;font-size:var(--type-label);margin-top:5px">Optional model ID passed to Codex CLI. Leave blank to use the model selected by your Codex account. Examples depend on your account and CLI version.</div>
   <div class="row" style="margin-top:6px"><button class="sm" id="cliRecheck">Check for assistants again</button></div>
   <label for="apikey">Anthropic API key</label><input type="password" id="apikey" style="width:100%" placeholder="sk-ant-..." autocomplete="off">
   <label for="model">Claude API model</label><input type="text" id="model" style="width:100%">
   <div class="row" style="margin-top:14px"><button class="solid" id="saveSettings">Save settings</button><button id="closeSettings">Close</button></div>
   <div class="dim" style="margin:16px 0 6px;text-transform:uppercase">App and KeyShot connection</div>
   <div class="row"><button id="disconnectBtn" title="Stops the Director connection inside KeyShot; use the launcher to start it again">Stop KeyShot bridge</button><button id="restartBtn">Restart Director</button><button id="quitBtn">Quit Director</button></div>
-  <div class="dim" style="text-transform:none;letter-spacing:0;font-size:11.5px;margin-top:6px">Stop the bridge in KeyShot to run the setup command again. Restart or Quit affects the Director app, not your KeyShot scene.</div>
+  <div class="dim" style="text-transform:none;letter-spacing:0;font-size:var(--type-label);margin-top:6px">Stop the bridge in KeyShot to run the setup command again. Restart or Quit affects the Director app, not your KeyShot scene.</div>
 </dialog>
 <div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
@@ -387,7 +391,7 @@ async function api(path, body) {
   catch { throw new Error('Could not reach Director. Check that the app is open, then try again.'); }
   let j;
   try { j = await r.json(); } catch { throw new Error('Director returned an unreadable response. Restart the app and try again.'); }
-  if (!r.ok) throw new Error(j.error || `Director could not complete this action (${r.status}). Check the KeyShot connection and try again.`);
+  if (!r.ok) { const error = new Error(j.error || `Director could not complete this action (${r.status}). Check the KeyShot connection and try again.`); error.status = r.status; throw error; }
   return j;
 }
 function sceneContextFact(label, value) {
@@ -468,8 +472,15 @@ previewToggleButtons.forEach(button => button.addEventListener('click', () => se
 syncPreviewDisclosure();
 $('studioWorkspace').querySelector('aside').prepend($('studioPanel'));
 $('libraryQuickCopyHost').appendChild($('libraryMaterialCopyCard'));
-function showWorkspace(name) {
+let workspacePreviewAnimation = null;
+function showWorkspace(name, animate = false) {
   if (!['studio','materials'].includes(name)) name = 'studio';
+  const currentWorkspace = document.querySelector('[data-workspace][aria-current="page"]')?.dataset.workspace;
+  if (currentWorkspace === name) { history.replaceState(null, '', '#' + name); return; }
+  if (workspacePreviewAnimation) workspacePreviewAnimation.cancel();
+  const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  const previousRect = animate && currentWorkspace && !reduceMotion && typeof sceneStage.animate === 'function'
+    ? sceneStage.getBoundingClientRect() : null;
   (name === 'materials' ? materialsStageHost : studioStageHome).appendChild(sceneStage);
   for (const key of ['studio','materials']) {
     $(`${key}Workspace`).hidden = key !== name;
@@ -477,10 +488,28 @@ function showWorkspace(name) {
     if (key === name) button.setAttribute('aria-current','page'); else button.removeAttribute('aria-current');
   }
   history.replaceState(null, '', '#' + name);
+  if (!previousRect || previousRect.width < 1 || previousRect.height < 1) return;
+  const nextRect = sceneStage.getBoundingClientRect();
+  if (nextRect.width < 1 || nextRect.height < 1) return;
+  const deltaX = previousRect.left - nextRect.left, deltaY = previousRect.top - nextRect.top;
+  const scaleX = previousRect.width / nextRect.width, scaleY = previousRect.height / nextRect.height;
+  if (Math.abs(deltaX) < 1 && Math.abs(deltaY) < 1 && Math.abs(scaleX - 1) < .01 && Math.abs(scaleY - 1) < .01) return;
+  sceneStage.classList.add('workspace-preview-moving');
+  const animation = sceneStage.animate([
+    { transformOrigin: 'top left', transform: `translate(${deltaX}px, ${deltaY}px) scale(${scaleX}, ${scaleY})` },
+    { transformOrigin: 'top left', transform: 'none' }
+  ], { duration: 280, easing: 'cubic-bezier(.16, 1, .3, 1)' });
+  workspacePreviewAnimation = animation;
+  const clearAnimation = () => {
+    if (workspacePreviewAnimation === animation) workspacePreviewAnimation = null;
+    sceneStage.classList.remove('workspace-preview-moving');
+  };
+  animation.onfinish = clearAnimation;
+  animation.oncancel = clearAnimation;
 }
-document.querySelectorAll('[data-workspace]').forEach(button => button.onclick = () => showWorkspace(button.dataset.workspace));
+document.querySelectorAll('[data-workspace]').forEach(button => button.onclick = () => showWorkspace(button.dataset.workspace, true));
 showWorkspace(location.hash.slice(1));
-window.addEventListener('hashchange', () => showWorkspace(location.hash.slice(1)));
+window.addEventListener('hashchange', () => showWorkspace(location.hash.slice(1), true));
 async function busy(btn, fn) { btn && btn.classList.add('busy'); try { return await fn(); } catch (e) { toast(e.message); } finally { btn && btn.classList.remove('busy'); } }
 
 /* ---------- camera: drag the preview to orbit / pan / zoom (KeyShot has its own camera tools; this is the second-monitor control) ---------- */
@@ -709,8 +738,59 @@ async function inspectMaterial() {
   const undoScope = document.createElement('p'); undoScope.className = 'material-readonly-input';
   undoScope.textContent = graph.undo?.scope || 'Undo is available for supported material edits made during this KeyShot connection.';
   box.appendChild(undoScope);
+  const colorNode = graph.nodes.find(node => node.name === 'Director Base Color' && node.type.name === 'lux_color_adjust');
+  const baseMap = graph.nodes.find(node => node.type.name === '__texture' &&
+    node.parameters.some(parameter => parameter.name === 'texture' && /(?:base.?color|albedo|diffuse)/i.test(String(parameter.value || ''))));
+  const baseMapAdjustments = baseMap?.parameters.filter(parameter =>
+    ['brightness', 'contrast'].includes(parameter.name) && !parameter.connected && parameter.value != null) || [];
+  if (colorNode || baseMapAdjustments.length) {
+    const controls = document.createElement('section'); controls.className = 'material-color-controls';
+    const title = document.createElement('h4'); title.textContent = 'Base color'; controls.appendChild(title);
+    const hint = document.createElement('p'); hint.textContent = colorNode
+      ? 'Adjust the imported color in KeyShot. Texture grain, roughness, and bump stay connected. Changes affect every part using this material.'
+      : 'The imported color map is connected. These controls adjust this material without changing the source image.';
+    controls.appendChild(hint);
+    const addControl = (node, key, label, kind, min, max) => {
+      const parameter = node.parameters.find(item => item.name === key);
+      if (!parameter || parameter.connected || parameter.value == null) return;
+      const row = document.createElement('label'); row.className = 'material-color-control';
+      const caption = document.createElement('span'); caption.textContent = label; row.appendChild(caption);
+      const input = document.createElement('input'); input.type = kind; input.disabled = !graph.editable;
+      if (kind === 'color') {
+        input.value = '#' + parameter.value.slice(0, 3).map(channel => Math.round(Math.max(0, Math.min(1, channel)) * 255).toString(16).padStart(2, '0')).join('');
+      } else {
+        input.min = String(min); input.max = String(max); input.step = '0.05'; input.value = String(parameter.value);
+      }
+      input.onchange = async () => {
+        const value = kind === 'color'
+          ? [1, 3, 5].map(index => parseInt(input.value.slice(index, index + 2), 16) / 255)
+          : Number(input.value);
+        if (kind !== 'color' && (!Number.isFinite(value) || value < min || value > max)) {
+          toast(`${label} must be between ${min} and ${max}.`); await inspectMaterial(); return;
+        }
+        input.disabled = true;
+        try {
+          await api('/api/material/set', { name, node_id: node.id, parameter: key, value, expected_value: parameter.value });
+          $('materialStatus').textContent = `${label} updated in KeyShot. The imported image is unchanged; Undo restores the previous value.`;
+          await inspectMaterial();
+        } catch (error) { toast(error.message); await inspectMaterial(); }
+      };
+      row.appendChild(input); controls.appendChild(row);
+    };
+    if (colorNode) {
+      addControl(colorNode, 'colorize', 'Tint', 'color');
+      addControl(colorNode, 'value', 'Lightness', 'number', 0, 4);
+      addControl(colorNode, 'saturation', 'Saturation', 'number', 0, 4);
+      addControl(colorNode, 'contrast', 'Contrast', 'number', 0, 4);
+    } else {
+      addControl(baseMap, 'brightness', 'Lightness', 'number', 0, 4);
+      addControl(baseMap, 'contrast', 'Contrast', 'number', 0, 4);
+    }
+    box.appendChild(controls);
+  }
   for (const node of graph.nodes) {
     if (node.type.name === '__root') continue;
+    if (node === colorNode) continue;
     const section = document.createElement('div'); section.style.cssText = 'padding:9px 0;border-top:1px solid #ddd';
     const heading = document.createElement('b'); heading.textContent = `${node.type.display_name || node.type.name} · ${node.id}`; section.appendChild(heading);
     for (const p of node.parameters) {
@@ -939,9 +1019,16 @@ async function loadTextureSets() {
       info.append(recipe);
     }
     info.append(inventory, folderDetails);
-    const supportedRoles = new Set(['base-color','roughness','metallic','normal','bump','displacement']);
+    const graphGuide = document.createElement('details'); graphGuide.className = 'texture-set-folder';
+    const graphGuideTitle = document.createElement('summary'); graphGuideTitle.textContent = 'KeyShot graph steps after building';
+    const graphGuideList = document.createElement('ol');
+    const graphSteps = ['Open the saved material in KeyShot’s Material Graph and check the Plastic surface and map connections.', 'Check texture scale and placement on the intended model.'];
+    for (const step of graphSteps) { const li = document.createElement('li'); li.textContent = step; graphGuideList.append(li); }
+    graphGuide.append(graphGuideTitle, graphGuideList);
+    info.append(graphGuide);
+    const supportedRoles = new Set(['base-color','roughness','normal','bump']);
     const canBuild = set.files.some(file => supportedRoles.has(file.role));
-    const options = document.createElement('div'); options.className = 'row';
+    const options = document.createElement('div'); options.className = 'row texture-set-ao';
     const choice = (label, checked = true) => {
       const wrap = document.createElement('label'); wrap.className = 'texture-set-roles';
       const input = document.createElement('input'); input.type = 'checkbox'; input.checked = checked;
@@ -949,44 +1036,32 @@ async function loadTextureSets() {
     };
     const ao = set.files.some(file => file.role === 'ambient-occlusion')
       ? choice('Blend Ambient Occlusion into Base Color') : null;
-    const displacement = set.files.some(file => file.role === 'displacement')
-      ? choice('Add displacement geometry') : null;
-    let height = null;
-    if (displacement) {
-      const wrap = document.createElement('label'); wrap.className = 'texture-set-roles';
-      wrap.textContent = 'Displacement height (mm; 0.001–0.1) ';
-      height = document.createElement('input'); height.type = 'number'; height.min = '0.001'; height.max = '0.1';
-      height.step = '0.001'; height.value = '0.01'; height.style.width = '5em';
-      height.title = 'Default 0.01 mm; supported range 0.001–0.1 mm';
-      wrap.append(height); options.append(wrap);
-    }
     if (options.childNodes.length) info.append(options);
     const build = document.createElement('button'); build.type = 'button'; build.className = 'solid'; build.textContent = 'Build KeyShot material';
-    build.disabled = !canBuild || !!set.missing?.length;
-    build.title = set.missing?.length ? 'This set is incomplete. Add the missing maps before building a material.' : canBuild ? 'Ambient Occlusion and displacement maps are included by default when available. Uncheck either to leave it out.' : 'Add a Base Color, Roughness, Metallic, Normal, Bump, or Displacement map to build a material.';
+    build.disabled = !canBuild;
+    build.title = set.missing?.length ? 'Builds from supported maps that are available; missing source maps are reported.'
+      : !canBuild ? 'Add a Base Color, Roughness, Normal, or Bump map to build a material.'
+        : 'Builds a simple Plastic material. AO is optional; Metallic and displacement are skipped.';
     build.onclick = async () => {
       build.disabled = true; build.textContent = 'Building…';
       $('textureBuildStatus').textContent = `Building ${set.name} in the connected KeyShot scene…`;
       try {
-        const result = await api('/api/material/build-from-texture-set', { texture_set_id: set.id,
-          use_ao: !!ao?.checked, use_displacement: !!displacement?.checked,
-          displacement_height_mm: height ? Number(height.value) : 0.01 });
+        const result = await api('/api/material/build-from-texture-set', { texture_set_id: set.id, use_ao: !!ao?.checked });
         await loadMaterials(result.name); await loadMaterialAssets();
         selectMaterialContext({ kind: 'scene-material', name: result.name });
         const channelNames = { 'base-color':'Base Color', 'ambient-occlusion':'AO blend', roughness:'Roughness',
           metallic:'Metallic', normal:'Normal map', bump:'Bump map', displacement:'Displacement geometry' };
         const used = result.used_files.map(file => channelNames[file.role] || file.role).join(', ');
-        const roleNames = { 'ambient-occlusion':'AO', metallic:'Metallic', displacement:'Displacement', specular:'Specular', glossiness:'Glossiness' };
-        const skipped = [...new Set(result.skipped_files.map(file => roleNames[file.role]).filter(Boolean))];
-        $('textureBuildStatus').textContent = `Built ${result.name} with ${used}. Saved it to KeyShot’s Material Library and as a .kmp material file.${skipped.length ? ` These map types were skipped: ${skipped.join(', ')}.` : ''} The material is not assigned to a part. Drag it from the library onto your chosen part in KeyShot.${result.used_files.some(file => file.role === 'displacement') ? ' After assigning it, enable Execute Geometry in KeyShot to see displacement.' : ''} File: ${result.path}`;
+        const skipped = result.skipped_files.map(file => `${file.name}${file.reason ? ` (${file.reason})` : ''}`);
+        $('textureBuildStatus').textContent = `Built ${result.name} as a simple Plastic material with ${used}. Saved it to KeyShot’s Material Library and as a .kmp material file.${skipped.length ? ` Skipped: ${skipped.join(', ')}.` : ''} The material is not assigned to a part. Review “KeyShot graph steps after building” on this set, then drag the material from the library onto your chosen part. File: ${result.path}`;
         $('materialStatus').textContent = `Built ${result.name}. It is saved but not assigned to a part. Apply it from KeyShot’s Material Library.`;
       } catch (error) {
         $('textureBuildStatus').textContent = `${error.message} Your imported source maps are unchanged. Check the KeyShot connection and try again.`;
-      } finally { build.disabled = !canBuild || !!set.missing?.length; build.textContent = 'Build KeyShot material'; }
+      } finally { build.disabled = !canBuild; build.textContent = 'Build KeyShot material'; }
     };
     const open = document.createElement('button'); open.type = 'button'; open.className = 'sm'; open.textContent = 'Open this set'; open.onclick = async () => { try { await api('/api/material/open-folder', { textureSet: set.id }); } catch (err) { toast(err.message); } };
     const addMore = document.createElement('button'); addMore.type = 'button'; addMore.className = 'sm'; addMore.textContent = 'Add missing maps'; addMore.onclick = () => { $('textureSetFiles').dataset.setId = set.id; $('textureSetFiles').click(); };
-    const actions = document.createElement('div'); actions.className = 'row';
+    const actions = document.createElement('div'); actions.className = 'row texture-set-actions';
     const edit = document.createElement('button'); edit.type = 'button'; edit.className = 'sm'; edit.textContent = 'Use in Material Director';
     edit.onclick = () => selectMaterialContext({ kind: 'texture-set', id: set.id, name: set.name, files: set.files.map(file => ({ name: file.name, role: file.role })), missing: set.missing || [] });
     actions.append(edit, build, addMore, open); item.append(info, actions); host.appendChild(item);
@@ -1276,7 +1351,7 @@ async function sendMaterialPrompt() {
   const countLabel = materialImages.length ? ` · ${materialImages.length} reference image${materialImages.length === 1 ? '' : 's'}` : '';
   materialLine('user', (text || 'Use these references as the material direction.') + countLabel);
   try {
-    await api('/api/material/prompt', { text: text || 'Create an unassigned material inspired by these reference images.', images: materialImages.map(item => item.data), context: materialWorkContext, imageAspectRatio: materialImageAspect.value });
+    await api('/api/material/prompt', { text: text || 'Create an unassigned material inspired by these reference images.', images: materialImages.map(item => item.data), context: materialWorkContext, graph_preset: 'simple_plastic', imageAspectRatio: materialImageAspect.value });
     $('materialPrompt').value = ''; let since = 0;
     for (;;) {
       await new Promise(r => setTimeout(r, 700)); const j = await api('/api/material/prompt?since=' + since); since = j.next;
@@ -1358,50 +1433,144 @@ function showExamples() { const e = $('examples'); e.innerHTML = ''; for (const 
 
 /* ---------- reference video: pull frames out in the browser, send them to be matched ---------- */
 async function videoFrames(file, n = 12, maxW = 640) {
-  const v = document.createElement('video'); v.muted = true; v.playsInline = true; v.preload = 'auto'; v.src = URL.createObjectURL(file);
-  await new Promise((ok, no) => { v.onloadedmetadata = ok; v.onerror = () => no(new Error('This browser cannot play that video file (try mp4 / H.264)')); });
-  const dur = v.duration; if (!isFinite(dur) || dur <= 0) throw new Error('Could not read this video’s duration. Try an MP4 using H.264.');
-  n = Math.max(6, Math.min(n, Math.round(dur * 3)));
-  const s = Math.min(1, maxW / v.videoWidth), c = document.createElement('canvas'); c.width = Math.round(v.videoWidth * s); c.height = Math.round(v.videoHeight * s);
-  const g = c.getContext('2d'), frames = [];
-  for (let i = 0; i < n; i++) {
-    const t = Math.min(dur - 0.04, (i / (n - 1)) * dur);
-    await new Promise(ok => { v.onseeked = ok; v.currentTime = t; });
-    g.drawImage(v, 0, 0, c.width, c.height); frames.push({ t: +t.toFixed(3), png: c.toDataURL('image/png') });
-    $('vlog').textContent = `reading frames ${i + 1}/${n}`;
-  }
-  URL.revokeObjectURL(v.src); return { frames, duration: dur };
-}
-async function pollJob(url, el, onTick) { for (;;) { await new Promise(r => setTimeout(r, 1500)); const j = await api(url).catch(() => null); if (!j) continue; el.textContent = j.log.join('\n') + (onTick ? onTick(j) : ''); if (!j.running) return j; } }
-async function matchVideoFile(file) {
-  if (!file || !file.type.startsWith('video/')) return toast('That is not a video file');
+  const v = document.createElement('video'), source = URL.createObjectURL(file);
+  v.muted = true; v.playsInline = true; v.preload = 'auto';
+  const waitFor = (eventName, description) => new Promise((resolve, reject) => {
+    let timer;
+    const cleanup = () => { clearTimeout(timer); v.removeEventListener(eventName, onReady); v.removeEventListener('error', onError); };
+    const onReady = () => { cleanup(); resolve(); };
+    const onError = () => { cleanup(); reject(new Error('This browser cannot read that video. Try an MP4 using H.264.')); };
+    timer = setTimeout(() => { cleanup(); reject(new Error('Timed out while ' + description + '. Try a shorter MP4 using H.264.')); }, 15000);
+    v.addEventListener(eventName, onReady, { once: true }); v.addEventListener('error', onError, { once: true });
+  });
   try {
-    $('vdrop').classList.add('busy'); $('vstop').disabled = false; $('vplay').disabled = $('vrender').disabled = true;
-    const { frames, duration } = await videoFrames(file);
-    await api('/api/video', { frames, duration, lighting: $('vlight').checked, camera: $('vcam').checked });
-    const j = await pollJob('/api/video', $('vlog'));
-    const r = j.result || {};
-    if (r.recipe) { $('recipe').value = JSON.stringify(r.recipe, null, 2); $('vplay').disabled = $('vrender').disabled = false; const a = r.aspect || 1.78; $('vsize').value = a < 0.8 ? '1080x1920' : a < 1.2 ? '1080x1080' : '1280x720'; }
-    loadStudio().catch(() => {}); syncPose();
-  } catch (e) { $('vlog').textContent = e.message; }
-  finally { $('vdrop').classList.remove('busy'); $('vstop').disabled = true; $('vplay').disabled = $('vrender').disabled = false; }
+    const metadata = waitFor('loadedmetadata', 'opening the video'); v.src = source; v.load(); await metadata;
+    const dur = v.duration;
+    if (!Number.isFinite(dur) || dur <= 0 || !v.videoWidth || !v.videoHeight) throw new Error('Could not read this video’s duration or dimensions. Try an MP4 using H.264.');
+    n = Math.max(6, Math.min(n, Math.round(dur * 3)));
+    const scale = Math.min(1, maxW / v.videoWidth), c = document.createElement('canvas'); c.width = Math.round(v.videoWidth * scale); c.height = Math.round(v.videoHeight * scale);
+    const g = c.getContext('2d'); if (!g) throw new Error('This browser could not prepare video previews. Try a different browser or an MP4 using H.264.');
+    if (v.readyState < 2) await waitFor('loadeddata', 'decoding the first video frame');
+    const frames = [];
+    for (let i = 0; i < n; i++) {
+      const t = Math.min(Math.max(0, dur - 0.04), (i / (n - 1)) * dur);
+      if (Math.abs(v.currentTime - t) > 0.001) { const seek = waitFor('seeked', 'reading a video frame'); v.currentTime = t; await seek; }
+      g.drawImage(v, 0, 0, c.width, c.height); frames.push({ t: +t.toFixed(3), png: c.toDataURL('image/png') });
+      $('vlog').textContent = 'Reading frames ' + (i + 1) + ' of ' + n + '…';
+    }
+    return { frames, duration: dur };
+  } finally {
+    v.pause(); v.removeAttribute('src'); v.load(); URL.revokeObjectURL(source);
+  }
+}
+async function pollJob(url, el, onTick) {
+  videoPollActive = true;
+  try {
+    let failures = 0;
+    for (;;) {
+      await new Promise(r => setTimeout(r, 1500));
+      let j;
+      try { j = await api(url); failures = 0; }
+      catch (error) {
+        failures++;
+        if (failures >= 8) throw new Error('Director stopped responding while checking this job. It may still be running; reconnect, then use Stop before starting another.');
+        el.textContent = 'Director is not responding · retrying status (' + failures + '/8)…';
+        continue;
+      }
+      const lines = Array.isArray(j.log) ? j.log : [];
+      el.textContent = lines.join('\n') + (onTick ? onTick(j) : '');
+      if (!j.running) return j;
+    }
+  } finally { videoPollActive = false; }
+}
+let videoOperation = null, videoStopRequestPending = false, videoPollActive = false;
+function hasVideoRecipe() { try { const recipe = JSON.parse($('recipe').value); return !!recipe && typeof recipe === 'object' && !Array.isArray(recipe); } catch { return false; } }
+function setVideoOperation(operation) {
+  videoOperation = operation;
+  const busyOperation = !!operation;
+  $('vdrop').disabled = busyOperation; $('vfile').disabled = busyOperation;
+  $('vplay').disabled = busyOperation || !hasVideoRecipe(); $('vrender').disabled = busyOperation || !hasVideoRecipe();
+  $('vstop').disabled = videoStopRequestPending || (operation !== 'video' && operation !== 'render');
+}
+function resumeVideoJobWatch() {
+  const operation = videoOperation;
+  if (videoPollActive || (operation !== 'video' && operation !== 'render')) return;
+  const url = operation === 'video' ? '/api/video' : '/api/render';
+  const onTick = operation === 'render' ? q => (q.running ? '\nframe ' + q.frame + '/' + q.total : '') : null;
+  pollJob(url, $('vlog'), onTick).then(job => {
+    if (videoOperation !== operation) return;
+    const result = job.result || {};
+    if (result.error) $('vlog').textContent = result.error;
+    else if (operation === 'video' && result.recipe) {
+      $('recipe').value = JSON.stringify(result.recipe, null, 2);
+      const aspect = result.aspect || 1.78;
+      $('vsize').value = aspect < 0.8 ? '1080x1920' : aspect < 1.2 ? '1080x1080' : '1280x720';
+    } else if (operation === 'render' && result.video) {
+      $('rvid').src = '/api/render/video?t=' + Date.now(); $('rvid').style.display = 'block';
+    }
+    setVideoOperation(null); loadStudio().catch(() => {}); syncPose();
+  }).catch(error => { if (videoOperation === operation) $('vlog').textContent = error.message; });
 }
 const vdrop = $('vdrop');
-vdrop.onclick = () => $('vfile').click(); $('vfile').onchange = e => { matchVideoFile(e.target.files[0]); e.target.value = ''; };
+setVideoOperation(null);
+async function matchVideoFile(file) {
+  if (!file || !file.type.startsWith('video/')) return toast('Choose a supported video file.');
+  if (videoOperation) return toast('Wait for the current video or render operation to finish.');
+  setVideoOperation('matching');
+  try {
+    vdrop.classList.add('busy');
+    const { frames, duration } = await videoFrames(file);
+    try { await api('/api/video', { frames, duration, lighting: $('vlight').checked, camera: $('vcam').checked }); }
+    catch (error) {
+      if (error.message.includes('Could not reach Director') || error.status === 409) setVideoOperation('video');
+      else setVideoOperation(null);
+      throw error;
+    }
+    setVideoOperation('video');
+    const j = await pollJob('/api/video', $('vlog'));
+    const r = j.result || {};
+    if (r.error) { setVideoOperation(null); throw new Error(r.error); }
+    if (r.recipe) { $('recipe').value = JSON.stringify(r.recipe, null, 2); const a = r.aspect || 1.78; $('vsize').value = a < 0.8 ? '1080x1920' : a < 1.2 ? '1080x1080' : '1280x720'; }
+    setVideoOperation(null);
+    loadStudio().catch(() => {}); syncPose();
+  } catch (e) { $('vlog').textContent = e.message; }
+  finally { vdrop.classList.remove('busy'); if (videoOperation === 'matching') setVideoOperation(null); else setVideoOperation(videoOperation); }
+}
+vdrop.onclick = () => $('vfile').click(); $('vfile').onchange = e => { const file = e.target.files[0]; e.target.value = ''; matchVideoFile(file); };
 vdrop.addEventListener('dragover', e => { e.preventDefault(); vdrop.classList.add('over'); }); vdrop.addEventListener('dragleave', () => vdrop.classList.remove('over'));
 vdrop.addEventListener('drop', e => { e.preventDefault(); vdrop.classList.remove('over'); matchVideoFile([...e.dataTransfer.files].find(f => f.type.startsWith('video/'))); });
 const curRecipe = () => { try { return JSON.parse($('recipe').value); } catch { throw new Error('No camera move yet: match a video or record a move'); } };
-$('vplay').onclick = () => busy($('vplay'), async () => { await api('/api/play', curRecipe()); await syncPose(); });
+$('vplay').onclick = () => busy($('vplay'), async () => {
+  if (videoOperation) throw new Error('Wait for the current video or render operation to finish.');
+  setVideoOperation('playing');
+  try { await api('/api/play', curRecipe()); await syncPose(); }
+  finally { setVideoOperation(null); }
+});
 $('vrender').onclick = () => busy($('vrender'), async () => {
+  if (videoOperation) throw new Error('Wait for the current video or render operation to finish.');
   const [width, height] = $('vsize').value.split('x').map(Number);
-  await api('/api/render', { recipe: curRecipe(), fps: +$('vfps').value, width, height, secs: +$('vq').value });
-  $('vstop').disabled = false; $('rvid').style.display = 'none';
-  const j = await pollJob('/api/render', $('rlog'), q => (q.running ? `\nframe ${q.frame}/${q.total}` : ''));
-  $('vstop').disabled = true;
+  setVideoOperation('starting-render');
+  try { await api('/api/render', { recipe: curRecipe(), fps: +$('vfps').value, width, height, secs: +$('vq').value }); }
+  catch (error) {
+    if (error.message.includes('Could not reach Director') || error.status === 409) setVideoOperation('render');
+    else setVideoOperation(null);
+    throw error;
+  }
+  setVideoOperation('render'); $('rvid').style.display = 'none';
+  const j = await pollJob('/api/render', $('rlog'), q => (q.running ? '\nframe ' + q.frame + '/' + q.total : ''));
+  setVideoOperation(null);
+  if (j.result && j.result.error) throw new Error(j.result.error);
   if (j.result && j.result.video) { $('rvid').src = '/api/render/video?t=' + Date.now(); $('rvid').style.display = 'block'; }
   await syncPose();
 });
-$('vstop').onclick = () => { api('/api/video/stop', {}); api('/api/render/stop', {}); api('/api/stop', {}); };
+$('vstop').onclick = async () => {
+  const endpoint = videoOperation === 'video' ? '/api/video/stop' : videoOperation === 'render' ? '/api/render/stop' : null;
+  if (!endpoint || videoStopRequestPending) return;
+  videoStopRequestPending = true; setVideoOperation(videoOperation);
+  try { await api(endpoint, {}); $('vlog').textContent = 'Stop requested. Waiting for KeyShot to finish the current step…'; resumeVideoJobWatch(); }
+  catch (error) { $('vlog').textContent = error.message + ' The job may still be running; reconnect and retry Stop.'; }
+  finally { videoStopRequestPending = false; setVideoOperation(videoOperation); }
+};
 
 /* ---------- connect line: the one-liner for KeyShot's scripting console, with a Copy button ---------- */
 let CONNECT = '';

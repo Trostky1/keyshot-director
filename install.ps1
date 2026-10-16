@@ -7,7 +7,7 @@ $home_ = Split-Path -Parent $MyInvocation.MyCommand.Path
 Write-Host ""; Write-Host "KeyShot Director - install" -ForegroundColor White; Write-Host "folder: $home_"
 
 # Fail early when someone runs the installer from a partial or incorrectly extracted download.
-foreach ($required in 'server\server.js', 'bridge\cc_bridge.py', 'tools\stop.ps1') {
+foreach ($required in 'server\server.js', 'server\listen-with-fallback.js', 'server\material-core.js', 'bridge\cc_bridge.py', 'bridge\cc_materials.py', 'bridge\cc_lights.py', 'tools\stop.ps1') {
   if (-not (Test-Path (Join-Path $home_ $required) -PathType Leaf)) {
     Write-Host "`nThis download is incomplete: $required is missing. Extract the full release ZIP into a permanent folder, then run Install KeyShot Director.bat again." -ForegroundColor Red
     exit 1
@@ -73,7 +73,6 @@ $batLines = @(
   'if errorlevel 1 goto nonode',
   'for /f "tokens=1 delims=v." %%A in (''node --version'') do set NODE_MAJOR=%%A',
   'if %NODE_MAJOR% LSS 20 goto oldnode',
-  'rem Any older copy of this app still holding the port is stopped first, so this always gives a fresh start.',
   'powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0tools\stop.ps1"',
   'echo Starting KeyShot Director ...',
   'set KD_OPEN=1',
