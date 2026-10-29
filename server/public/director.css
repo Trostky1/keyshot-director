@@ -1,3 +1,5 @@
+/* Hallmark · v2.0.0 · redesign: polish · scope: app/materials · keep: layout, wiring, content · change: materials chrome */
+/* Hallmark critique · Material Lab had nested cards, status pills, tracked labels, and dot-joined metadata that made the tool read like a generated dashboard. */
 /* Scoped extension: a neutral photographic workbench on a second monitor.
    Reference and intent precede the renderer; evidence and reversible controls stay nearby. */
 ::selection { background: #171717; color: #fff; }
@@ -239,12 +241,18 @@ dialog input, dialog select { min-height:38px; }
 .texture-set-ao { display:flex; justify-content:flex-start; gap:7px; margin-top:4px; }
 .texture-set-ao label { display:flex; align-items:flex-start; gap:7px; min-width:0; margin:0; line-height:1.4; }
 .texture-set-ao input[type="checkbox"] { flex:none; margin:2px 0 0; }
+.texture-map-review { display:grid; gap:9px; margin-top:12px; padding-top:12px; border-top:1px solid var(--line); }
+.texture-map-review > b { font-size:var(--type-label); }
+.texture-map-review-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:9px 12px; }
+.texture-map-review-grid label { display:grid; gap:5px; min-width:0; color:var(--fg); font-size:var(--type-label); font-weight:550; }
+.texture-map-review-grid select, .texture-map-review-grid input { width:100%; min-width:0; min-height:38px; padding:7px 9px; border:1px solid var(--line); border-radius:var(--radius-control,9px); background:var(--surface); color:var(--fg); font:inherit; font-weight:400; }
+.texture-map-review-grid :is(select,input):focus-visible { outline:2px solid var(--blue); outline-offset:2px; }
 #textureSetList { container-type:inline-size; }
 @container (max-width:850px) {
   .texture-set { grid-template-columns:minmax(0,1fr); gap:10px; }
   .texture-set-actions { grid-template-columns:repeat(2,minmax(0,1fr)); }
 }
-@container (max-width:400px) { .texture-set-actions { grid-template-columns:minmax(0,1fr); } }
+@container (max-width:400px) { .texture-set-actions, .texture-map-review-grid { grid-template-columns:minmax(0,1fr); } }
 #textureBuildStatus:empty { display:none; }
 .material-assets-heading { display:flex; align-items:center; justify-content:space-between; gap:16px; }
 .material-assets-heading h3 { margin-bottom:5px; }
@@ -1060,6 +1068,224 @@ button.busy { transition:opacity 120ms ease; }
   border-radius:50%;
   background:var(--orange);
   vertical-align:.55em;
+}
+
+/* Hallmark polish: keep the Material Lab workbench factual and quiet. */
+:root {
+  --hallmark-material-ink: var(--fg);
+  --hallmark-material-muted: var(--dim);
+  --hallmark-material-line: var(--line);
+  --hallmark-material-wash: #fafaf8;
+  --hallmark-material-focus: var(--blue);
+}
+
+html, body { overflow-x:clip; }
+#materialsWorkspace { color:var(--hallmark-material-ink); }
+#materialsWorkspace .scene-tag {
+  padding:0;
+  border:0;
+  border-radius:0;
+  background:transparent;
+  color:var(--hallmark-material-muted);
+  font-size:var(--type-label);
+  font-weight:500;
+  letter-spacing:0;
+  text-transform:none;
+}
+#materialsWorkspace .scene-tag::before { display:none; }
+#materialsWorkspace .material-tools-nav { border-bottom:1px solid var(--hallmark-material-line); }
+#materialsWorkspace .material-tools-nav [role=tab] {
+  min-height:36px;
+  padding:7px 12px;
+  border:0;
+  border-bottom:2px solid transparent;
+  border-radius:0;
+  background:transparent;
+  color:var(--hallmark-material-muted);
+  font-weight:600;
+  letter-spacing:0;
+  text-transform:none;
+}
+#materialsWorkspace .material-tools-nav [role=tab]:hover:not(:disabled) {
+  border-color:var(--hallmark-material-line);
+  background:transparent;
+  color:var(--hallmark-material-ink);
+}
+#materialsWorkspace .material-tools-nav [role=tab][aria-selected=true] {
+  border-color:var(--hallmark-material-focus);
+  background:transparent;
+  color:var(--hallmark-material-ink);
+  box-shadow:none;
+}
+#materialsWorkspace .materials-tools {
+  padding:0 0 18px;
+  border:0;
+  border-radius:0;
+  background:transparent;
+  box-shadow:none;
+}
+#materialsWorkspace #materialToolPanels {
+  margin-top:0;
+  padding-top:18px;
+  border-top:0;
+}
+#materialsWorkspace .material-subpanel {
+  padding:0;
+  border:0;
+  background:transparent;
+}
+#materialsWorkspace .texture-import-card {
+  max-width:none;
+  padding:18px 0 0;
+  border:0;
+  border-top:1px solid var(--hallmark-material-line);
+  border-radius:0;
+  background:transparent;
+}
+#materialsWorkspace .texture-import-card-heading { align-items:baseline; }
+#materialsWorkspace .texture-import-card-heading .scene-tag { display:none; }
+#materialsWorkspace .texture-import-note { max-width:72ch; }
+#materialsWorkspace .material-asset {
+  align-items:start;
+  padding:18px 0;
+  border-top:1px solid var(--hallmark-material-line);
+}
+#materialsWorkspace .material-asset-info { gap:6px; }
+#materialsWorkspace .material-asset-info b { font-size:var(--type-reading); }
+#materialsWorkspace .texture-set-roles,
+#materialsWorkspace .texture-set-inventory,
+#materialsWorkspace .texture-set-folder { color:var(--hallmark-material-muted); }
+#materialsWorkspace .texture-set-inventory > summary,
+#materialsWorkspace .texture-set-folder > summary {
+  color:var(--hallmark-material-ink);
+  font-weight:600;
+  text-decoration-thickness:1px;
+}
+#materialsWorkspace .texture-map-review {
+  margin-top:14px;
+  padding-top:14px;
+  border-top:1px solid var(--hallmark-material-line);
+}
+#materialsWorkspace .texture-map-review > b { font-weight:650; }
+#materialsWorkspace .texture-map-review-grid { gap:12px; }
+#materialsWorkspace .texture-map-review-grid label { color:var(--hallmark-material-ink); font-weight:550; }
+#materialsWorkspace .texture-map-review-grid :is(select,input) {
+  border-color:var(--hallmark-material-line);
+  border-radius:4px;
+  background:var(--hallmark-material-wash);
+}
+#materialsWorkspace .texture-map-review-grid :is(select,input):focus-visible {
+  outline:2px solid var(--hallmark-material-focus);
+  outline-offset:2px;
+  border-color:var(--hallmark-material-focus);
+}
+#materialsWorkspace .texture-set-actions { gap:8px; }
+#materialsWorkspace .texture-set-actions button {
+  min-height:36px;
+  border-radius:4px;
+  letter-spacing:0;
+  text-transform:none;
+}
+#materialsWorkspace .texture-set-actions button.solid { font-weight:650; }
+#materialsWorkspace .texture-set-actions button:not(.solid) {
+  border-color:var(--hallmark-material-line);
+  background:transparent;
+}
+#materialsWorkspace .texture-set-actions button:not(.solid):hover:not(:disabled) {
+  border-color:var(--hallmark-material-ink);
+  background:var(--hallmark-material-wash);
+}
+#materialsWorkspace .material-folder {
+  border-color:var(--hallmark-material-line);
+  border-radius:4px;
+  background:var(--hallmark-material-wash);
+}
+#materialsWorkspace .material-subpanel .material-assets-heading h3 { letter-spacing:-.02em; }
+#materialsWorkspace .material-subpanel .material-assets-heading p { max-width:72ch; }
+#materialsWorkspace .material-subpanel button,
+#materialsWorkspace .material-subpanel select,
+#materialsWorkspace .material-subpanel input { font-size:var(--type-label); }
+#materialsWorkspace .material-graph-preset {
+  margin:14px 0 0;
+  padding:0 0 12px;
+  border:0;
+  border-bottom:1px solid var(--hallmark-material-line);
+  border-radius:0;
+  background:transparent;
+  box-shadow:none;
+}
+#materialsWorkspace .material-context {
+  margin-left:0;
+  margin-right:0;
+  padding:10px 0;
+  border-width:1px 0;
+  border-radius:0;
+  background:transparent;
+}
+#materialsWorkspace .material-context-label {
+  color:var(--hallmark-material-muted);
+  font-weight:600;
+  letter-spacing:0;
+  text-transform:none;
+}
+#materialsWorkspace .material-line.user {
+  padding:0;
+  border:0;
+  border-radius:0;
+  background:transparent;
+}
+
+@media (prefers-reduced-motion:reduce) {
+  #materialsWorkspace *, #materialsWorkspace *::before, #materialsWorkspace *::after {
+    transition-duration:.01ms !important;
+    animation-duration:.01ms !important;
+  }
+}
+
+/* Impeccable layout pass: give the Studio brief a steadier vertical rhythm. */
+#studioWorkspace .conversation-heading {
+  gap:16px;
+  padding:22px 2px 12px;
+}
+#studioWorkspace .promptbar {
+  padding:18px;
+  margin-top:12px;
+  border-top:1px solid var(--line);
+  border-radius:15px;
+}
+#studioWorkspace .director-context {
+  gap:14px;
+  margin-bottom:16px;
+}
+#studioWorkspace .director-reference-row {
+  grid-template-columns:minmax(210px,230px) minmax(0,1fr);
+  gap:16px;
+  margin-bottom:16px;
+}
+#studioWorkspace .director-reference-row .photo-drop {
+  min-height:84px;
+  padding:12px;
+}
+#studioWorkspace #photoDropText > span { white-space:nowrap; }
+#studioWorkspace .director-reference-details { gap:8px 14px; }
+#studioWorkspace .promptbar textarea { min-height:96px; }
+#studioWorkspace .promptbar > .row {
+  gap:8px;
+  margin-top:14px !important;
+}
+#studioWorkspace #examples {
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  margin-top:12px !important;
+}
+#studioWorkspace #examples .ex { margin:0; }
+
+@media (max-width:700px) {
+  #studioWorkspace .promptbar { padding:14px; margin-top:10px; }
+  #studioWorkspace .director-reference-row { grid-template-columns:1fr; gap:10px; }
+  #studioWorkspace .director-reference-row .photo-drop { min-height:94px; }
+  #studioWorkspace #photoDropText > span { white-space:normal; }
 }
 #studioStageHome #stage,
 #materialsStageHost #stage {
