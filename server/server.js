@@ -13,6 +13,7 @@ const { resizeJpeg } = require('./image-tools');
 const textureSets = require('./material-textures');
 const textureEdit = require('./texture-edit');
 const { compileTexturePlan } = require('./material-core');
+const { selectMaterialBuildInputs } = require('./material-build-input');
 const { RIGS, ENV_RIGS, buildRig, toPos } = require('./rigs');
 const lightingPlaybooks = require('./lighting-playbooks');
 const { decode, productStats } = require('./png');
@@ -841,7 +842,7 @@ const actions = {
       ...edited, path: path.join(set.path, imported.name), name: imported.name, role: imported.role };
   },
   async build_material_from_texture_set({ texture_set_id, name, graph_preset, use_ao = true,
-    use_displacement = false, geometry_template }) {
+    use_displacement = false, geometry_template, selected_files, tile_size_mm = 41 }) {
     assertSceneAvailable(false);
     const set = textureSets.listTextureSets().find(item => item.id === String(texture_set_id || ''));
     if (!set) throw new Error('That texture set is no longer available. Refresh Material Lab and try again.');
@@ -861,11 +862,10 @@ const actions = {
       const ending = ` (${suffix++})`;
       materialName = baseName.slice(0, 80 - ending.length).trimEnd() + ending;
     }
-    if (typeof use_ao !== 'boolean') throw new Error('AO selection must be on or off.');
     if (use_displacement || geometry_template) throw new Error('Geometry displacement is paused for reliability. Remove that option and build the supported Plastic maps.');
+    const { recipeFiles } = selectMaterialBuildInputs(set.files, { selected_files, use_ao, tile_size_mm });
     const plan = await compileTexturePlan({ name: materialName,
-      files: set.files.filter(file => (use_ao || file.role !== 'ambient-occlusion') &&
-        (supportedRoles.has(file.role) || file.role === 'ambient-occlusion')).map(file => ({ name: file.name, role: file.role })) });
+      files: recipeFiles.map(file => ({ name: file.name, role: file.role })) });
     const filesByName = new Map(set.files.map(file => [file.name, file]));
     const selected = plan.maps.map(map => {
       const file = filesByName.get(map.path);
@@ -876,7 +876,7 @@ const actions = {
     try {
       await send('material_create', { name: materialName }, 20000);
       wiring = await send('material_texture_apply', { name: materialName, model: 'Plastic',
-        maps: selected.map(({ role, path: filePath }) => ({ role, path: filePath })) }, 30000);
+        tile_size_mm, maps: selected.map(({ role, path: filePath }) => ({ role, path: filePath })) }, 30000);
     } catch (error) {
       try { await send('material_discard', { name: materialName }, 15000); } catch { /* preserve the material if KeyShot says it is no longer safe to discard */ }
       throw new Error(`KeyShot could not build this texture set: ${error.message}`);
@@ -894,7 +894,8 @@ const actions = {
       reason: file.role === 'metallic' ? 'Metallic layering is paused' :
         file.role === 'ambient-occlusion' && !use_ao ? 'AO blend not enabled' :
         file.role === 'displacement' ? 'Geometry displacement is paused' :
-        plan.skipped.find(item => item.name === file.name)?.reason || 'No supported connection' })),
+        plan.skipped.find(item => item.name === file.name)?.reason ||
+        (supportedRoles.has(file.role) || file.role === 'ambient-occlusion' ? 'Not selected for this build' : 'No supported connection') })),
       ...(set.missing || []).map(name => ({ name, role: null, reason: 'Source file is missing; the material was built from available maps.' }))];
     const channels = wiring.maps.map(map => map.role).join(', ');
     const manualGraphSteps = [
@@ -902,8 +903,20 @@ const actions = {
       'Check the texture mapping scale and placement on the intended model.'
     ];
     const graphPresetName = 'Simple Plastic';
+    const receipt = { version: 1, built_at: new Date().toISOString(), texture_set_id: set.id,
+      material_name: materialName, model: 'Plastic', tile_size_mm: wiring.tile_size_mm,
+      used_files: usedFiles, skipped_files: skipped, missing_files: set.missing || [],
+      graph: wiring, package_path: saved.path, library: saved.library, assignment: 'unassigned' };
+    let receiptPath = null;
+    try {
+      const receiptDir = path.join(MATERIAL_PACKAGE_DIR, 'build-receipts');
+      fs.mkdirSync(receiptDir, { recursive: true });
+      receiptPath = path.join(receiptDir, `${set.id}-${Date.now()}-${require('crypto').randomBytes(3).toString('hex')}.json`);
+      fs.writeFileSync(receiptPath, JSON.stringify(receipt, null, 2), { flag: 'wx' });
+    } catch (error) { console.warn('Material built, but its receipt could not be saved:', error.message); }
     return { summary: `${materialName} built as an unassigned ${wiring.model || plan.material.model} material using the ${graphPresetName} preset from ${channels}; saved to the KeyShot library and as a portable KMP.`,
       name: materialName, path: saved.path, library: saved.library, material: wiring, used_files: usedFiles, skipped_files: skipped,
+      tile_size_mm: wiring.tile_size_mm, receipt: receiptPath,
       graph_preset,
       manual_graph_steps: manualGraphSteps,
       recipe: plan,
@@ -1278,7 +1291,7 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/material/build-from-texture-set' && req.method === 'POST') {
       const b = await body(req), result = await actions.build_material_from_texture_set({ texture_set_id: b.texture_set_id, name: b.name,
         graph_preset: b.graph_preset, use_ao: b.use_ao !== false, use_displacement: b.use_displacement === true,
-        geometry_template: b.geometry_template });
+        geometry_template: b.geometry_template, selected_files: b.selected_files, tile_size_mm: b.tile_size_mm === undefined ? 41 : b.tile_size_mm });
       return json(res, 201, result);
     }
     if (url.pathname === '/api/material/edit-texture-map' && req.method === 'POST') {
