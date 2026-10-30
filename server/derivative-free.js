@@ -34,11 +34,14 @@ function meter(evaluate, budget, signal) {
 }
 
 // Compass / pattern search: try +/- step along each coordinate; shrink when no coordinate improves.
-async function coordinateSearch({ x0, bounds, evaluate, budget, step0 = 0.2, minStep = 0.01, shrink = 0.5, margin = 0, signal, startScore = null, onlyAfter = null }) {
+// patience: stop after this many consecutive evaluations that did not improve the best score by more than `margin`
+// (margin is the measured render-noise gate), so a flat or noise-dominated landscape does not spend the whole budget.
+async function coordinateSearch({ x0, bounds, evaluate, budget, step0 = 0.2, minStep = 0.01, shrink = 0.5, margin = 0, signal, startScore = null, patience = null }) {
   const sp = space(bounds), m = meter(evaluate, budget, signal);
   let u = sp.toUnit(x0), step = step0;
   let best = startScore ?? await m.run(sp.toReal(u), { stage: 'search' });
-  let converged = false;
+  let converged = false, stopped = null, since = 0;
+  const STOP = { patience: true };
   try {
     while (step >= minStep) {
       let improved = false;
@@ -46,13 +49,16 @@ async function coordinateSearch({ x0, bounds, evaluate, budget, step0 = 0.2, min
         const trial = u.slice(); trial[i] = clamp01(u[i] + direction * step);
         if (trial[i] === u[i]) continue;
         const score = await m.run(sp.toReal(trial), { stage: 'search', coordinate: bounds[i].name || i, step });
-        if (best - score > margin) { u = trial; best = score; improved = true; break; }
+        if (best - score > margin) { u = trial; best = score; improved = true; since = 0; break; }
+        if (patience && ++since >= patience) throw STOP;
       }
       if (!improved) step *= shrink;
     }
-    converged = true;
-  } catch (error) { if (!error.budget) throw error; }
-  return { method: 'coordinate', x: sp.toReal(u), score: best, evaluations: m.log, converged, step };
+    converged = true; stopped = 'converged';
+  } catch (error) {
+    if (error === STOP) stopped = 'patience'; else if (error.budget) stopped = 'budget'; else throw error;
+  }
+  return { method: 'coordinate', x: sp.toReal(u), score: best, evaluations: m.log, converged, step, stopped };
 }
 
 // Powell-style conjugate direction search with a bounded golden-section line search. Directions live in unit space.
@@ -98,7 +104,7 @@ async function powellSearch({ x0, bounds, evaluate, budget, lineEvaluations = 10
       directions = directions.map((d, i) => i === biggest ? unitMove : d);   // replace the direction that helped most
     }
   } catch (error) { if (!error.budget) throw error; }
-  return { method: 'powell', x: sp.toReal(u), score: best, evaluations: m.log, converged };
+  return { method: 'powell', x: sp.toReal(u), score: best, evaluations: m.log, converged, stopped: converged ? 'converged' : 'budget' };
 }
 
 // Repeat-noise estimation and finalist re-validation around either search.
@@ -123,9 +129,13 @@ async function optimize({ x0, bounds, evaluate, budget, method = 'coordinate', b
     const key = e.x.map(v => v.toPrecision(6)).join(','); if (seen.has(key) || key === x0.map(v => v.toPrecision(6)).join(',')) continue; seen.add(key); unique.push(e); if (unique.length >= finalists) break;
   }
   const validated = [];
-  for (const candidate of unique) {
+  finalistLoop: for (const candidate of unique) {
     const scores = [];
-    for (let i = 0; i < finalistRepeats; i++) scores.push(await guarded(candidate.x, { stage: 'finalist', quality: 'final', repeat: i }));
+    for (let i = 0; i < finalistRepeats; i++) {
+      // If a time limit stops re-validation part-way, only fully re-validated finalists count; with none, the start is kept.
+      try { scores.push(await guarded(candidate.x, { stage: 'finalist', quality: 'final', repeat: i })); }
+      catch (error) { if (error.budget) break finalistLoop; throw error; }
+    }
     validated.push({ x: candidate.x, search_score: candidate.score, ...summarizeRepeats(scores) });
   }
   validated.sort((a, b) => a.mean - b.mean);
@@ -134,7 +144,7 @@ async function optimize({ x0, bounds, evaluate, budget, method = 'coordinate', b
   const required = Math.max(floor, z * noise);
   const improvement = top ? baseline.mean - top.mean : 0;
   const accepted = !!top && improvement > required;
-  return { method, accepted, x: accepted ? top.x : x0.slice(), baseline, finalists: validated, improvement, required_improvement: required,
+  return { method, accepted, x: accepted ? top.x : x0.slice(), baseline, finalists: validated, improvement, required_improvement: required, stop_reason: found.stopped,
     reason: accepted ? 'Finalist improved beyond repeat noise on re-validation.' : 'No finalist improved beyond repeat noise; the starting point is kept.',
     evaluations_used: trace.length, budget, trace };
 }

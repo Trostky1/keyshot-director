@@ -11,7 +11,7 @@ const { HDRI } = require('./rigs');
 const { powerMode, iesDimmer } = require('./light-spec');
 const lightingPlaybooks = require('./lighting-playbooks');
 const refinement = require('./photo-refinement');
-const { reconcile: reconcileReceipt } = require('./job-receipt');
+const { createRecovery, recoverySummary } = require('./job-receipt');
 // The part of a pre-job snapshot that is needed to put the scene back; the large scene context is not persisted.
 const persistableSnapshot = s => JSON.parse(JSON.stringify({ subject: s.subject, camera: s.camera, checkpoint: s.checkpoint, environment: s.environment,
   lights: s.lights, selectOnly: s.selectOnly, createdIds: [], studio: s.studio }));
@@ -250,7 +250,7 @@ function createDirector(deps) {
     let ref, options; try { ref = reference(input.image); options = refinement.settings(input.refinement); } catch (e) { e.status = 400; throw e; }
     if (deps.receipts) {
       // A previous job that never finished (crash, restart, failed restore) must be reviewed first; never start over it.
-      const open = deps.receipts.unresolved();
+      const open = [...deps.receipts.unresolved(), ...(deps.blockers?.() || [])];
       if (open.length) throw Object.assign(new Error('A previous photo match did not finish. Review it under recovery before starting another match.'), { status: 409, recovery: open.map(recoverySummary) });
     }
     const id = Date.now() + '_' + crypto.randomBytes(4).toString('hex');
@@ -378,51 +378,9 @@ function createDirector(deps) {
     job.promise = execute(); // private; do not serialize the promise in status
     return { id, started: true };
   }
-  // Recovery of jobs that did not finish (or whose restore failed), driven by on-disk receipts. Restoring is only
-  // offered when the live scene identity equals the one recorded at the start; otherwise the only action is to dismiss.
-  const recoverySummary = r => r.unreadable ? { job_id: r.job_id, unreadable: true, error: r.error } : { job_id: r.job_id, kind: r.kind, status: r.status, created_at: r.created_at,
-    restore: r.restore, owned: r.owned.map(({ kind, id, evidence }) => ({ kind, id, evidence })), last_operations: r.operations.slice(-5),
-    scene_identity_recorded: r.scene_identity != null };
-  async function recovery() {
-    if (!deps.receipts) return { items: [] };
-    const items = [];
-    for (const r of deps.receipts.unresolved().filter(r => !(job.running && r.job_id === job.id))) {
-      const item = recoverySummary(r);
-      if (!r.unreadable && deps.sceneIdentity) {
-        try {
-          const live = { scene_identity: await deps.sceneIdentity(null), inventory: await deps.inventory?.() || [] };
-          Object.assign(item, { reconciliation: reconcileReceipt(r, live) });
-        } catch (error) { item.reconciliation_error = String(error.message || error).slice(0, 160); }
-      }
-      items.push(item);
-    }
-    return { items };
-  }
-  async function resolveRecovery(jobId, action) {
-    if (!deps.receipts) throw new Error('Recovery receipts are not enabled.');
-    if (job.running) throw Object.assign(new Error('Stop the running match before resolving recovery.'), { status: 409 });
-    const receipt = deps.receipts.get(jobId);
-    if (!receipt) throw Object.assign(new Error('No receipt exists for that job.'), { status: 404 });
-    if (action === 'dismiss') {
-      deps.receipts.setRestore(jobId, 'dismissed', 'Dismissed by the user; the scene was left as it is.');
-      if (receipt.status === 'running') deps.receipts.finish(jobId, 'dismissed');
-      return { resolved: 'dismissed' };
-    }
-    if (action !== 'restore') throw Object.assign(new Error('Choose restore or dismiss.'), { status: 400 });
-    if (!receipt.initial_state) throw Object.assign(new Error('This receipt has no recorded starting state.'), { status: 409 });
-    if (receipt.scene_identity == null || !deps.sceneIdentity) throw Object.assign(new Error('The scene identity was not recorded, so this scene cannot be confirmed. You can dismiss the receipt instead.'), { status: 409 });
-    const live = await deps.sceneIdentity(null);
-    if (live !== receipt.scene_identity) throw Object.assign(new Error('The open scene is not the one this job changed. Nothing was restored; open the original scene or dismiss the receipt.'), { status: 409 });
-    // Only items this job recorded as its own are removed; names are never used to decide ownership.
-    const state = { ...receipt.initial_state, createdIds: receipt.owned.filter(o => o.kind === 'light').map(o => o.id) };
-    job.running = true;
-    try { await deps.restore(state); } finally { job.running = false; }
-    deps.receipts.setRestore(jobId, 'complete', 'Restored from the on-disk receipt.');
-    if (receipt.status === 'running' || receipt.status === 'failed') deps.receipts.finish(jobId, 'recovered');
-    if (undoJobId === jobId) { undo = null; undoJobId = null; }
-    deps.refresh?.();
-    return { resolved: 'restored' };
-  }
+  const { recovery, resolveRecovery } = createRecovery({ receipts: deps.receipts, sceneIdentity: deps.sceneIdentity, inventory: deps.inventory,
+    restore: deps.restore, refresh: deps.refresh, label: 'match', isBusy: () => job.running, setBusy: v => { job.running = v; },
+    isCurrent: id => job.running && job.id === id, onRestored: id => { if (undoJobId === id) { undo = null; undoJobId = null; } } });
   return {
     status: () => { const { promise, ...s } = status(); return s; }, start, recovery, resolveRecovery,
     stop: () => controller?.abort(new Error('Photo match canceled.')),
@@ -433,4 +391,4 @@ function createDirector(deps) {
       return path.join(root, id, slot + (slot === 'recipe' ? '.json' : '.png')); },
   };
 }
-module.exports = { cleanPlan, frame, projectBounds, measurementTarget, lightingFrame, reference, createDirector, captureDimensions: refinement.dimensions };
+module.exports = { persistableSnapshot, cleanPlan, frame, projectBounds, measurementTarget, lightingFrame, reference, createDirector, captureDimensions: refinement.dimensions };
