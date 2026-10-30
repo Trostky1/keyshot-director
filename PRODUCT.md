@@ -10,7 +10,7 @@ Choose a reference product photograph, describe the lighting qualities to borrow
 
 - KeyShot Studio 2026.2 is the user's installed version. No other scripts/dialogs should run while its bridge is working.
 - Preserve product geometry and materials. Never save the user's scene automatically.
-- The visual direction is now a calm, Apple-inspired creative workspace: a large real KeyShot scene first, with reference matching and controls in a focused inspector. Use system typography, silver/white surfaces, restrained blue actions, clear hierarchy, and responsive controls. Do not use Apple logos or imply Apple affiliation.
+- The visual direction is the orchid system (see DESIGN.md and the Figma file "Orchid Style Handoff"): a large real KeyShot scene first, with reference matching and controls in a focused inspector. Use IBM Plex Sans, white and soft grey surfaces with one night-black scene card, a single orange accent, clear hierarchy, and responsive controls. Keep the Home page copy factual: it states real limits and never promises exact matches.
 - Matching is an inference, not exact inverse reconstruction. Clearly identify noise, different materials and physical sets/backplates that lights alone cannot recreate.
 - Reference and preview images may be sent to the selected signed-in AI provider only as part of the requested matching workflow. Explain this before the action.
 - Keep original lights intact; hide them during matching. Use an isolated environment and one intentional native rollback camera per photo job. Undo is session-local, one level; output images and recipe JSON are durable.

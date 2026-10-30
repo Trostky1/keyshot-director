@@ -26,7 +26,7 @@ If **KeyShot Director** is not in KeyShot's script list, run the installer once 
 
 Material recipe planning is handled by the bundled JavaScript engine. Neither the release ZIP nor a source checkout needs Rust, Cargo, or WebAssembly to run or package Director.
 
-See the [2.4 release notes](docs/RELEASE_NOTES_2.4.md) for this release's features and current limits. The [2.3 release notes](docs/RELEASE_NOTES_2.3.md) cover the previous release.
+See the [3.0 release notes](docs/RELEASE_NOTES_3.0.md) for this release's features and current limits. The [2.4 release notes](docs/RELEASE_NOTES_2.4.md) cover the previous release.
 
 The working checkout adds [measured lighting refinement](docs/MEASURED_REFINEMENT.md) and [material edit recovery](docs/MATERIAL_EDIT_RECEIPTS.md). Set an explicit reference rectangle and objective to enable measured candidates; missing or incompatible evidence retains the first look. A disposable KeyShot 2026.2 calibration measured material mapping and displacement behavior; its [results](docs/MATERIAL_CALIBRATION_RESULTS.md) refine the [calibration plan](docs/MATERIAL_CALIBRATION_PLAN.md). Broader end-to-end verification of these new lighting and material workflows is still needed in KeyShot.
 
