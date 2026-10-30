@@ -88,7 +88,7 @@
   dialog::backdrop { background:#fffc; }
   #qr { background:#fff; border:1px solid var(--fg); padding:6px; display:inline-block; margin-top:8px; }
 </style>
-<link rel="stylesheet" href="/director.css">
+<link rel="stylesheet" href="/director.css?v=20261027">
 </head>
 <body>
 <!-- THESIS: A premium workbench for directing the live KeyShot scene. OWN-WORLD: Editorial black-and-white typography, KeyShot blue actions, restrained orange punctuation, and a fine grid reserved for actual editing canvases. STORY: Shape the light, state the intent, then refine from evidence. FIRST VIEWPORT: Scene, unified Director brief, and lighting controls in one glance. FORM: Preserve the wide render and focused native controls; Materials pairs the same live render with the real inspector. FINISH: Clear hierarchy, responsive touch targets, explicit scene state, and no simulated controls. -->
@@ -114,7 +114,7 @@
           <select id="directorStyle"><option value="">No style selected</option></select></label>
       </div>
       <div class="director-reference-row">
-        <button class="photo-drop" id="photoDrop" type="button"><img id="photoRef" alt="Selected reference" hidden><span id="photoDropText">Add a reference image<span>Choose or drop · PNG, JPG, WebP</span></span></button>
+        <button class="photo-drop" id="photoDrop" type="button"><img id="photoRef" alt="Selected reference" hidden><span id="photoDropText">Add a reference image<span>Choose or drop — PNG, JPG, WebP</span></span></button>
         <input id="photoFile" type="file" accept="image/png,image/jpeg,image/webp" hidden>
         <div class="director-reference-details"><p id="referenceSelection" role="status" aria-live="polite">No reference image selected.</p><button id="clearPhoto" type="button" hidden>Remove image</button><label for="referenceUse" id="referenceUseLabel" hidden>Use this image to<select id="referenceUse"><option value="match">Match its lighting and mood</option><option value="context">Provide context for my request</option></select></label></div>
       </div>
@@ -147,7 +147,7 @@
   <aside>
     <section class="panel" aria-labelledby="frameTitle"><h2 id="frameTitle">Frame &amp; background</h2><p class="blurb">Choose how much of the product appears. A close-up uses one selected KeyShot part when available.</p>
       <div class="row"><button data-frame="hero">Full product</button><button data-frame="detail">Close-up</button><button data-frame="upper">Upper product</button></div>
-      <label for="frameAspect">Output shape</label><select id="frameAspect"><option value="1.7777777778">Landscape · 16:9</option><option value="1">Square · 1:1</option><option value="0.8">Portrait · 4:5</option></select>
+      <label for="frameAspect">Output shape</label><select id="frameAspect"><option value="1.7777777778">Landscape (16:9)</option><option value="1">Square (1:1)</option><option value="0.8">Portrait (4:5)</option></select>
       <details class="fold" id="environmentFold"><summary>Background &amp; ground</summary><label for="envColor">Backdrop color <input id="envColor" type="color" value="#f5f5f5"></label><label><input id="envShadows" type="checkbox" checked> Ground shadows</label><label><input id="envReflections" type="checkbox"> Ground reflections</label><button id="environmentApply">Apply background</button></details>
     </section>
     <div class="panel">
@@ -176,7 +176,7 @@
       <div class="row" style="margin-top:8px"><button id="vplay">Preview camera move</button><button id="vrender" class="solid">Render video</button><button id="vstop" disabled>Stop render</button></div>
       <div class="row" style="margin-top:8px"><select id="vsize" aria-label="Video dimensions"><option value="1280x720">1280 &times; 720</option><option value="1920x1080">1920 &times; 1080</option><option value="1080x1920">1080 &times; 1920 vertical</option><option value="1080x1080">1080 &times; 1080 square</option><option value="640x360">640 &times; 360 draft</option></select>
         <select id="vfps" aria-label="Video frames per second"><option value="24">24 fps</option><option value="30">30 fps</option><option value="12">12 fps</option></select>
-        <select id="vq" aria-label="Render quality" title="Time to render each frame"><option value="2">Draft · 2 sec/frame</option><option value="6" selected>Good · 6 sec/frame</option><option value="20">High · 20 sec/frame</option><option value="60">Final · 60 sec/frame</option></select></div>
+        <select id="vq" aria-label="Render quality" title="Time to render each frame"><option value="2">Draft (2 sec/frame)</option><option value="6" selected>Good (6 sec/frame)</option><option value="20">High (20 sec/frame)</option><option value="60">Final (60 sec/frame)</option></select></div>
       <div id="rlog" class="mono dim" role="status" aria-live="polite" style="margin-top:8px;white-space:pre-wrap"></div>
       <video id="rvid" controls loop style="display:none;width:100%;margin-top:8px;border:1px solid #fff"></video>
       </details>
@@ -247,7 +247,7 @@
       <details class="fold" id="styleLibraryFold"><summary>Saved styles &amp; references</summary>
         <p class="blurb">Collect images into a named style, then select it beside your Director prompt.</p>
         <label for="styleName">Style name</label><input id="styleName" placeholder="e.g. Brushed metal campaign" maxlength="64">
-        <button type="button" id="styleDrop" class="workspace-drop">Drop or paste reference images <span>PNG, JPEG or WebP · up to 8 at a time</span></button><input id="styleFiles" type="file" accept="image/png,image/jpeg,image/webp" multiple hidden>
+        <button type="button" id="styleDrop" class="workspace-drop">Drop or paste reference images <span>PNG, JPEG or WebP — up to 8 at a time</span></button><input id="styleFiles" type="file" accept="image/png,image/jpeg,image/webp" multiple hidden>
         <div id="styleThumbs" class="workspace-thumbs"></div><div class="row"><button id="styleSave" class="solid" title="Save the selected images to this named style">Save references</button><button id="styleClear" title="Remove the images selected for the next style save">Clear added images</button></div><p id="styleUploadStatus" class="blurb" role="status" aria-live="polite"></p>
         <div id="styles"></div><div id="matchlog" class="mono dim" role="status" aria-live="polite" style="margin-top:8px;white-space:pre-wrap"></div>
       </details>
@@ -293,14 +293,14 @@
       <div class="material-composer">
       <div class="material-graph-preset">
         <span>Texture material</span>
-        <small>Simple Plastic · Base Color · Roughness · Normal or Bump · optional AO</small>
+        <small>Simple Plastic: Base Color, Roughness, Normal or Bump, and optional AO</small>
       </div>
       <label for="materialPrompt">Describe the finish or change</label>
       <textarea id="materialPrompt" rows="3" placeholder="Fine bead-blasted aluminum, cool silver, a soft satin sheen…"></textarea>
       <button type="button" id="materialDrop" class="workspace-drop" aria-label="Add material reference images or a Poliigon texture folder"><span id="materialDropText">Add reference images or a Poliigon folder <small>Drop a texture folder and reference images together, or click to choose images</small></span></button><input id="materialFile" type="file" accept="image/png,image/jpeg,image/webp" multiple hidden>
       <p id="materialDropStatus" class="material-drop-status" role="status" aria-live="polite"></p>
       <div class="material-reference-heading"><span id="materialImageCount" aria-live="polite">No material reference images added</span><button type="button" id="materialClearImages" class="text-button" title="Remove all attached material reference images" hidden>Clear all</button></div><div id="materialThumbs" class="material-reference-grid" aria-label="Material reference images"></div>
-      <div class="material-ratio-row"><label for="materialImageAspect">Image shape for future material generation</label><select id="materialImageAspect" aria-describedby="materialImageAspectNote"><option value="original">Match reference</option><option value="1:1">Square · 1:1</option><option value="4:3">Landscape · 4:3</option><option value="3:2">Landscape · 3:2</option><option value="16:9">Wide · 16:9</option><option value="3:4">Portrait · 3:4</option><option value="2:3">Portrait · 2:3</option><option value="9:16">Tall · 9:16</option></select><small id="materialImageAspectNote">This saves your preference only. Material image generation is not available yet.</small></div>
+      <div class="material-ratio-row"><label for="materialImageAspect">Image shape for future material generation</label><select id="materialImageAspect" aria-describedby="materialImageAspectNote"><option value="original">Match reference</option><option value="1:1">Square (1:1)</option><option value="4:3">Landscape (4:3)</option><option value="3:2">Landscape (3:2)</option><option value="16:9">Wide (16:9)</option><option value="3:4">Portrait (3:4)</option><option value="2:3">Portrait (2:3)</option><option value="9:16">Tall (9:16)</option></select><small id="materialImageAspectNote">This saves your preference only. Material image generation is not available yet.</small></div>
       <div class="row"><button id="materialSend" class="solid">Send to Material Director</button><button id="materialStop" disabled hidden>Stop</button><button id="materialNewChat" title="Clear this conversation and its attached images. Keep the current material task.">New chat</button></div>
       <p class="blurb">Copy workflows leave the source material unchanged. Reference images are sent to your selected AI provider for this request and are not saved as training data.</p>
       </div>
@@ -323,13 +323,14 @@
   <section id="materialTexturePanel" class="workspace-card material-subpanel material-texture-import" role="tabpanel" aria-labelledby="materialTextureTitle" hidden>
     <div class="material-assets-heading"><div><h3 id="materialTextureTitle">Texture sets</h3><p>Import Poliigon maps, review their channels, then build a separate KeyShot material.</p></div><span class="scene-tag">Source files stay unchanged</span></div>
     <div class="texture-import-card">
-      <div class="texture-import-card-heading"><div><h4>Import a Poliigon asset</h4><p>Choose the downloaded folder. Director copies its maps into the working folder; your downloaded files stay unchanged.</p></div><span class="scene-tag">Folder import</span></div>
+      <div class="texture-import-card-heading"><div><h4>Import downloaded materials</h4><p>Choose one asset folder or a parent folder of downloaded assets. Director copies each material separately; your downloads stay unchanged.</p></div><span class="scene-tag">Folder import</span></div>
       <div class="texture-import-flow">
         <div><label for="textureSetName">Texture set name <span class="dim">(optional)</span></label><input id="textureSetName" type="text" placeholder="Use the folder name" maxlength="100"></div>
-        <div class="texture-import-action"><button type="button" id="textureSetChoose" class="solid">Import Poliigon folder</button><input id="textureSetFiles" type="file" multiple webkitdirectory directory hidden accept=".png,.jpg,.jpeg,.webp,.tif,.tiff,.exr,.hdr,.mtlx"></div>
+        <div><label for="textureImportResolution">Preferred resolution</label><select id="textureImportResolution"><option value="4K">4K when available</option><option value="2K">2K when available</option><option value="8K">8K when available</option></select></div>
+        <div class="texture-import-action"><button type="button" id="textureSetChoose" class="solid">Import downloaded folder</button><input id="textureSetFiles" type="file" multiple webkitdirectory directory hidden accept=".png,.jpg,.jpeg,.webp,.tif,.tiff,.exr,.hdr,.mtlx"></div>
       </div>
       <p class="texture-import-note">In Poliigon Download Settings, choose KeyShot as the render engine before downloading. Director reads Base Color, Roughness, Metallic, Normal, Displacement, Bump, Specular, and AO maps; MaterialX is used only as a conversion hint.</p>
-      <p id="textureSetStatus" class="blurb" role="status" aria-live="polite">Choose the downloaded Poliigon folder that contains the maps.</p>
+      <p id="textureSetStatus" class="blurb" role="status" aria-live="polite">Choose a downloaded material folder or a parent folder containing several materials.</p>
     </div>
     <p id="textureBuildStatus" class="blurb" role="status" aria-live="polite"></p>
     <div id="textureSetList" class="material-asset-list" role="list"><p class="chat-empty">No texture sets imported yet.</p></div>
@@ -379,6 +380,7 @@
 </dialog>
 <div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="/texture-import-plan.js"></script>
 <script>
 const $ = id => document.getElementById(id);
 const D2R = Math.PI / 180;
@@ -407,10 +409,10 @@ function renderSceneContext(context) {
   const selection = context.target?.selection || [], facts = document.createElement('div');
   facts.className = 'scene-context-facts';
   const cameraText = [camera.lens_type, Number.isFinite(camera.fov) ? `${camera.fov}° FOV` : null,
-    Number.isFinite(camera.focal) ? `${camera.focal} mm` : null].filter(Boolean).join(' · ');
+    Number.isFinite(camera.focal) ? `${camera.focal} mm` : null].filter(Boolean).join(', ');
   const environmentName = environment.name || environment.hdri_name || active.studio;
-  const environmentText = [environmentName, Number.isFinite(environment.brightness) ? `${environment.brightness.toFixed(2)}×` : null].filter(Boolean).join(' · ');
-  const renderText = [render.engine, Array.isArray(render.image_size) && render.image_size.every(Number.isFinite) ? `${render.image_size[0]} × ${render.image_size[1]}` : null].filter(Boolean).join(' · ');
+  const environmentText = [environmentName, Number.isFinite(environment.brightness) ? `${environment.brightness.toFixed(2)}×` : null].filter(Boolean).join(', ');
+  const renderText = [render.engine, Array.isArray(render.image_size) && render.image_size.every(Number.isFinite) ? `${render.image_size[0]} × ${render.image_size[1]}` : null].filter(Boolean).join(', ');
   for (const fact of [
     sceneContextFact('Scene', scene.display_name || 'Name unavailable'),
     sceneContextFact('Units', scene.unit || 'Unknown'),
@@ -429,11 +431,11 @@ function renderSceneContext(context) {
       const path = Array.isArray(part.path) && part.path.length ? part.path.join(' / ') : (part.name || 'Unnamed part');
       const name = document.createElement('strong'); name.textContent = path;
       row.appendChild(name);
-      if (part.material) { const material = document.createElement('span'); material.textContent = `Material · ${part.material}`; row.appendChild(material); }
-      if (part.render_layer) { const layer = document.createElement('span'); layer.textContent = `Render layer · ${part.render_layer}`; row.appendChild(layer); }
+      if (part.material) { const material = document.createElement('span'); material.textContent = `Material: ${part.material}`; row.appendChild(material); }
+      if (part.render_layer) { const layer = document.createElement('span'); layer.textContent = `Render layer: ${part.render_layer}`; row.appendChild(layer); }
       if (Array.isArray(part.bounds) && part.bounds.length === 2 && part.bounds.every(point => Array.isArray(point) && point.length === 3 && point.every(Number.isFinite))) {
         const span = part.bounds[0].map((low, axis) => Math.abs(part.bounds[1][axis] - low));
-        const bounds = document.createElement('span'); bounds.textContent = `Bounds · ${span.map(value => value.toFixed(2)).join(' × ')} ${scene.unit || 'scene units'}`; row.appendChild(bounds);
+        const bounds = document.createElement('span'); bounds.textContent = `Bounds: ${span.map(value => value.toFixed(2)).join(' × ')} ${scene.unit || 'scene units'}`; row.appendChild(bounds);
       }
       list.appendChild(row);
     }
@@ -584,7 +586,7 @@ async function loadStudio() {
       const result = await api('/api/rig', { name: r.id, mirror: $('mirror').checked, exposure: Math.pow(2, +$('exp').value), useSelectedPart: $('rigSelectedTarget').checked });
       await loadStudio();
       const target = ST.studio.rigSubject?.models?.[0], meter = result.auto?.measurement_scope;
-      lstatus(`${r.label} applied${target ? ` to ${target}` : ''}${meter ? ` · exposure measured from ${meter}` : ''}.`);
+      lstatus(`${r.label} applied${target ? ` to ${target}` : ''}${meter ? `; exposure measured from ${meter}` : ''}.`);
     }); box.appendChild(b); }
   const cur = ST.rigs.find(r => r.id === ST.studio.rig), targetPart = ST.studio.rigSubject?.models?.[0]; $('rigBlurb').textContent = cur ? cur.blurb + (targetPart ? ` Lighting target: ${targetPart}.` : '') : 'Choose a preset. Remove Director lights to clear every light this workspace added.';
   const envMultiplier = Number.isFinite(ST.studio.envMultiplier) ? ST.studio.envMultiplier : 1;
@@ -618,9 +620,9 @@ function renderLights() {
     const tempKelvin = Number.isFinite(l.kelvin) ? l.kelvin : (Number.isFinite(l.profile_kelvin_hint) ? l.profile_kelvin_hint : 5600);
     const tempControl = slider(type === 'ies' ? 'Color temperature override (K)' : 'Color temperature (K)', 'kelvin', { ...l, kelvin: tempKelvin }, 2000, 9000, 50);
     const iesOverride = Number.isFinite(l.kelvin) || Array.isArray(l.rgb);
-    const iesInfo = type === 'ies' && l.ies_asset_id ? `<p class="dim">Fixture: ${htmlText(l.ies_asset_id.split('/').pop())}${l.profile_kelvin_hint ? ` · nominal ${l.profile_kelvin_hint} K` : ''}</p><p class="dim">${iesOverride ? 'Color override active' : 'Using native profile color'} unless changed below.</p>` : '';
+     const iesInfo = type === 'ies' && l.ies_asset_id ? `<p class="dim">Fixture: ${htmlText(l.ies_asset_id.split('/').pop())}${l.profile_kelvin_hint ? `, nominal ${l.profile_kelvin_hint} K` : ''}</p><p class="dim">${iesOverride ? 'Color override active' : 'Using native profile color'} unless changed below.</p>` : '';
     const lightKind = String(l.id || '').startsWith('photo_') ? 'reference' : lightRole(l) || 'Director';
-    d.innerHTML = `<summary><span class="sw"></span><b>${htmlText(lightLabel(l))}</b><span class="dim">${htmlText(typeName + ' · ' + lightKind)}</span><button class="rm sm" data-rm="${htmlText(l.id)}" aria-label="Remove ${htmlText(lightLabel(l))}">Remove</button></summary><div class="body">
+     d.innerHTML = `<summary><span class="sw"></span><b>${htmlText(lightLabel(l))}</b><span class="dim">${htmlText(typeName + ': ' + lightKind)}</span><button class="rm sm" data-rm="${htmlText(l.id)}" aria-label="Remove ${htmlText(lightLabel(l))}">Remove</button></summary><div class="body">
       ${slider('Brightness', 'gain', l, 0.05, 4, 0.05)}${tempControl}${iesInfo}<label>RGB tint <input type="color" aria-label="${htmlText(lightLabel(l))} RGB tint" data-id="${htmlText(l.id)}" data-k="rgb" value="${rgbHex(l.rgb || (Number.isFinite(l.kelvin) ? kelvinRgb(l.kelvin) : l.profile_rgb || kelvinRgb(tempKelvin)))}"></label>${slider('Azimuth', 'az', l, -180, 180, 1)}${slider('Elevation', 'el', l, -10, 90, 1)}
       ${slider('Distance', 'd', l, 1.2, 6, 0.05)}${shapeControls}${beamControls}${visibilityControls}</div>`;
     box.appendChild(d);
@@ -653,10 +655,10 @@ let materialWorkContext = null;
 const materialTabs = [...document.querySelectorAll('[data-material-tab]')];
 materialTabs.forEach((tab, index) => { tab.tabIndex = index === 0 ? 0 : -1; });
 function materialContextLabel(context) {
-  return context.kind === 'texture-set' ? `Texture set · ${context.name}`
-    : context.kind === 'scene-material' ? `Scene material · ${context.name}`
-    : context.kind === 'library-material' ? `KeyShot library · ${context.name}`
-    : `Saved material · ${context.name}`;
+  return context.kind === 'texture-set' ? `Texture set: ${context.name}`
+    : context.kind === 'scene-material' ? `Scene material: ${context.name}`
+    : context.kind === 'library-material' ? `KeyShot library: ${context.name}`
+    : `Saved material: ${context.name}`;
 }
 function selectMaterialContext(context, scrollToChat = true) {
   materialWorkContext = context;
@@ -732,7 +734,7 @@ async function inspectMaterial() {
   for (const channel of graph.root_channels || []) {
     const line = document.createElement('p'); line.className = 'material-readonly-input';
     const type = channel.source_type;
-    line.textContent = `${channel.socket}: ${channel.error ? 'could not inspect this connection' : channel.source_node_id == null ? 'no map connected' : `${type?.display_name || type?.name || 'node'} · ${channel.source_node_id}${channel.enabled === false ? ' (disabled)' : ''}`} — ${channel.meaning}`;
+    line.textContent = `${channel.socket}: ${channel.error ? 'could not inspect this connection' : channel.source_node_id == null ? 'no map connected' : `${type?.display_name || type?.name || 'node'} (${channel.source_node_id})${channel.enabled === false ? ' (disabled)' : ''}`} — ${channel.meaning}`;
     box.appendChild(line);
   }
   const undoScope = document.createElement('p'); undoScope.className = 'material-readonly-input';
@@ -792,7 +794,7 @@ async function inspectMaterial() {
     if (node.type.name === '__root') continue;
     if (node === colorNode) continue;
     const section = document.createElement('div'); section.style.cssText = 'padding:9px 0;border-top:1px solid #ddd';
-    const heading = document.createElement('b'); heading.textContent = `${node.type.display_name || node.type.name} · ${node.id}`; section.appendChild(heading);
+    const heading = document.createElement('b'); heading.textContent = `${node.type.display_name || node.type.name} (${node.id})`; section.appendChild(heading);
     for (const p of node.parameters) {
       const incoming = graph.edges.find(edge => edge.target_node_id === node.id && edge.target_parameter === p.name);
       if (incoming) {
@@ -913,7 +915,7 @@ function refreshMaterialMapChoices() {
   select.innerHTML = '<option value="">Choose an imported map</option>';
   for (const set of materialTextureSets) for (const file of set.files.filter(item => ['base-color','roughness','normal','bump'].includes(item.role))) {
     const option = document.createElement('option'); option.value = `${set.id}/${file.name}`;
-    option.dataset.path = `${set.path}/${file.name}`; option.textContent = `${set.name} · ${file.role}: ${file.name}`; select.appendChild(option);
+    option.dataset.path = `${set.path}/${file.name}`; option.textContent = `${set.name}: ${file.role} — ${file.name}`; select.appendChild(option);
   }
 }
 $('materialCopyMake').onclick = e => busy(e.target, async () => {
@@ -953,7 +955,7 @@ async function loadMaterialAssets() {
     const item = document.createElement('article'); item.className = 'material-asset'; item.setAttribute('role', 'listitem');
     const info = document.createElement('div'); info.className = 'material-asset-info';
     const title = document.createElement('b'); title.textContent = asset.name.replace(/\.kmp$/i, '');
-    const meta = document.createElement('span'); meta.textContent = `${(asset.size / 1024).toFixed(0)} KB · ${new Date(asset.modified).toLocaleString()}`;
+    const meta = document.createElement('span'); meta.textContent = `${(asset.size / 1024).toFixed(0)} KB, modified ${new Date(asset.modified).toLocaleString()}`;
     const location = document.createElement('details'); location.className = 'texture-set-folder';
     const locationSummary = document.createElement('summary'); locationSummary.textContent = 'Show file location';
     const pathLine = document.createElement('code'); pathLine.textContent = asset.path;
@@ -979,7 +981,7 @@ async function loadTextureSets() {
     const item = document.createElement('article'); item.className = 'material-asset texture-set'; item.setAttribute('role', 'listitem');
     const info = document.createElement('div'); info.className = 'material-asset-info';
     const title = document.createElement('b'); title.textContent = set.name;
-    const meta = document.createElement('span'); meta.textContent = `${set.files.length} source files · ${(set.bytes / 1048576).toFixed(1)} MB · imported ${new Date(set.imported).toLocaleString()}`;
+    const meta = document.createElement('span'); meta.textContent = `${set.files.length} source files, ${(set.bytes / 1048576).toFixed(1)} MB, imported ${new Date(set.imported).toLocaleString()}`;
     const roles = document.createElement('span'); roles.className = 'texture-set-roles';
     const reviewCount = set.files.filter(file => String(file.role).startsWith('unassigned')).length;
     const previewCount = set.files.filter(file => String(file.role).startsWith('preview')).length;
@@ -988,7 +990,7 @@ async function loadTextureSets() {
         .filter(file => !String(file.role).startsWith('unassigned') && !String(file.role).startsWith('preview') && !String(file.role).startsWith('MaterialX metadata'))
         .map(file => String(file.role).split('-').map(word => word ? word[0].toUpperCase() + word.slice(1) : word).join(' '))
     )];
-    roles.textContent = `Maps found: ${mapTypes.length ? mapTypes.join(', ') : 'none'}${reviewCount ? ` · ${reviewCount} file${reviewCount === 1 ? '' : 's'} need review` : ''}${previewCount ? ` · ${previewCount} preview image${previewCount === 1 ? '' : 's'}` : ''}`;
+    roles.textContent = `Maps found: ${mapTypes.length ? mapTypes.join(', ') : 'none'}${reviewCount ? `; ${reviewCount} file${reviewCount === 1 ? '' : 's'} need review` : ''}${previewCount ? `; ${previewCount} preview image${previewCount === 1 ? '' : 's'}` : ''}`;
     const inventory = document.createElement('details'); inventory.className = 'texture-set-inventory';
     const inventorySummary = document.createElement('summary'); inventorySummary.textContent = `Show source files (${set.files.length})`;
     const inventoryList = document.createElement('ul');
@@ -1005,16 +1007,16 @@ async function loadTextureSets() {
     info.append(title, meta, roles);
     if (set.missing?.length) {
       const missing = document.createElement('span'); missing.className = 'texture-set-roles';
-      missing.textContent = `Import incomplete · Missing ${set.missing.length} map${set.missing.length === 1 ? '' : 's'}: ${set.missing.join(', ')}`;
+      missing.textContent = `Import incomplete. Missing ${set.missing.length} map${set.missing.length === 1 ? '' : 's'}: ${set.missing.join(', ')}`;
       info.append(missing);
     }
     if (set.materialx) {
     const recipe = document.createElement('span'); recipe.className = 'texture-set-roles';
-      const links = set.materialx.connections.map(edge => `${edge.input} ← ${edge.source}`);
+      const links = set.materialx.connections.map(edge => `${edge.input} from ${edge.source}`);
       const disabled = [];
       if (set.materialx.values.AO_Mix_Strength === 0) disabled.push('AO blend 0');
       if (set.materialx.values.displacementScale === 0) disabled.push('displacement scale 0');
-      recipe.textContent = `MaterialX conversion hints (not applied directly): ${links.join(' · ') || 'no map connections found'}${disabled.length ? ` · ${disabled.join(' · ')}` : ''}`;
+      recipe.textContent = `MaterialX conversion hints (not applied directly): ${links.join(', ') || 'no map connections found'}${disabled.length ? `. ${disabled.join(', ')}` : ''}`;
       recipe.title = set.materialx.note || 'MaterialX files help identify map connections but are not applied directly.';
       info.append(recipe);
     }
@@ -1028,15 +1030,35 @@ async function loadTextureSets() {
     info.append(graphGuide);
     const supportedRoles = new Set(['base-color','roughness','normal','bump']);
     const canBuild = set.files.some(file => supportedRoles.has(file.role));
-    const options = document.createElement('div'); options.className = 'row texture-set-ao';
-    const choice = (label, checked = true) => {
-      const wrap = document.createElement('label'); wrap.className = 'texture-set-roles';
-      const input = document.createElement('input'); input.type = 'checkbox'; input.checked = checked;
-      wrap.append(input, document.createTextNode(` ${label}`)); options.append(wrap); return input;
+    const review = document.createElement('div'); review.className = 'texture-map-review';
+    const reviewTitle = document.createElement('b'); reviewTitle.textContent = 'Choose maps for this material'; review.append(reviewTitle);
+    const reviewGrid = document.createElement('div'); reviewGrid.className = 'texture-map-review-grid';
+    const mapChoice = (label, roles) => {
+      const files = set.files.filter(file => roles.includes(file.role));
+      if (!files.length) return null;
+      const field = document.createElement('label'); field.textContent = label;
+      const select = document.createElement('select'); select.setAttribute('aria-label', `${label} for ${set.name}`);
+      const none = document.createElement('option'); none.value = ''; none.textContent = 'Do not use'; select.append(none);
+      for (const file of files) {
+        const option = document.createElement('option'); option.value = file.name;
+        const dimensions = file.metadata?.width && file.metadata?.height ? `, ${file.metadata.width}×${file.metadata.height}` : '';
+        option.textContent = `${file.name}${dimensions}`; select.append(option);
+      }
+      select.value = files[0].name; field.append(select); reviewGrid.append(field);
+      return { select, files };
     };
-    const ao = set.files.some(file => file.role === 'ambient-occlusion')
-      ? choice('Blend Ambient Occlusion into Base Color') : null;
-    if (options.childNodes.length) info.append(options);
+    const colorChoice = mapChoice('Base Color', ['base-color']);
+    const roughnessChoice = mapChoice('Roughness', ['roughness']);
+    const detailChoice = mapChoice('Surface detail', ['normal', 'bump']);
+    const aoChoice = mapChoice('AO blend', ['ambient-occlusion']);
+    const tileField = document.createElement('label'); tileField.textContent = 'Texture tile size (mm)';
+    const tileInput = document.createElement('input'); tileInput.type = 'number'; tileInput.min = '1'; tileInput.max = '2000'; tileInput.step = '0.1'; tileInput.value = '41';
+    tileInput.setAttribute('aria-label', `Texture tile size for ${set.name} in millimeters`);
+    tileField.append(tileInput); reviewGrid.append(tileField);
+    review.append(reviewGrid);
+    const reviewNote = document.createElement('span'); reviewNote.className = 'texture-set-roles';
+    reviewNote.textContent = 'Choose one file per channel. Normal and Bump share the Surface detail input. Tile size applies equally to every chosen map.';
+    review.append(reviewNote); info.append(review);
     const build = document.createElement('button'); build.type = 'button'; build.className = 'solid'; build.textContent = 'Build KeyShot material';
     build.disabled = !canBuild;
     build.title = set.missing?.length ? 'Builds from supported maps that are available; missing source maps are reported.'
@@ -1046,14 +1068,22 @@ async function loadTextureSets() {
       build.disabled = true; build.textContent = 'Building…';
       $('textureBuildStatus').textContent = `Building ${set.name} in the connected KeyShot scene…`;
       try {
-        const result = await api('/api/material/build-from-texture-set', { texture_set_id: set.id, use_ao: !!ao?.checked });
+        const tileSize = Number(tileInput.value);
+        if (!tileInput.value || !Number.isFinite(tileSize) || tileSize < 1 || tileSize > 2000)
+          throw new Error('Enter a texture tile size between 1 and 2000 mm.');
+        const selectedFiles = [colorChoice, roughnessChoice, detailChoice, aoChoice].filter(Boolean).map(choice =>
+          choice.files.find(file => file.name === choice.select.value)).filter(Boolean).map(file => ({ name: file.name, role: file.role }));
+        if (!selectedFiles.some(file => supportedRoles.has(file.role)))
+          throw new Error('Choose at least one Base Color, Roughness, Normal, or Bump map.');
+        const result = await api('/api/material/build-from-texture-set', { texture_set_id: set.id,
+          selected_files: selectedFiles, tile_size_mm: tileSize, use_ao: !!aoChoice?.select.value });
         await loadMaterials(result.name); await loadMaterialAssets();
         selectMaterialContext({ kind: 'scene-material', name: result.name });
         const channelNames = { 'base-color':'Base Color', 'ambient-occlusion':'AO blend', roughness:'Roughness',
           metallic:'Metallic', normal:'Normal map', bump:'Bump map', displacement:'Displacement geometry' };
         const used = result.used_files.map(file => channelNames[file.role] || file.role).join(', ');
         const skipped = result.skipped_files.map(file => `${file.name}${file.reason ? ` (${file.reason})` : ''}`);
-        $('textureBuildStatus').textContent = `Built ${result.name} as a simple Plastic material with ${used}. Saved it to KeyShot’s Material Library and as a .kmp material file.${skipped.length ? ` Skipped: ${skipped.join(', ')}.` : ''} The material is not assigned to a part. Review “KeyShot graph steps after building” on this set, then drag the material from the library onto your chosen part. File: ${result.path}`;
+        $('textureBuildStatus').textContent = `Built ${result.name} as a simple Plastic material with ${used} at ${result.tile_size_mm} mm tile size. Saved it to KeyShot’s Material Library and as a .kmp material file.${skipped.length ? ` Skipped: ${skipped.join(', ')}.` : ''} The material is not assigned to a part. Review “KeyShot graph steps after building” on this set, then drag the material from the library onto your chosen part. File: ${result.path}${result.receipt ? `. Build receipt: ${result.receipt}` : ''}`;
         $('materialStatus').textContent = `Built ${result.name}. It is saved but not assigned to a part. Apply it from KeyShot’s Material Library.`;
       } catch (error) {
         $('textureBuildStatus').textContent = `${error.message} Your imported source maps are unchanged. Check the KeyShot connection and try again.`;
@@ -1073,7 +1103,8 @@ async function uploadTextureFile(file, id) {
   const response = await fetch(`/api/material/texture-file?id=${encodeURIComponent(id)}&name=${encodeURIComponent(file.name)}`, { method:'POST', headers:{'Content-Type':'application/octet-stream'}, body:file });
   const result = await response.json(); if (!response.ok) throw new Error(result.error || `Could not import ${file.name}.`); return result;
 }
-$('textureSetChoose').onclick = () => $('textureSetFiles').click();
+let textureImportRunning = false;
+$('textureSetChoose').onclick = () => { if (!textureImportRunning) $('textureSetFiles').click(); };
 async function importTextureFiles(files, { resumeId = '', folderName = '', setName = null, statusTarget = null } = {}) {
   const showStatus = message => { $('textureSetStatus').textContent = message; if (statusTarget) $(statusTarget).textContent = message; };
   if (!files.length) return null;
@@ -1081,8 +1112,11 @@ async function importTextureFiles(files, { resumeId = '', folderName = '', setNa
   folderName = folderName || files[0].webkitRelativePath?.split('/')[0] || '';
   if (!resumeId && folderName) {
     const incoming = new Set(files.map(file => file.name.toLowerCase()));
-    const partial = materialTextureSets.find(set => set.name === folderName && set.files.some(file => incoming.has(file.name.toLowerCase())) && set.missing?.length);
-    if (partial) resumeId = partial.id;
+    const sameName = setName || folderName;
+    const reusable = materialTextureSets.find(set => set.name === sameName && set.files.some(file => incoming.has(file.name.toLowerCase()))
+      && set.files.filter(file => !file.derived && incoming.has(file.name.toLowerCase()))
+        .every(saved => files.some(file => file.name.toLowerCase() === saved.name.toLowerCase() && file.size === saved.bytes)));
+    if (reusable) resumeId = reusable.id;
   }
   const existing = materialTextureSets.find(set => set.id === resumeId);
   const mismatched = files.find(file => existing?.files.some(saved => saved.name.toLowerCase() === file.name.toLowerCase() && saved.bytes !== file.size));
@@ -1104,7 +1138,7 @@ async function importTextureFiles(files, { resumeId = '', folderName = '', setNa
     const created = existing || await api('/api/material/texture-sets', { name: setName || $('textureSetName').value.trim() || folderName || 'Imported texture set' });
     const receipts = [];
     for (let i = 0; i < pending.length; i++) {
-      const file = pending[i]; showStatus(`Copying texture maps ${i + 1} of ${pending.length} · ${file.name}`);
+      const file = pending[i]; showStatus(`Copying texture map ${i + 1} of ${pending.length}: ${file.name}`);
       const receipt = await uploadTextureFile(file, created.id);
       if (receipt.name !== file.name || receipt.bytes !== file.size) throw new Error(`${file.name} was received with an unexpected size. Refresh the set list to inspect files already copied.`);
       receipts.push(receipt);
@@ -1118,7 +1152,7 @@ async function importTextureFiles(files, { resumeId = '', folderName = '', setNa
     const detectedText = detected.length ? `Detected channels: ${detected.join(', ')}.` : 'No channel names were recognized; check the imported filenames below.';
     const message = importedSet.missing?.length
       ? `Copied ${receipts.length} file${receipts.length === 1 ? '' : 's'}, but this set still needs ${importedSet.missing.join(', ')}. Drop the complete Poliigon folder again to finish it.`
-      : `Verified in Material Lab: ${receipts.length} file${receipts.length === 1 ? '' : 's'} copied and visible in this set. ${detectedText} The maps are ready to edit in Material Director; build a KeyShot material to create a graph in the connected scene.`;
+      : `Verified in Material Lab: ${receipts.length} file${receipts.length === 1 ? '' : 's'} copied and visible in this set. ${detectedText} Review the maps below, then build a KeyShot material in the connected scene.`;
     showStatus(message);
     selectMaterialContext({ kind: 'texture-set', id: importedSet.id, name: importedSet.name, files: importedSet.files.map(file => ({ name: file.name, role: file.role })), missing: importedSet.missing || [] }, false);
     return { set: importedSet, imported: receipts.length, channels: detected };
@@ -1131,7 +1165,28 @@ async function importTextureFiles(files, { resumeId = '', folderName = '', setNa
 $('textureSetFiles').onchange = event => {
   const files = [...event.target.files]; event.target.value = '';
   const resumeId = event.target.dataset.setId || ''; event.target.dataset.setId = '';
-  importTextureFiles(files, { resumeId }).catch(error => toast(error.message));
+  if (textureImportRunning) return;
+  if (resumeId) return importTextureFiles(files, { resumeId }).catch(error => toast(error.message));
+  const plan = TextureImportPlan.plan(files, { targetResolution: $('textureImportResolution').value });
+  if (!plan.groups.length) { $('textureSetStatus').textContent = 'No supported texture maps were found in that folder.'; return; }
+  const imported = [], problems = [];
+  textureImportRunning = true;
+  (async () => {
+    $('textureSetChoose').disabled = true;
+    try {
+      for (let i = 0; i < plan.groups.length; i++) {
+        const group = plan.groups[i];
+        if (group.issue) { problems.push(group.issue); continue; }
+        $('textureSetStatus').textContent = `Importing material ${i + 1} of ${plan.groups.length}: ${group.name}${group.resolution ? ` (${group.resolution})` : ''}…`;
+        const result = await importTextureFiles(group.files, { folderName: group.name,
+          setName: plan.groups.length === 1 ? ($('textureSetName').value.trim() || group.name) : group.name });
+        $('textureSetChoose').disabled = true;
+        if (result) imported.push(result); else problems.push(`${group.name} needs attention`);
+      }
+      const skipped = plan.ignored + plan.groups.reduce((total, group) => total + group.skipped, 0);
+      $('textureSetStatus').textContent = `${imported.length} material${imported.length === 1 ? '' : 's'} imported and verified.${skipped ? ` ${skipped} preview, duplicate, unsupported, or alternate-resolution file${skipped === 1 ? '' : 's'} skipped.` : ''}${problems.length ? ` ${problems.length} need attention: ${problems.join('; ')}.` : ''} Source downloads remain unchanged.`;
+    } finally { textureImportRunning = false; $('textureSetChoose').disabled = false; }
+  })().catch(error => { $('textureSetStatus').textContent = error.message; });
 };
 function droppedEntryFile(entry) {
   return new Promise((resolve, reject) => entry.file(resolve, reject));
@@ -1202,7 +1257,7 @@ async function loadStyles() {
   if (!list.length) box.innerHTML = '<div class="dim" style="margin-top:8px">No saved styles yet. Add reference images above and save them with a name.</div>';
   for (const s of list) {
     const d = document.createElement('div'); d.className = 'style';
-    d.innerHTML = `<div class="row"><b>${htmlText(s.name)}</b><span class="dim">${s.images} reference image${s.images === 1 ? '' : 's'}${s.analyzed ? ' · analyzed: ' + s.looks.map(l => htmlText(l.id) + ' (' + l.count + ')').join(', ') : s.images ? ' · ready to analyze' : ' · add images to use'}</span></div>
+     d.innerHTML = `<div class="row"><b>${htmlText(s.name)}</b><span class="dim">${s.images} reference image${s.images === 1 ? '' : 's'}${s.analyzed ? ', analyzed: ' + s.looks.map(l => htmlText(l.id) + ' (' + l.count + ')').join(', ') : s.images ? ', ready to analyze' : ', add images to use'}</span></div>
       <div class="style-previews">${(s.previews || []).map(file => `<img loading="lazy" alt="${htmlText(s.name)} reference" src="/api/styles/image?name=${encodeURIComponent(s.name)}&file=${encodeURIComponent(file)}">`).join('')}</div>
       <div class="row" style="margin-top:6px"><button class="sm" data-an="${htmlText(s.name)}" ${s.images ? '' : 'disabled'}>Analyze style</button><button class="sm" data-use="${htmlText(s.name)}" ${s.images ? '' : 'disabled'}>Select for Director</button></div>`;
     box.appendChild(d);
@@ -1269,7 +1324,7 @@ function renderMaterialImages() {
   });
   $('materialImageCount').textContent = materialImages.length ? `${materialImages.length} of ${MAX_MATERIAL_IMAGES} material reference images` : 'No material reference images added';
   $('materialClearImages').hidden = materialImages.length === 0;
-  $('materialDropText').innerHTML = materialImages.length ? `Add reference images or a Poliigon folder <small>${MAX_MATERIAL_IMAGES - materialImages.length} reference images remaining · drop a texture folder and loose reference images together</small>` : 'Add reference images or a Poliigon folder <small>Drop a texture folder and reference images together, or click to choose images</small>';
+  $('materialDropText').innerHTML = materialImages.length ? `Add reference images or a Poliigon folder <small>${MAX_MATERIAL_IMAGES - materialImages.length} reference images remaining. Drop a texture folder and loose reference images together.</small>` : 'Add reference images or a Poliigon folder <small>Drop a texture folder and reference images together, or click to choose images</small>';
 }
 async function readMaterialImage(file) {
   const url = URL.createObjectURL(file), img = new Image();
@@ -1338,7 +1393,7 @@ $('materialDrop').ondrop = async e => {
     if (failedCount) summary.push(`${failedCount} texture import${failedCount === 1 ? '' : 's'} need attention`);
     const missingNames = [...new Set(textureResults.filter(Boolean).flatMap(result => result.set.missing || []))];
     const readyNote = [importedCount ? 'The imported set is now the chat target.' : '', missingNames.length ? `Still needed: ${missingNames.join(', ')}.` : '', addedReferences ? 'Reference pictures will be sent with your next prompt.' : ''].filter(Boolean).join(' ');
-    status.textContent = summary.length ? `${summary.join(' · ')}. ${failedCount ? status.textContent : readyNote}` : 'No supported references or texture maps were added.';
+    status.textContent = summary.length ? `${summary.join('. ')}. ${failedCount ? status.textContent : readyNote}` : 'No supported references or texture maps were added.';
   } catch (error) { status.textContent = error.message; }
 };
 $('materialClearImages').onclick = () => { materialImages = []; renderMaterialImages(); };
@@ -1348,7 +1403,7 @@ function materialLine(kind, value) { const p = document.createElement('p'); p.cl
 async function sendMaterialPrompt() {
   const text = $('materialPrompt').value.trim(); if ((!text && !materialImages.length) || materialRunning) return;
   materialRunning = true; $('materialSend').disabled = true; $('materialStop').disabled = false; $('materialStop').hidden = false; $('materialNewChat').disabled = true;
-  const countLabel = materialImages.length ? ` · ${materialImages.length} reference image${materialImages.length === 1 ? '' : 's'}` : '';
+  const countLabel = materialImages.length ? ` (${materialImages.length} reference image${materialImages.length === 1 ? '' : 's'})` : '';
   materialLine('user', (text || 'Use these references as the material direction.') + countLabel);
   try {
     await api('/api/material/prompt', { text: text || 'Create an unassigned material inspired by these reference images.', images: materialImages.map(item => item.data), context: materialWorkContext, graph_preset: 'simple_plastic', imageAspectRatio: materialImageAspect.value });
@@ -1357,7 +1412,7 @@ async function sendMaterialPrompt() {
       await new Promise(r => setTimeout(r, 700)); const j = await api('/api/material/prompt?since=' + since); since = j.next;
       for (const ev of j.events) {
         if (ev.type === 'text') materialLine('assistant', ev.text);
-        else if (ev.type === 'result') materialLine(ev.ok ? 'status' : 'error', `${ev.ok ? 'Done' : 'Could not finish'} · ${ev.summary}`);
+        else if (ev.type === 'result') materialLine(ev.ok ? 'status' : 'error', `${ev.ok ? 'Done' : 'Could not finish'}: ${ev.summary}`);
         else if (ev.type === 'error') materialLine('error', ev.message);
       }
       if (j.done) break;
@@ -1383,7 +1438,7 @@ async function sendPrompt(text) {
   const styleName = $('directorStyle').value;
   const directMatch = matchReference && attached.length === 0 && !styleName;
   if ((!text && !attached.length && !reference && !styleName) || running) return;
-  const label = [text || (matchReference ? 'Match this look' : 'Use selected reference'), reference ? 'reference image' : '', styleName ? `style: ${styleName}` : ''].filter(Boolean).join(' · ');
+  const label = [text || (matchReference ? 'Match this look' : 'Use selected reference'), reference ? 'reference image' : '', styleName ? `style: ${styleName}` : ''].filter(Boolean).join(' — ');
   add('msg u', label); $('examples').innerHTML = '';
   if (directMatch) {
     setRunning(true);
@@ -1474,7 +1529,7 @@ async function pollJob(url, el, onTick) {
       catch (error) {
         failures++;
         if (failures >= 8) throw new Error('Director stopped responding while checking this job. It may still be running; reconnect, then use Stop before starting another.');
-        el.textContent = 'Director is not responding · retrying status (' + failures + '/8)…';
+        el.textContent = 'Director is not responding; retrying status (' + failures + '/8)…';
         continue;
       }
       const lines = Array.isArray(j.log) ? j.log : [];
@@ -1590,7 +1645,7 @@ loadConnect();
 /* ---------- settings ---------- */
 async function loadConfig() {
   CFG = await api('/api/config');
-  $('mode').textContent = CFG.engine === 'cli' ? (CFG.provider === 'codex' ? 'ChatGPT · Codex CLI' + (CFG.codexModel ? ' · ' + CFG.codexModel : '') : 'Claude · signed-in CLI') : CFG.engine === 'api' ? 'Claude · API key · ' + CFG.model : 'Offline mode · open Settings to connect Claude or ChatGPT';
+  $('mode').textContent = CFG.engine === 'cli' ? (CFG.provider === 'codex' ? 'ChatGPT: Codex CLI' + (CFG.codexModel ? ', ' + CFG.codexModel : '') : 'Claude: signed-in CLI') : CFG.engine === 'api' ? 'Claude: API key, ' + CFG.model : 'Offline mode. Open Settings to connect Claude or ChatGPT';
   $('model').value = CFG.model; $('engine').value = CFG.want || 'auto';
   $('codexModel').value = CFG.codexModel || '';
   if (CFG.cliPath && !$('cliPath').value) $('cliPath').value = CFG.cliPath; if (CFG.codexPath && !$('codexPath').value) $('codexPath').value = CFG.codexPath;
@@ -1610,7 +1665,7 @@ $('closeSettings').onclick = () => $('settings').close();
 $('disconnectBtn').onclick = e => busy(e.target, async () => { const result = await api('/api/bridge/stop', {}); toast(result.note || (result.ok ? 'Bridge stopped.' : 'The bridge stop was not confirmed.')); });
 $('restartBtn').onclick = async () => { try { await api('/api/quit', { restart: true }); } catch { /* server already going down */ } toast('Restarting... this page reconnects by itself'); $('settings').close(); };
 $('quitBtn').onclick = async () => { if (!confirm('Quit KeyShot Director? Start it again from its app folder.')) return; try { await api('/api/quit', {}); } catch { /* going down */ } document.body.innerHTML = '<div style="padding:40px;font:14px Helvetica">KeyShot Director has quit. Close this tab. Start it again from its app folder.</div>'; };
-$('saveSettings').onclick = async () => { const b = { model: $('model').value, codexModel: $('codexModel').value.trim(), engine: $('engine').value, cliPath: $('cliPath').value.trim(), codexPath: $('codexPath').value.trim() }; if ($('apikey').value.trim()) b.apiKey = $('apikey').value; await api('/api/config', b); await loadConfig(); $('settings').close(); toast(CFG.engine === 'offline' ? 'Saved. Still in offline mode.' : 'Saved. Prompts will use ' + (CFG.provider === 'codex' ? 'ChatGPT (Codex)' + (CFG.codexModel ? ' · ' + CFG.codexModel : ' default model') + '.' : 'Claude.')); };
+ $('saveSettings').onclick = async () => { const b = { model: $('model').value, codexModel: $('codexModel').value.trim(), engine: $('engine').value, cliPath: $('cliPath').value.trim(), codexPath: $('codexPath').value.trim() }; if ($('apikey').value.trim()) b.apiKey = $('apikey').value; await api('/api/config', b); await loadConfig(); $('settings').close(); toast(CFG.engine === 'offline' ? 'Saved. Still in offline mode.' : 'Saved. Prompts will use ' + (CFG.provider === 'codex' ? 'ChatGPT (Codex)' + (CFG.codexModel ? ', ' + CFG.codexModel : ' default model') + '.' : 'Claude.')); };
 
 /* ---------- connection, preview loop ---------- */
 let booted = false;
@@ -1643,7 +1698,7 @@ async function tick() {
     sceneContextRefresh.disabled = !s.bridge.alive;
     if (!s.bridge.alive) $('sceneContextStatus').textContent = $('sceneContextOutput').dataset.loaded ? 'Disconnected. The last snapshot may be out of date.' : 'Connect KeyShot to inspect';
     else if (!sceneContextRefreshing && $('sceneContextStatus').textContent === 'Connect KeyShot to inspect') $('sceneContextStatus').textContent = 'Ready to inspect';
-    else if (!sceneContextRefreshing && $('sceneContextStatus').textContent.startsWith('Disconnected')) $('sceneContextStatus').textContent = 'Connection restored · refresh the snapshot';
+     else if (!sceneContextRefreshing && $('sceneContextStatus').textContent.startsWith('Disconnected')) $('sceneContextStatus').textContent = 'Connection restored; refresh the snapshot';
     $('connectQuick').hidden = s.bridge.alive;
     if (!s.bridge.alive && !tick.opened) { tick.opened = true; $('connectFold').open = true; } if (s.bridge.alive) tick.opened = false;
     if (s.bridge.alive && !booted) { booted = true; await syncPose(); loadMotions().catch(() => {}); $('recipe').value = $('recipe').value || ''; }

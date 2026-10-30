@@ -1,5 +1,7 @@
 # Reference-photo lighting
 
+> Capability statements in this file are partly historical. The current per-control evidence labels are in [Lighting capability and evidence record](LIGHTING_CAPABILITY_RECORD.md), and the acceptance loop is described in [Measured refinement](MEASURED_REFINEMENT.md).
+
 Open KeyShot Director at `http://localhost:8787`. With the product open and bridge connected:
 
 1. Set a starting angle that shows the product as intended.

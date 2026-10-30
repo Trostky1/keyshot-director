@@ -13,6 +13,7 @@ const { resizeJpeg } = require('./image-tools');
 const textureSets = require('./material-textures');
 const textureEdit = require('./texture-edit');
 const { compileTexturePlan } = require('./material-core');
+const { selectMaterialBuildInputs } = require('./material-build-input');
 const { RIGS, ENV_RIGS, buildRig, toPos } = require('./rigs');
 const lightingPlaybooks = require('./lighting-playbooks');
 const { decode, productStats } = require('./png');
@@ -22,6 +23,10 @@ const { createLightingLab } = require('./lighting-lab');
 const video = require('./video');
 const janitor = require('./janitor');
 const photo = require('./photo');
+const { describeLight } = require('./light-spec');
+const { createReceiptStore } = require('./job-receipt');
+const { createReconstructor } = require('./reconstruction');
+const crypto = require('crypto');
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const lightingLab = createLightingLab({ send, heartbeat, SHOTS });
 const MATERIAL_PACKAGE_DIR = path.resolve(__dirname, '..', 'materials');
@@ -115,7 +120,7 @@ function resolveMaterialContext(raw) {
 }
 
 // ---- studio lighting state (what we believe is in KeyShot; the bridge keeps the real registry) ----
-const studio = { rig: null, exposure: 1, frameAz: 0, mirror: false, subject: null, rigSubject: null, env: null, envBaseBrightness: null, envMultiplier: 1, lights: {}, target: null, envScales: false, lastAuto: null };
+const studio = { rig: null, exposure: 1, frameAz: 0, mirror: false, subject: null, rigSubject: null, env: null, envBaseBrightness: null, envMultiplier: 1, lights: {}, target: null, envScales: false, lastAuto: null, powerMode: 'artistic' };
 let stagingBusy = false;
 
 // Measure the product's own brightness in the live viewport (see png.js productStats).
@@ -265,33 +270,10 @@ function selectedSubjectFromContext(context, product) {
   return { ...product, models: [selected[0].name || selected[0].path?.join(' / ') || 'Selected part'], min, max,
     size, span, center: min.map((value, axis) => (value + max[axis]) / 2) };
 }
-function lightSpec(l, context = {}) {          // stage-frame light -> concrete bridge spec
-  const s = context.subject || studio.rigSubject || studio.subject;
-  const target = Array.isArray(context.target) ? context.target : s.center;
-  const scale = Number.isFinite(context.sourceScale) ? context.sourceScale : 1;
-  const d = l.d * scale, dist = d * s.span;
-  const scaled = { ...l, d };
-  const type = ['area', 'point', 'ies', 'spotlight'].includes(l.type) ? l.type : 'area';
-  const spec = {
-    id: l.id, type, pos: toPos(target, studio.frameAz, scaled, s.span), target,
-    size: [l.w * scale * s.span, l.h * scale * s.span],
-    ...(type !== 'ies' || Number.isFinite(l.kelvin) ? { kelvin: l.kelvin } : {}),
-    ...(Array.isArray(l.rgb) ? { rgb: l.rgb } : {}),
-    radius: Number.isFinite(l.radius) ? l.radius : 0,
-    angle: Number.isFinite(l.angle) ? l.angle : 45,
-    falloff: Number.isFinite(l.falloff) ? l.falloff : 0.5,
-    constant_output: l.constant_output !== false,
-    roll: l.roll || 0, visible_refl: l.refl, visible_eye: l.eye, visible_shadows: l.shadows ?? true,
-  };
-  if (type === 'ies') {
-    spec.multiplier = +((Number.isFinite(l.multiplier) ? l.multiplier : (l.gain ?? 1)) * studio.exposure).toFixed(4);
-    spec.ies_asset_id = l.ies_asset_id;
-    if (Number.isInteger(l.axis)) spec.axis = l.axis;
-  } else {
-    spec.power = +(l.E * (l.gain ?? 1) * dist * dist * studio.exposure).toFixed(2);
-  }
-  return spec;
+function lightSpecDetail(l, context = {}) {   // stage-frame light -> concrete bridge spec + the power model that produced it
+  return describeLight(l, context, { subject: studio.rigSubject || studio.subject, frameAz: studio.frameAz, exposure: studio.exposure, powerMode: studio.powerMode });
 }
+const lightSpec = (l, context = {}) => lightSpecDetail(l, context).spec;
 // Coalesce rapid edits to one light (slider drags): at most one bridge call in flight per light, latest values win.
 const lightJobs = new Map();
 function editLight(id, patch) {
@@ -387,6 +369,7 @@ async function applyRig(name, opts = {}) {
     return { rig: name, lights: [], env: studio.env };
   }
   studio.exposure = opts.exposure ?? 1;
+  studio.powerMode = 'artistic';             // preset rigs are exposure-normalized by design
   studio.mirror = !!opts.mirror;
   studio.frameAz = opts.frameAz ?? (cur ? cur.az : (base ? base.az : 0));
   const rig = buildRig(name, subject, { frameAz: studio.frameAz, exposure: studio.exposure, mirror: studio.mirror });
@@ -433,7 +416,21 @@ async function applyPose(p) {
 }
 
 let currentPhotoSnapshot = null;
-const photoDirector = photo.createDirector({
+// Identity of the open scene for recovery: the saved name plus the product bounds (Director's own lights are excluded from
+// those bounds), so it stays stable while this job adds lights but changes when a different scene or product is open.
+async function photoSceneIdentity(snapshot) {
+  const subject = snapshot?.subject || await ensureSubject(true);
+  const context = snapshot?.scene_context || await send('scene_context', {}, 15000).catch(() => null);
+  const round = v => Array.isArray(v) ? v.map(x => Math.round(x * 100) / 100) : null;
+  return crypto.createHash('sha256').update(JSON.stringify({ name: context?.scene?.display_name ?? null,
+    models: [...(subject.models || [])].sort(), min: round(subject.min), max: round(subject.max) })).digest('hex').slice(0, 32);
+}
+async function sceneInventory() {
+  const listed = await send('lights_list');
+  return Object.keys(listed || {}).map(id => ({ kind: 'light', id, name: id }));
+}
+let lastLightingApply = null;   // subject, framing and light ids of the newest applied rig, for lightweight updates
+const sharedSceneDeps = {
   async snapshot({ signal } = {}) {
     signal?.throwIfAborted();
     await syncFromKeyShot();
@@ -450,7 +447,7 @@ const photoDirector = photo.createDirector({
     const r = await send('lighting_ies_assets', { limit: 40 }, 30000);
     return r.installed_files?.assets || [];
   },
-  async lightingEvidence(previousRunId = null, { aspect = 16 / 9, snapshot, signal } = {}) {
+  async lightingEvidence(previousRunId = null, { aspect = 16 / 9, snapshot, mask = null, signal } = {}) {
     signal?.throwIfAborted();
     const camera = await readPose();
     const dimensions = photo.captureDimensions(aspect);
@@ -460,7 +457,7 @@ const photoDirector = photo.createDirector({
       ? await lightingLab.replay({ run_id: previousRunId })
       : await lightingLab.run({ operation_id: 'lighting.capture_diagnostic_passes', inputs: {
         passes: ['clown', 'direct', 'reflection', 'shadow'], ...dimensions, secs: 2,
-        render_engine: 'current', measurement_target
+        render_engine: 'current', measurement_target, ...(mask ? { mask } : {})
       } });
     signal?.throwIfAborted();
     if (record.status !== 'verified_shape') throw new Error(record.error || 'KeyShot diagnostic capture did not pass its state checks.');
@@ -484,9 +481,11 @@ const photoDirector = photo.createDirector({
     const existing = await send('lights_list');
     check(); await send('light_visibility', { ids: Object.keys(existing).filter(id => !ids.includes(id)), visible: false }, 30000);
     studio.lights = {};
-    Object.assign(studio, { rig: 'reference_photo', exposure: 1, frameAz: camera.az, mirror: false, subject, rigSubject: subject, envScales: false, envMultiplier: 1 });
+    Object.assign(studio, { rig: 'reference_photo', exposure: 1, frameAz: camera.az, mirror: false, subject, rigSubject: subject, envScales: false, envMultiplier: 1, powerMode: plan.power_mode || 'artistic' });
+    const placedLights = [];
     const { background, ...environment } = plan.environment;
     studio.envBaseBrightness = Math.max(0.000001, Number(environment.brightness) || 1);
+    opts.declareOwned?.({ kind: 'environment', id: 'CC_Photo_' + opts.id });
     check(); studio.env = await send('env_set', { ...environment, director_name: 'CC_Photo_' + opts.id, bg: background.map(v => Math.round(255 * Math.pow(v / 255, 2.2))) }, 30000);
     for (const [i, source] of plan.lights.entries()) {
       check();
@@ -494,11 +493,16 @@ const photoDirector = photo.createDirector({
       if (!currentPhotoSnapshot.createdIds.includes(l.id)) currentPhotoSnapshot.createdIds.push(l.id);
       const prior = existing[l.id];
       if (prior && (prior.spec?.type || 'area') !== l.type) await send('light_remove', { id: l.id }, 30000);
-      check(); await send('light_set', lightSpec(l, { subject, target: lightFrame.target, sourceScale: lightFrame.sourceScale }), 30000);
+      const detail = lightSpecDetail(l, { subject, target: lightFrame.target, sourceScale: lightFrame.sourceScale, powerMode: plan.power_mode });
+      opts.declareOwned?.({ kind: 'light', id: l.id });   // recorded before creation so an interrupted job still knows what it may have made
+      check(); const placed = await send('light_set', detail.spec, 30000);
       check(); await send('light_visibility', { ids: [l.id], visible: true }, 30000); studio.lights[l.id] = l;
+      placedLights.push({ id: l.id, type: l.type, created: placed?.created === true, material: placed?.material || null, power: detail.power,
+        aim_mm: detail.spec.target, visible_refl: detail.spec.visible_refl, visible_eye: detail.spec.visible_eye, visible_shadows: detail.spec.visible_shadows });
     }
     check(); if (opts.framing) await applyPose(lightFrame.pose);
-    return { lighting_frame: { aim_point_mm: lightFrame.target, source_scale: lightFrame.sourceScale,
+    lastLightingApply = { subject, lightFrame, ids };
+    return { power_mode: studio.powerMode, lights: placedLights, lighting_frame: { aim_point_mm: lightFrame.target, source_scale: lightFrame.sourceScale,
       view_distance_mm: lightFrame.viewDistance, full_product_fit_distance_mm: lightFrame.fullProductDistance,
       camera_framed: !!opts.framing } };
   },
@@ -510,10 +514,39 @@ const photoDirector = photo.createDirector({
     latestShot = fs.readFileSync(file); preview.last = Date.now();
   },
   refresh() { preview.wanted = true; },
+};
+const photoDirector = photo.createDirector({ ...sharedSceneDeps,
+  receipts: createReceiptStore({ root: path.join(__dirname, '..', 'references', '_photos') }),
+  sceneIdentity: photoSceneIdentity, inventory: sceneInventory,
+  blockers: () => reconstructionReceipts.unresolved() });
+
+// Single-view reconstruction (milestone 1). Shares the photo adapter's snapshot, apply, restore and capture; adds a lightweight
+// per-evaluation update, baseline facts, camera access and an explicit native save. NOT yet exercised against live KeyShot.
+const reconstructionRoot = path.join(__dirname, '..', 'references', '_reconstruct');
+const reconstructionReceipts = createReceiptStore({ root: reconstructionRoot });
+const photoReceiptsReader = createReceiptStore({ root: path.join(__dirname, '..', 'references', '_photos') });
+const reconstructor = createReconstructor({ ...sharedSceneDeps, root: reconstructionRoot, receipts: reconstructionReceipts,
+  blockers: () => photoReceiptsReader.unresolved(), sceneIdentity: photoSceneIdentity, inventory: sceneInventory,
+  readPose, applyPose: async pose => { await applyPose(pose); },
+  async baseline(snapshot) {
+    const ctx = snapshot.scene_context || {};
+    return { scene: ctx.scene || null, camera: ctx.camera || null, lights: Object.keys(snapshot.lights || {}).length, environment: snapshot.environment ? { name: snapshot.environment.name ?? null } : null,
+      image_style: null, render_settings: null, note: 'Image style and render options have no reader in the bridge yet; they are recorded as unknown, not assumed.' };
+  },
+  async update(plan, opts) {   // after the first full apply, an evaluation only needs the lights re-set
+    const ctx = lastLightingApply; if (!ctx) throw new Error('No applied lighting to update.');
+    for (const [i, source] of plan.lights.entries()) {
+      opts.signal?.throwIfAborted();
+      const l = { ...source, id: ctx.ids[i], radius: source.radius * ctx.subject.span * ctx.lightFrame.sourceScale };
+      await send('light_set', lightSpec(l, { subject: ctx.subject, target: ctx.lightFrame.target, sourceScale: ctx.lightFrame.sourceScale, powerMode: plan.power_mode }), 30000);
+      studio.lights[l.id] = l;
+    }
+  },
+  async saveScene(targets) { return send('scene_save', targets, 180000); },
 });
 function assertSceneAvailable(includePrompt = true) {
   if (!heartbeat().alive) throw Object.assign(new Error(NOT_CONNECTED), { status: 409 });
-  if (stagingBusy || photoDirector.status().running || playing || matchJob.running || videoJob.running || renderJob.running || (includePrompt && promptJob && !promptJob.done))
+  if (stagingBusy || photoDirector.status().running || reconstructor.status().running || playing || matchJob.running || videoJob.running || renderJob.running || (includePrompt && promptJob && !promptJob.done))
     throw Object.assign(new Error('Another scene job is running. Stop it or wait before changing the scene.'), { status: 409 });
 }
 async function stagingOperation(op, input = {}) {
@@ -529,7 +562,7 @@ async function stagingOperation(op, input = {}) {
 const preview = { live: false, budget: 300, used: 0, minGapMs: 3000, last: 0, wanted: false };
 let previewTimer = null;
 async function grabPreview() {
-  if (!heartbeat().alive || stagingBusy || shotBusy || renderJob.running || photoDirector.status().running || matchJob.running || videoJob.running || (promptJob && !promptJob.done) || preview.used >= preview.budget) return false;
+  if (!heartbeat().alive || stagingBusy || shotBusy || renderJob.running || photoDirector.status().running || reconstructor.status().running || matchJob.running || videoJob.running || (promptJob && !promptJob.done) || preview.used >= preview.budget) return false;
   shotBusy = true; preview.used++;
   try { const r = await send('screenshot', { name: 'live', width: 960, secs: 1.0 }, 30000); latestShot = fs.readFileSync(r.path); preview.last = Date.now(); return true; }
   catch { return false; } finally { shotBusy = false; }
@@ -809,7 +842,7 @@ const actions = {
       ...edited, path: path.join(set.path, imported.name), name: imported.name, role: imported.role };
   },
   async build_material_from_texture_set({ texture_set_id, name, graph_preset, use_ao = true,
-    use_displacement = false, geometry_template }) {
+    use_displacement = false, geometry_template, selected_files, tile_size_mm = 41 }) {
     assertSceneAvailable(false);
     const set = textureSets.listTextureSets().find(item => item.id === String(texture_set_id || ''));
     if (!set) throw new Error('That texture set is no longer available. Refresh Material Lab and try again.');
@@ -829,11 +862,10 @@ const actions = {
       const ending = ` (${suffix++})`;
       materialName = baseName.slice(0, 80 - ending.length).trimEnd() + ending;
     }
-    if (typeof use_ao !== 'boolean') throw new Error('AO selection must be on or off.');
     if (use_displacement || geometry_template) throw new Error('Geometry displacement is paused for reliability. Remove that option and build the supported Plastic maps.');
+    const { recipeFiles } = selectMaterialBuildInputs(set.files, { selected_files, use_ao, tile_size_mm });
     const plan = await compileTexturePlan({ name: materialName,
-      files: set.files.filter(file => (use_ao || file.role !== 'ambient-occlusion') &&
-        (supportedRoles.has(file.role) || file.role === 'ambient-occlusion')).map(file => ({ name: file.name, role: file.role })) });
+      files: recipeFiles.map(file => ({ name: file.name, role: file.role })) });
     const filesByName = new Map(set.files.map(file => [file.name, file]));
     const selected = plan.maps.map(map => {
       const file = filesByName.get(map.path);
@@ -844,7 +876,7 @@ const actions = {
     try {
       await send('material_create', { name: materialName }, 20000);
       wiring = await send('material_texture_apply', { name: materialName, model: 'Plastic',
-        maps: selected.map(({ role, path: filePath }) => ({ role, path: filePath })) }, 30000);
+        tile_size_mm, maps: selected.map(({ role, path: filePath }) => ({ role, path: filePath })) }, 30000);
     } catch (error) {
       try { await send('material_discard', { name: materialName }, 15000); } catch { /* preserve the material if KeyShot says it is no longer safe to discard */ }
       throw new Error(`KeyShot could not build this texture set: ${error.message}`);
@@ -862,7 +894,8 @@ const actions = {
       reason: file.role === 'metallic' ? 'Metallic layering is paused' :
         file.role === 'ambient-occlusion' && !use_ao ? 'AO blend not enabled' :
         file.role === 'displacement' ? 'Geometry displacement is paused' :
-        plan.skipped.find(item => item.name === file.name)?.reason || 'No supported connection' })),
+        plan.skipped.find(item => item.name === file.name)?.reason ||
+        (supportedRoles.has(file.role) || file.role === 'ambient-occlusion' ? 'Not selected for this build' : 'No supported connection') })),
       ...(set.missing || []).map(name => ({ name, role: null, reason: 'Source file is missing; the material was built from available maps.' }))];
     const channels = wiring.maps.map(map => map.role).join(', ');
     const manualGraphSteps = [
@@ -870,8 +903,20 @@ const actions = {
       'Check the texture mapping scale and placement on the intended model.'
     ];
     const graphPresetName = 'Simple Plastic';
+    const receipt = { version: 1, built_at: new Date().toISOString(), texture_set_id: set.id,
+      material_name: materialName, model: 'Plastic', tile_size_mm: wiring.tile_size_mm,
+      used_files: usedFiles, skipped_files: skipped, missing_files: set.missing || [],
+      graph: wiring, package_path: saved.path, library: saved.library, assignment: 'unassigned' };
+    let receiptPath = null;
+    try {
+      const receiptDir = path.join(MATERIAL_PACKAGE_DIR, 'build-receipts');
+      fs.mkdirSync(receiptDir, { recursive: true });
+      receiptPath = path.join(receiptDir, `${set.id}-${Date.now()}-${require('crypto').randomBytes(3).toString('hex')}.json`);
+      fs.writeFileSync(receiptPath, JSON.stringify(receipt, null, 2), { flag: 'wx' });
+    } catch (error) { console.warn('Material built, but its receipt could not be saved:', error.message); }
     return { summary: `${materialName} built as an unassigned ${wiring.model || plan.material.model} material using the ${graphPresetName} preset from ${channels}; saved to the KeyShot library and as a portable KMP.`,
       name: materialName, path: saved.path, library: saved.library, material: wiring, used_files: usedFiles, skipped_files: skipped,
+      tile_size_mm: wiring.tile_size_mm, receipt: receiptPath,
       graph_preset,
       manual_graph_steps: manualGraphSteps,
       recipe: plan,
@@ -997,6 +1042,21 @@ const server = http.createServer(async (req, res) => {
     if (lightingRun && req.method === 'GET') return json(res, 200, lightingLab.getRun(lightingRun[1]));
     if (url.pathname === '/api/photo' && req.method === 'GET') return json(res, 200, photoDirector.status());
     if (url.pathname === '/api/photo' && req.method === 'POST') { const b = await body(req); assertSceneAvailable(); return json(res, 202, await photoDirector.start(b)); }
+    if (url.pathname === '/api/reconstruct' && req.method === 'GET') return json(res, 200, reconstructor.status());
+    if (url.pathname === '/api/reconstruct' && req.method === 'POST') { const b = await body(req); assertSceneAvailable(); return json(res, 202, await reconstructor.start(b)); }
+    if (url.pathname === '/api/reconstruct/stop' && req.method === 'POST') { reconstructor.stop(); return json(res, 200, { stopping: true, note: 'The current KeyShot render finishes before restoration.' }); }
+    if (url.pathname === '/api/reconstruct/camera' && req.method === 'POST') { const b = await body(req); return json(res, 200, reconstructor.confirmCamera(b.accept === true)); }
+    if (url.pathname === '/api/reconstruct/undo' && req.method === 'POST') { assertSceneAvailable(); return json(res, 200, await reconstructor.undo()); }
+    if (url.pathname === '/api/reconstruct/deliver' && req.method === 'POST') { const b = await body(req); assertSceneAvailable(); return json(res, 200, await reconstructor.deliver(b)); }
+    if (url.pathname === '/api/reconstruct/recovery' && req.method === 'GET') return json(res, 200, await reconstructor.recovery());
+    if (url.pathname === '/api/reconstruct/recovery' && req.method === 'POST') { const b = await body(req); assertSceneAvailable(); return json(res, 200, await reconstructor.resolveRecovery(String(b.job_id || ''), String(b.action || ''))); }
+    if (url.pathname === '/api/reconstruct/file' && req.method === 'GET') {
+      const file = reconstructor.file(url.searchParams.get('id'), url.searchParams.get('slot'));
+      if (!fs.existsSync(file)) return json(res, 404, { error: 'Not available.' });
+      res.writeHead(200, { 'Content-Type': file.endsWith('.json') ? 'application/json' : 'image/png', 'Cache-Control': 'no-store' }); return res.end(fs.readFileSync(file));
+    }
+    if (url.pathname === '/api/photo/recovery' && req.method === 'GET') return json(res, 200, await photoDirector.recovery());
+    if (url.pathname === '/api/photo/recovery' && req.method === 'POST') { const b = await body(req); assertSceneAvailable(); return json(res, 200, await photoDirector.resolveRecovery(String(b.job_id || ''), String(b.action || ''))); }
     if (url.pathname === '/api/photo/stop' && req.method === 'POST') { photoDirector.stop(); return json(res, 200, { stopping: true, note: 'The current KeyShot render finishes before restoration.' }); }
     if (url.pathname === '/api/photo/undo' && req.method === 'POST') { assertSceneAvailable(); return json(res, 200, await photoDirector.undo()); }
     if (url.pathname === '/api/photo/file' && req.method === 'GET') {
@@ -1231,7 +1291,7 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/material/build-from-texture-set' && req.method === 'POST') {
       const b = await body(req), result = await actions.build_material_from_texture_set({ texture_set_id: b.texture_set_id, name: b.name,
         graph_preset: b.graph_preset, use_ao: b.use_ao !== false, use_displacement: b.use_displacement === true,
-        geometry_template: b.geometry_template });
+        geometry_template: b.geometry_template, selected_files: b.selected_files, tile_size_mm: b.tile_size_mm === undefined ? 41 : b.tile_size_mm });
       return json(res, 201, result);
     }
     if (url.pathname === '/api/material/edit-texture-map' && req.method === 'POST') {
