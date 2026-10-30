@@ -18,6 +18,84 @@ KeyShot Studio 2026.2 EDU scripting (live GUI only; headless scripting is unavai
 | `proposed` | An engineering proposal or an offline-only result (including the synthetic renderer); not a demonstrated KeyShot result. |
 | `open` | Insufficient evidence; a version-specific live check is required. |
 
+## Native light capability matrix
+
+One row per source family, one column per capability. **R** recorded live (earlier controlled KeyShot experiment, not rerun), **S** source-confirmed (code and offline tests only), **D** documented by KeyShot only, **O** open. Nothing in this matrix was newly verified in KeyShot for this record, and "R" means the specific scene, parameter and result in the cited notes, not general reliability.
+
+| Source | Create | Independent position | Independent aim | Output / power | Color | Size, radius or spread | Readback | Edit in place | Ownership | Cleanup |
+|---|---|---|---|---|---|---|---|---|---|---|
+| Area | R | R | R | R | S | R | R | R | S | R |
+| Point | R | R | S | R | S | R | R | R | S | R |
+| Spotlight | R | S | R | R | S | R | R | R | S | R |
+| IES | R | S | R | S | R | O | R | S | S | R |
+| Planar | O | O | O | D | D | D | O | O | O | O |
+| Environment (HDRI file, brightness, rotation, background) | S | S | O | S | R | O | S | S | S | S |
+
+Cell notes and the probe that would close each open cell:
+
+| Source | Capability | Label | Note |
+|---|---|---|---|
+| Area | Create | R | Imported carrier panel with an Area material; placement self-check against computed corners. |
+| Area | Independent position | R | Position and size set per light; self-check error recorded. |
+| Area | Independent aim | R | Panel normal faces a per-light target; the photo plan now exposes a per-light offset (offline-tested only). |
+| Area | Output / power | R | Lumen sweep 12k/60k/120k with readback. Physical (fixed-flux) and artistic modes differ offline only. |
+| Area | Color | S | Kelvin or RGB written and read back in code; no dedicated colour calibration recorded. |
+| Area | Size, radius or spread | R | Rectangular carrier width/height; disk, strip and custom carriers unprobed. |
+| Area | Readback | R | Power and visibility flags read back from the graph. |
+| Area | Edit in place | R | Same-ID replay at 60k worked. |
+| Area | Ownership | S | Registry holds created node and geometry ids; adoption after a bridge restart still matches a name prefix. |
+| Area | Cleanup | R | Node deletion leaves the carrier mesh and material; broad cleanup is refused; reopening a saved checkpoint resets a disposable scene only. |
+| Point | Create | R | Typed create with readback on a disposable scene. |
+| Point | Independent position | R | Position is the carrier centre; contribution measured. |
+| Point | Independent aim | S | Not directional; no aim control exists or is needed. |
+| Point | Output / power | R | Power read back; flux-versus-distance behaviour not measured (physical mode proposed). |
+| Point | Color | S | As Area. |
+| Point | Size, radius or spread | R | Radius read back; response across product scale not measured. |
+| Point | Readback | R | Graph parameters read back. |
+| Point | Edit in place | R | Typed update with readback. |
+| Point | Ownership | S | As Area. |
+| Point | Cleanup | R | Checkpoint reopening on a disposable scene only. |
+| Spotlight | Create | R | Typed create with beam-parameter readback. |
+| Spotlight | Independent position | S | Per-light position in code. |
+| Spotlight | Independent aim | R | Local -Y emission axis produced a measurable beam; +Z did not. |
+| Spotlight | Output / power | R | Power read back; constant-output behaviour across angle unmeasured. |
+| Spotlight | Color | S | As Area. |
+| Spotlight | Size, radius or spread | R | Angle, falloff and constant-output flag read back; footprint not measured. |
+| Spotlight | Readback | R | Read back. |
+| Spotlight | Edit in place | R | Typed update. |
+| Spotlight | Ownership | S | As Area. |
+| Spotlight | Cleanup | R | Checkpoint reopening only. |
+| IES | Create | R | K72 profile loaded and rendered; 31 profile pairs catalogued. |
+| IES | Independent position | S | Carrier position per light. |
+| IES | Independent aim | R | Aimed with the Spotlight convention; the six axis enum values were exercised without a universal mapping. |
+| IES | Output / power | S | Planner gain now reaches the native multiplier (offline trace); the live plan-to-render round trip is open. |
+| IES | Color | R | Native profile colour read back and preserved unless overridden. |
+| IES | Size, radius or spread | O | Rectangular width/length and shape modes unprobed. Probe: sweep each with a known asymmetric profile. |
+| IES | Readback | R | Profile colour and multiplier read back. |
+| IES | Edit in place | S | Multiplier and axis writable in code. |
+| IES | Ownership | S | Profile material ownership tracked. |
+| IES | Cleanup | R | Checkpoint reopening only. |
+| Planar | Create | O | No lux shader constant or library asset found; the Area panel is not a Planar light. Probe: graph discovery on a disposable scene. |
+| Planar | Independent position | O | Probe after construction is established. |
+| Planar | Independent aim | O | Probe after construction is established. |
+| Planar | Output / power | D | Documented in the manual; not verified on 2026.2. |
+| Planar | Color | D | Documented, including textured colour and alpha. |
+| Planar | Size, radius or spread | D | Documented width, height and separate spread angles. |
+| Planar | Readback | O | Probe after construction. |
+| Planar | Edit in place | O | Probe after construction. |
+| Planar | Ownership | O | Probe after construction. |
+| Planar | Cleanup | O | Probe after construction. |
+| Environment (HDRI file, brightness, rotation, background) | Create | S | An isolated CC_Photo environment is created and the original restored by snapshot. |
+| Environment (HDRI file, brightness, rotation, background) | Independent position | S | Rotation set in code. |
+| Environment (HDRI file, brightness, rotation, background) | Independent aim | O | No directional control; HDRI pins are the spatial control and no scripting path is known. Probe: inventory the Env surface for pin methods. |
+| Environment (HDRI file, brightness, rotation, background) | Output / power | S | Brightness set in code; KeyShot rejects exactly zero (0.000001 used). |
+| Environment (HDRI file, brightness, rotation, background) | Color | R | Background colour is treated as linear and gamma-encoded. |
+| Environment (HDRI file, brightness, rotation, background) | Size, radius or spread | O | Size, height and contrast controls exist on the Env object but are not set by Director. Probe: set each on a disposable copy and read it back. |
+| Environment (HDRI file, brightness, rotation, background) | Readback | S | env_info snapshot. |
+| Environment (HDRI file, brightness, rotation, background) | Edit in place | S | env_set in place. |
+| Environment (HDRI file, brightness, rotation, background) | Ownership | S | CC_Photo_ environment named per job. |
+| Environment (HDRI file, brightness, rotation, background) | Cleanup | S | env_restore from snapshot; restoration of pins cannot be offered because pins are not scriptable. |
+
 ## Light source families
 
 ### Area
@@ -108,6 +186,7 @@ In the photo plan grammar: **no**.
 |---|---|---|---|---|
 | `recovery.session_undo` | One-level session undo (camera checkpoint, hidden originals, environment restore) | `source-confirmed` | server/photo.js; server/server.js restore | Existing behavior, fixture-tested. Live restoration checks exist only as the opt-in tools/test_photo_live.js. |
 | `recovery.receipts` | Persistent job receipt (identity, initial state, owned items, last accepted recipe, operation receipts, restore status) | `source-confirmed` | server/job-receipt.js; server/photo.js recovery() | Written before the first scene change; ownership comes only from recorded items; restore requires the recorded scene identity. Restart behavior against a real scene is untested. E14. |
+| `delivery.native_save` | Explicit native save: KSP package and/or BIP scene to new paths | `source-confirmed` | bridge/cc_deliver.py; server/reconstruction.js deliver | Uses documented lux.savePackage and lux.saveFile; the bridge op is tested against a fake lux only. Whether saveFile retargets the open scene, whether the package bundles every resource, and the reopen round trip are unverified, so a BIP save requires an acknowledgement. R13. |
 | `recovery.node_ids` | Native node ids in receipts | `open` | bridge op_light_set | The bridge tracks created node ids but does not return them; receipts currently record light ids and materials. |
 | `recovery.direct_removal` | Direct removal of imported light carriers | `recorded-live-evidence` | bridge op_light_remove | KeyShot retained the carrier mesh after node deletion in the disposable scene; broad cleanup is refused. Saved-checkpoint reopening is a disposable-scene reset only. E01. |
 
@@ -119,15 +198,16 @@ In the photo plan grammar: **no**.
 | `measure.shared_mask` | One mask applied to the reference and the render | `source-confirmed` | server/image-mask.js; photo-refinement referenceMetrics; lighting-evidence masked_beauty | Replaces the asymmetry between all-pixel reference statistics and Clown-product render statistics. Correspondence assumes the camera is aligned (E05); manual polygon/rect masks only, no automatic segmentation. E06. |
 | `measure.colour_contract` | Linear EXR and display-space pixels kept separate | `source-confirmed` | server/colour-contract.js | The KeyShot linear-to-PNG transform is an sRGB-like assumption, not measured. E04. |
 | `measure.repeat_noise` | Repeat noise distributions per metric | `open` | server/photo-refinement.js decision | Current gate uses a single repeat difference; distributions are not measured on a real scene. E04. |
-| `measure.camera_alignment` | Camera alignment helper (landmarks, silhouette overlay, reprojection check) | `proposed` | server/camera-alignment.js | Validated on injected fixtures only; KeyShot projection conventions against a rendered calibration target are untested. Not wired into the app. E05. |
+| `measure.camera_alignment` | Camera alignment helper (landmarks, silhouette overlay, reprojection check) | `proposed` | server/camera-alignment.js | Used by the reconstruction session camera stage (verify or propose; a correction is applied only after confirmation). Validated on injected fixtures only; KeyShot projection conventions against a rendered calibration target are untested. No UI. E05. |
 
 ## Search and reconstruction
 
 | Id | Capability | Evidence | Where | Basis |
 |---|---|---|---|---|
 | `search.vision_loop` | Bounded vision refinement (default 2 attempts, 12 captures, 480 s) | `source-confirmed` | server/photo.js; server/photo-refinement.js | Accepts a candidate only when the named objective improves by more than max(0.005, 2x repeat difference). A heuristic, not a similarity percentage. |
-| `search.objectives` | Multi-component objective (highlight shapes, shadow direction, regional tone/colour, sharpness) | `proposed` | server/lighting-objectives.js | Adversarial-fixture tests on synthetic images only; not wired into the app. E07. |
-| `search.optimizer` | Coordinate and Powell-style derivative-free search with repeat-noise gating | `proposed` | server/derivative-free.js; tools/reconstruction_harness.js | Compared with the existing director loop at equal render budget on a synthetic renderer with a stand-in vision policy (see docs/RELEASE_NOTES_REFERENCE_LIGHTING.md for the table). Coordinate search beat the stand-in; the Powell-style variant did worse than coordinate search. Not wired into the app. E07, E13. |
+| `search.objectives` | Multi-component objective (highlight shapes, shadow direction, regional tone/colour, sharpness) | `proposed` | server/lighting-objectives.js | Used by the reconstruction session, separately for the product outline and its surroundings. Adversarial-fixture tests on synthetic images only. E07. |
+| `search.optimizer` | Coordinate and Powell-style derivative-free search with repeat-noise gating | `proposed` | server/derivative-free.js; tools/reconstruction_harness.js | Compared with the existing director loop at equal render budget on a synthetic renderer with a stand-in vision policy (see docs/RELEASE_NOTES_REFERENCE_LIGHTING.md for the table). Coordinate search beat the stand-in; the Powell-style variant did worse than coordinate search. Drives the reconstruction session (40-evaluation ceiling, time limit, early stop on measured noise). E07, E13. |
+| `search.reconstruction_session` | Single-view reconstruction session (baseline, camera lock, bounded light fit, diagnosis, before/after) | `source-confirmed` | server/reconstruction.js; server/server.js /api/reconstruct | Tested end to end against injected adapters and a synthetic renderer (docs/RECONSTRUCTION_MILESTONE_1.md). The KeyShot adapter loads but has never been run against a live scene; render time and noise there are unmeasured. No UI yet. |
 | `search.light_basis` | Light-response basis (NNLS over per-source linear renders) | `proposed` | server/light-basis.js | Synthetic renderer only; tone mapping and clipping break it by construction. E09. |
 
 ## Research experiments

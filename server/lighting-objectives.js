@@ -29,8 +29,18 @@ function lumaImage(img, mask) {
 function quantile(sorted, f) { return sorted[Math.min(sorted.length - 1, Math.max(0, Math.floor(f * sorted.length)))]; }
 
 // ---- highlights -------------------------------------------------------------------------------------------------
-function highlightBlobs(img, mask = null, { maxBlobs = 6 } = {}) {
-  const { l, idx } = lumaImage(img, mask);
+// 3x3 box smoothing so render noise cannot create or split tiny highlight components.
+function smooth(l, w, h) {
+  const out = new Float32Array(l.length);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    let s = 0, n = 0;
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const xx = x + dx, yy = y + dy; if (xx >= 0 && yy >= 0 && xx < w && yy < h) { s += l[yy * w + xx]; n++; } }
+    out[y * w + x] = s / n;
+  }
+  return out;
+}
+function highlightBlobs(img, mask = null, { maxBlobs = 6, minShare = 0.08 } = {}) {
+  const base = lumaImage(img, mask), idx = base.idx, l = smooth(base.l, img.w, img.h);
   if (!idx.length) return { blobs: [], threshold: null, area_pixels: 0 };
   const sorted = idx.map(i => l[i]).sort((a, b) => a - b);
   const median = quantile(sorted, 0.5), top = quantile(sorted, 0.99);
@@ -46,7 +56,7 @@ function highlightBlobs(img, mask = null, { maxBlobs = 6 } = {}) {
       for (const j of [x > 0 ? i - 1 : -1, x < img.w - 1 ? i + 1 : -1, y > 0 ? i - img.w : -1, y < img.h - 1 ? i + img.w : -1])
         if (j >= 0 && !seen[j] && (!mask || mask[j]) && l[j] >= threshold) { seen[j] = 1; stack.push(j); }
     }
-    if (pixels.length < Math.max(3, idx.length * 0.001)) continue;
+    if (pixels.length < Math.max(5, idx.length * 0.002)) continue;
     let mass = 0, cx = 0, cy = 0;
     for (const i of pixels) { const m = l[i] - threshold + 1e-3; mass += m; cx += m * ((i % img.w) + 0.5); cy += m * (((i / img.w) | 0) + 0.5); }
     cx /= mass; cy /= mass;
@@ -55,7 +65,8 @@ function highlightBlobs(img, mask = null, { maxBlobs = 6 } = {}) {
       extent: { x: Math.sqrt(vx / pixels.length) / img.w + 1e-4, y: Math.sqrt(vy / pixels.length) / img.h + 1e-4 } });
   }
   blobs.sort((a, b) => b.mass - a.mass);
-  const kept = blobs.slice(0, maxBlobs), total = kept.reduce((n, b) => n + b.mass, 0) || 1;
+  const all = blobs.slice(0, maxBlobs), allMass = all.reduce((n, b) => n + b.mass, 0) || 1;
+  const kept = all.filter(b => b.mass / allMass >= minShare), total = kept.reduce((n, b) => n + b.mass, 0) || 1;   // drop specks that are a sliver of the total highlight energy
   return { blobs: kept.map(b => ({ ...b, mass_share: b.mass / total })), threshold, area_pixels: idx.length };
 }
 function highlightLoss(ref, rnd) {
@@ -198,4 +209,25 @@ function score(reference, render, { mask = null, weights = {}, referenceDescript
   return compare(referenceDescription || describe(reference, mask), describe(render, mask), weights);
 }
 
-module.exports = { WEIGHTS, fromPng, describe, compare, score, highlightBlobs, highlightLoss, shadowDescriptor, shadowLoss, regionGrid, regionLosses, edgeSharpness, rho };
+// ---- product / background separation ------------------------------------------------------------------------------
+// The product outline mask and its complement are scored separately, because a better backdrop must not hide a worse product
+// (and the reverse). Weights differ: highlights and sharpness only mean something on the product; cast shadow and gradient
+// mostly live on the surroundings.
+const BACKGROUND_WEIGHTS = Object.freeze({ highlights: 0, shadow: 0.4, tone_structure: 0, multiscale_tone: 0.3, exposure: 0.2, colour_variation: 0.1, sharpness: 0, global_tint: 0 });
+function scoreRegions(reference, render, { productMask, productWeight = 0.7, weights = {} } = {}) {
+  assertImage(reference, 'reference'); assertImage(render, 'render');
+  if (reference.w !== render.w || reference.h !== render.h) throw new Error('Reference and render must be compared at the same size.');
+  if (!productMask || productMask.length !== reference.w * reference.h) throw new Error('A product mask on the comparison grid is required.');
+  const inverse = Uint8Array.from(productMask, v => v ? 0 : 1);
+  const count = m => m.reduce((n, v) => n + v, 0), total = reference.w * reference.h;
+  const productShare = count(productMask) / total;
+  if (productShare < 0.01) throw new Error('The product outline covers under 1% of the frame.');
+  const product = compare(describe(reference, productMask), describe(render, productMask), weights);
+  const backgroundUsable = 1 - productShare >= 0.05;
+  const background = backgroundUsable ? compare(describe(reference, inverse), describe(render, inverse), { ...BACKGROUND_WEIGHTS }) : null;
+  const combined = background ? productWeight * product.total + (1 - productWeight) * background.total : product.total;
+  return { combined, product, background, product_share: productShare,
+    note: 'Lower is better. Region scores are for ranking candidates against one reference; they are not a similarity percentage.' };
+}
+
+module.exports = { WEIGHTS, BACKGROUND_WEIGHTS, scoreRegions, fromPng, describe, compare, score, highlightBlobs, highlightLoss, shadowDescriptor, shadowLoss, regionGrid, regionLosses, edgeSharpness, rho };

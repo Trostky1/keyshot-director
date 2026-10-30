@@ -82,6 +82,13 @@ function forEachMasked(mask, rect, w, h, step, fn) {
     }
 }
 
+// Rasterize the mask onto a w x h grid covering the normalized rectangle (default: the whole frame). 1 = inside the mask.
+function rasterize(mask, w, h, rect = { x0: 0, y0: 0, x1: 1, y1: 1 }) {
+  const out = new Uint8Array(w * h);
+  forEachMasked(mask, rect, w, h, 1, (x, y) => { out[y * w + x] = 1; });
+  return out;
+}
+
 // Identical statistics for both sides. samples: [{ u, v, l, rgb: [r, g, b] }] in display space, 0..1.
 function maskedStatistics(samples) {
   if (!samples.length) return null;
@@ -95,4 +102,4 @@ function maskedStatistics(samples) {
     highlight: spread < 0.02 ? null : { x: bright.reduce((n, s) => n + s.u, 0) / bright.length, y: bright.reduce((n, s) => n + s.v, 0) / bright.length } };
 }
 
-module.exports = { normalizeMask, contains, inPolygon, polygonArea, forEachMasked, maskedStatistics, MAX_POINTS, MAX_EXCLUDES };
+module.exports = { normalizeMask, contains, inPolygon, polygonArea, forEachMasked, rasterize, maskedStatistics, MAX_POINTS, MAX_EXCLUDES };

@@ -121,4 +121,51 @@ function reconcile(receipt, live, { lookalikePrefixes = [] } = {}) {
   return { scene_matches, owned_present, owned_missing, unowned_present, conflicts, allowed_actions: scene_matches ? ['restore', 'dismiss'] : ['dismiss'] };
 }
 
-module.exports = { createReceiptStore, reconcile, SCHEMA, OWNED_KINDS, RESTORE_STATUSES, JOB_STATUSES };
+const recoverySummary = r => r.unreadable ? { job_id: r.job_id, unreadable: true, error: r.error } : { job_id: r.job_id, kind: r.kind, status: r.status, created_at: r.created_at,
+  restore: r.restore, owned: r.owned.map(({ kind, id, evidence }) => ({ kind, id, evidence })), last_operations: r.operations.slice(-5),
+  scene_identity_recorded: r.scene_identity != null };
+
+// Recovery of jobs that did not finish (or whose restore failed), driven by on-disk receipts and shared by every job type.
+// Restoring is only offered when the live scene identity equals the one recorded at the start; otherwise the only action is
+// to dismiss. Only items the job recorded as its own are removed; names are never used to decide ownership.
+function createRecovery({ receipts, sceneIdentity, inventory, restore, refresh, label = 'job', isBusy, setBusy, isCurrent = () => false, onRestored = () => {} }) {
+  async function recovery() {
+    if (!receipts) return { items: [] };
+    const items = [];
+    for (const r of receipts.unresolved().filter(r => !isCurrent(r.job_id))) {
+      const item = recoverySummary(r);
+      if (!r.unreadable && sceneIdentity) {
+        try { item.reconciliation = reconcile(r, { scene_identity: await sceneIdentity(null), inventory: await inventory?.() || [] }); }
+        catch (error) { item.reconciliation_error = String(error.message || error).slice(0, 160); }
+      }
+      items.push(item);
+    }
+    return { items };
+  }
+  async function resolveRecovery(jobId, action) {
+    if (!receipts) throw new Error('Recovery receipts are not enabled.');
+    if (isBusy()) throw Object.assign(new Error(`Stop the running ${label} before resolving recovery.`), { status: 409 });
+    const receipt = receipts.get(jobId);
+    if (!receipt) throw Object.assign(new Error('No receipt exists for that job.'), { status: 404 });
+    if (action === 'dismiss') {
+      receipts.setRestore(jobId, 'dismissed', 'Dismissed by the user; the scene was left as it is.');
+      if (receipt.status === 'running') receipts.finish(jobId, 'dismissed');
+      return { resolved: 'dismissed' };
+    }
+    if (action !== 'restore') throw Object.assign(new Error('Choose restore or dismiss.'), { status: 400 });
+    if (!receipt.initial_state) throw Object.assign(new Error('This receipt has no recorded starting state.'), { status: 409 });
+    if (receipt.scene_identity == null || !sceneIdentity) throw Object.assign(new Error('The scene identity was not recorded, so this scene cannot be confirmed. You can dismiss the receipt instead.'), { status: 409 });
+    if (await sceneIdentity(null) !== receipt.scene_identity) throw Object.assign(new Error('The open scene is not the one this job changed. Nothing was restored; open the original scene or dismiss the receipt.'), { status: 409 });
+    const state = { ...receipt.initial_state, createdIds: receipt.owned.filter(o => o.kind === 'light').map(o => o.id) };
+    setBusy(true);
+    try { await restore(state); } finally { setBusy(false); }
+    receipts.setRestore(jobId, 'complete', 'Restored from the on-disk receipt.');
+    if (receipt.status === 'running' || receipt.status === 'failed') receipts.finish(jobId, 'recovered');
+    onRestored(jobId);
+    refresh?.();
+    return { resolved: 'restored' };
+  }
+  return { recovery, resolveRecovery };
+}
+
+module.exports = { createReceiptStore, reconcile, createRecovery, recoverySummary, SCHEMA, OWNED_KINDS, RESTORE_STATUSES, JOB_STATUSES };

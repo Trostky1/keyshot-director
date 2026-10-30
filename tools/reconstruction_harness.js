@@ -48,7 +48,7 @@ function toPng(img) {
 }
 
 // Run the real director loop against the synthetic renderer. Returns the final rig and the renders consumed.
-async function runVisionLoop({ truth = TRUTH, seed = 1, mode = 'independent', maxAttempts = 3, budget = 16, objective = 'highlight_position', scene = {} } = {}) {
+async function runVisionLoop({ truth = TRUTH, seed = 1, mode = 'independent', maxAttempts = 3, budget = 16, objective = 'highlight_position', scene = {} } = {}) {   // reference seed 9000 + seed, same as the session fixture
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'kd-synthetic-')), renderer = synthetic.budgeted(budget, { scene, baseSeed: 5000 + seed * 100 });
   const reference = synthetic.render(toRig(truth), { scene, seed: 9000 + seed, quality: 'final' }), referencePng = toPng(reference);
   const mask = normalizeMask({ kind: 'rect' });
