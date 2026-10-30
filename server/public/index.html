@@ -88,21 +88,132 @@
   dialog::backdrop { background:#fffc; }
   #qr { background:#fff; border:1px solid var(--fg); padding:6px; display:inline-block; margin-top:8px; }
 </style>
+<script>document.documentElement.classList.add('js')</script>
 <link rel="stylesheet" href="/director.css?v=20261027">
+<link rel="stylesheet" href="/orchid.css?v=20261029">
 </head>
-<body>
+<body class="orchid">
 <!-- THESIS: A premium workbench for directing the live KeyShot scene. OWN-WORLD: Editorial black-and-white typography, KeyShot blue actions, restrained orange punctuation, and a fine grid reserved for actual editing canvases. STORY: Shape the light, state the intent, then refine from evidence. FIRST VIEWPORT: Scene, unified Director brief, and lighting controls in one glance. FORM: Preserve the wide render and focused native controls; Materials pairs the same live render with the real inspector. FINISH: Clear hierarchy, responsive touch targets, explicit scene state, and no simulated controls. -->
-<header class="app-header">
+<header class="app-header" id="appHeader">
   <div class="brand-lockup"><span class="brand-mark" aria-hidden="true">K</span><h1>KeyShot Director</h1></div>
-  <nav class="workspace-nav" aria-label="Workspaces"><button type="button" data-workspace="studio" aria-current="page">Studio</button><button type="button" data-workspace="materials">Materials</button></nav>
-  <div class="header-actions"><div class="connection-status"><span class="dot" id="dot"></span><span id="status" role="status" aria-live="polite">Checking connection…</span></div><span class="dim" id="mode"></span>
-    <button class="sm solid" id="connectQuick" data-copy disabled hidden title="Copy the setup command, then paste it into KeyShot’s scripting console." aria-label="Copy KeyShot setup command">Copy setup command</button>
-    <button class="sm" id="settingsBtn">Settings</button>
+  <div class="nav-panel" id="navPanel">
+    <nav class="workspace-nav" aria-label="Workspaces"><button type="button" data-workspace="home">Home</button><button type="button" data-workspace="studio" aria-current="page">Studio</button><button type="button" data-workspace="materials">Materials</button></nav>
+    <div class="header-actions"><div class="connection-status"><span class="dot" id="dot"></span><span id="status" role="status" aria-live="polite">Checking connection…</span></div><span class="dim" id="mode"></span>
+      <button class="sm solid" id="connectQuick" data-copy disabled hidden title="Copy the setup command, then paste it into KeyShot’s scripting console." aria-label="Copy KeyShot setup command">Copy setup command</button>
+      <button class="sm" id="settingsBtn">Settings</button>
+    </div>
   </div>
+  <button class="nav-burger" id="navBurger" type="button" aria-label="Menu" aria-expanded="false" aria-controls="navPanel"><span></span><span></span></button>
+  <div class="app-progress" aria-hidden="true"></div>
 </header>
+<main id="homeWorkspace" class="home" hidden aria-label="Home">
+  <section class="hero2">
+    <div class="hero2__txt">
+      <h2 class="hero2__name">KeyShot<span>Director</span></h2>
+      <p class="hero2__lead">A photo-first companion to KeyShot Studio. Match a reference photo, stage the shot, and build materials, all inside the scene you already have open.</p>
+      <div class="hero2__cta"><button type="button" class="btn-dark" data-workspace="studio">Connect KeyShot</button><button type="button" class="btn-text" data-scroll="homeHow">How it works</button></div>
+    </div>
+    <div class="hero2__img" data-ui>
+      <img id="homeShot" alt="Current KeyShot render preview" hidden>
+      <div class="frag" id="homeFrag">
+        <h3>Lighting setup</h3>
+        <div class="frag__chips" aria-hidden="true"><span class="on">Hero soft (3-point)</span><span>Dark &amp; moody</span><span>Glass edge-light</span><span>Blank studio</span><span>Warm luxe</span><span>Color drama</span></div>
+        <div class="frag__row"><span>Environment brightness</span><b>1.00×</b></div>
+        <input type="range" value="50" disabled aria-hidden="true" tabindex="-1">
+        <p class="frag__note">Presets build native KeyShot lights you can aim, dim and remove. Your live preview replaces this panel once KeyShot is connected.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec">
+    <div class="feat">
+      <div class="feat__txt reveal">
+        <span class="pill pill--white"><i></i>Lighting match</span>
+        <h2 class="h2">Match a reference</h2>
+        <p class="feat__sub">From photograph to native lights.</p>
+        <p class="feat__p">Add a reference photo and Director builds an editable lighting setup, checks it in real KeyShot previews, and lets you undo it.</p>
+        <button type="button" class="link-arrow link-arrow--night" data-workspace="studio"><span>Try it in Studio</span><i class="link-arrow__bar"></i></button>
+      </div>
+      <ul class="feat__facts reveal">
+        <li><b>Editable native lights</b><span>Area, point, spot and IES lights, placed around your own product and left in the scene for you to adjust.</span></li>
+        <li><b>Real KeyShot previews as evidence</b><span>Each attempt is rendered and measured. A result is kept only when it beats normal render variation.</span></li>
+        <li><b>One-step undo</b><span>Your original lights stay intact and your materials are never touched.</span></li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="sec works2">
+    <div class="sec-head2"><div><h2 class="h2 reveal">Four ways to direct a scene</h2></div><button type="button" class="link-arrow reveal" data-workspace="studio"><span>Open Studio</span><i class="link-arrow__bar"></i></button></div>
+    <div class="caps">
+      <article class="reveal"><h3 class="h4">Lighting match</h3><p>Turn a reference photo into native lights, then compare before and after.</p></article>
+      <article class="reveal"><h3 class="h4">Framing and close-ups</h3><p>Frame the full product or one selected part without changing your materials.</p></article>
+      <article class="reveal"><h3 class="h4">Materials</h3><p>Import texture sets and build an unassigned Plastic material from the maps you choose.</p></article>
+      <article class="reveal"><h3 class="h4">Reference video</h3><p>Turn a reference clip into a camera move and render it frame by frame.</p></article>
+    </div>
+  </section>
+
+  <section class="sec works2" id="homeHow">
+    <div class="sec-head2"><div><h2 class="h2 reveal">From scene to finished look</h2></div></div>
+    <ol class="steps">
+      <li class="step reveal"><h3 class="h4">Connect</h3><div class="step__body"><p>Save your scene, paste one command in KeyShot’s scripting window, and Director links up for up to four hours.</p><div class="chipbox"><span>Window → Scripting</span><span>One command</span></div></div></li>
+      <li class="step reveal"><h3 class="h4">Direct</h3><div class="step__body"><p>Add a reference photo or describe a change. Director builds native lights, frames the product, or prepares a material.</p><div class="chipbox"><span>Reference photo</span><span>Lights</span><span>Framing</span></div></div></li>
+      <li class="step reveal"><h3 class="h4">Review</h3><div class="step__body"><p>Check the result in real KeyShot previews. Compare before and after, refine within the limits, or undo.</p><div class="chipbox"><span>Before and after</span><span>Undo</span><span>Recipe JSON</span></div></div></li>
+      <li class="step reveal"><h3 class="h4">Keep</h3><div class="step__body"><p>Director never saves for you. Review in KeyShot, save your scene, and render final output there.</p><div class="chipbox"><span>Your scene</span><span>Your renderer</span></div></div></li>
+    </ol>
+  </section>
+
+  <section class="sec works2">
+    <div class="sec-head2"><div><h2 class="h2 reveal">Limits we keep</h2></div></div>
+    <ul class="limits">
+      <li class="reveal"><b>12 previews or 8 minutes</b>One lighting match stops at whichever limit it reaches first.</li>
+      <li class="reveal"><b>4 hours</b>One KeyShot connection lasts up to four hours. Run the command again to reconnect.</li>
+      <li class="reveal"><b>Never saved for you</b>Director leaves your scene unsaved so you review and keep the result in KeyShot.</li>
+      <li class="reveal"><b>Previews, not final renders</b>Downloads are preview quality. Final-resolution output stays KeyShot’s job.</li>
+    </ul>
+  </section>
+
+  <section class="sec works2">
+    <div class="sec-head2"><div><h2 class="h2 reveal">What Director won’t do</h2></div></div>
+    <div class="stance">
+      <article class="reveal"><h3>Change your geometry or materials</h3><p>Lighting matches add lights and environment only. Your product and materials stay as they are.</p></article>
+      <article class="reveal"><h3>Promise an exact match</h3><p>Matching is an inference from a photograph. Director reports what it measured and what it could not.</p></article>
+      <article class="reveal"><h3>Replace your real render</h3><p>The picture you see is always your own KeyShot scene, never a generated stand-in.</p></article>
+    </div>
+  </section>
+
+  <section class="sec faq" id="homeFaq">
+    <div class="reveal"><h2 class="h2">Questions we expect</h2></div>
+    <div class="reveal">
+      <details class="qa" open><summary>Does Director save my KeyShot scene?</summary><p>Never. Director leaves your scene unsaved, so you review the result and save it in KeyShot yourself.</p></details>
+      <details class="qa"><summary>Which KeyShot version does it need?</summary><p>KeyShot Studio 2026.2 on Windows 11 is the verified setup. Director talks to the open scene through KeyShot’s scripting window.</p></details>
+      <details class="qa"><summary>Where do my reference images go?</summary><p>Reference images and KeyShot previews go to the assistant you choose in Settings, only for the request that needs them. Saved style collections stay on this computer.</p></details>
+      <details class="qa"><summary>Can I use Director without an AI account?</summary><p>Director can still run basic commands in offline mode. Reference matching and the conversation need an assistant.</p></details>
+      <details class="qa"><summary>Does it work on macOS?</summary><p>Physical macOS integration is still unverified. Windows 11 with KeyShot Studio 2026.2 is the verified setup.</p></details>
+      <details class="qa"><summary>Why are Metallic and Displacement not built into materials?</summary><p>Those paths are paused for reliability. Director builds a simple Plastic material from Base Color, Roughness, a Normal or Bump map and optional AO, and lists every skipped file.</p></details>
+    </div>
+  </section>
+
+  <section class="cta2">
+    <h2 class="h2 reveal">Open KeyShot, then <span class="hl">direct the light.</span></h2>
+    <p class="reveal">Save your scene, run one command in KeyShot’s scripting window, and you’re connected.</p>
+    <button type="button" class="btn-acc reveal" data-copy aria-label="Copy KeyShot setup command">Copy setup command</button>
+  </section>
+
+  <footer class="foot">
+    <div class="foot__top">
+      <div><div class="brand-lockup"><span class="brand-mark" aria-hidden="true">K</span><span class="brand-name">KeyShot Director</span></div><p>A photo-first companion to KeyShot Studio. Your product, materials and renderer stay yours.</p></div>
+      <div class="foot__cols">
+        <div><b>Product</b><button type="button" data-workspace="studio">Studio</button><button type="button" data-workspace="materials">Materials</button><button type="button" data-open-settings>Settings</button></div>
+        <div><b>Learn</b><button type="button" data-scroll="homeHow">How it works</button><button type="button" data-scroll="homeFaq">FAQ</button><a href="https://github.com/Trostky1/keyshot-director/blob/main/docs/RELEASE_NOTES_2.3.md" target="_blank" rel="noopener">Release notes</a></div>
+      </div>
+    </div>
+    <div class="foot__bottom"><span>© 2026 KeyShot Director</span><span>Verified on Windows 11 and KeyShot Studio 2026.2</span></div>
+  </footer>
+</main>
+
 <main id="studioWorkspace">
   <section class="col">
-    <div class="stage-heading"><div><h2>Studio</h2><p>Control lighting, framing, and materials in your connected KeyShot scene.</p></div><div class="stage-heading-actions"><button type="button" class="preview-toggle" data-preview-toggle aria-controls="stage" aria-expanded="true">Hide preview</button><span class="scene-tag" id="studioSceneTag">Checking scene</span></div></div>
+    <div class="stage-heading"><div><span class="scene-tag" id="studioSceneTag">Checking scene</span><h2>Studio</h2><p>Control lighting, framing, and materials in your connected KeyShot scene.</p></div><div class="stage-heading-actions"><button type="button" class="preview-toggle" data-preview-toggle aria-controls="stage" aria-expanded="true">Hide preview</button></div></div>
     <div id="studioStageHome" class="studio-stage-host"><div class="stage" id="stage"><img id="shot" alt="Current KeyShot render preview" draggable="false"><div class="empty" id="empty"><b>Waiting for KeyShot</b><br><br>Save your scene. In KeyShot, open <b>Window &rarr; Scripting</b>, click the console, paste this command, and press Enter:<div class="connectline"><code class="cline">...</code><button class="solid" data-copy aria-label="Copy KeyShot setup command">Copy command</button></div><details class="first-run-guide"><summary>First time connecting?</summary><ol><li>In KeyShot, open <b>Window &rarr; Scripting</b>.</li><li>Choose <b>KeyShot Director</b> and click <b>Run</b>. If it is missing on Windows, run <b>Install KeyShot Director.bat</b> from the extracted download. On Mac, run <code>bash install-mac.sh</code>, then add the printed folder in KeyShot Preferences &rarr; Folders &rarr; Scripts.</li><li>You can also paste the command above into KeyShot’s scripting console and press Enter.</li></ol><p>Keep both KeyShot and Director open while you work. Your scene preview appears here after they connect.</p></details><span class="dim">The connection runs inside KeyShot. Keep its scripting window open and do not run other scripts or open dialogs there while connected.</span></div><div class="livebar"><label><input type="checkbox" id="live"> Update preview automatically</label><button class="sm" id="refresh" title="Request a fresh render preview from KeyShot">Refresh preview</button></div><div class="hint">Drag to orbit · Right-drag or Shift-drag to pan · Scroll to zoom · Touch: one finger orbits; two fingers pan and pinch</div></div></div>
       <div class="conversation-heading"><h2>Ask Director</h2><span>Describe a change, choose a lighting goal, or add reference images.</span></div>
     <div id="log" role="log" aria-live="polite" aria-relevant="additions text" aria-label="Director conversation"></div>
@@ -271,7 +382,7 @@
 </main>
 
 <section id="materialsWorkspace" class="workspace-page" hidden aria-labelledby="materialsTitle">
-  <div class="workspace-heading"><div><h2 id="materialsTitle">Materials</h2><p>Create a finish, edit a copy, or apply a library material to your KeyShot scene.</p></div><span class="scene-tag" id="materialsSceneTag">Checking scene</span></div>
+  <div class="workspace-heading"><div><span class="scene-tag" id="materialsSceneTag">Checking scene</span><h2 id="materialsTitle">Materials</h2><p>Create a finish, edit a copy, or apply a library material to your KeyShot scene.</p></div></div>
   <section id="libraryMaterialCopyCard" class="workspace-card library-material-quick" aria-label="Copy a material from the KeyShot library">
     <details class="quick-library-details"><summary>Quick copy from the KeyShot library</summary>
       <p class="blurb">Search the KeyShot library, choose a part in KeyShot, then create a separate copy on that part. The library material stays unchanged.</p>
@@ -476,7 +587,7 @@ $('studioWorkspace').querySelector('aside').prepend($('studioPanel'));
 $('libraryQuickCopyHost').appendChild($('libraryMaterialCopyCard'));
 let workspacePreviewAnimation = null;
 function showWorkspace(name, animate = false) {
-  if (!['studio','materials'].includes(name)) name = 'studio';
+  if (!['home','studio','materials'].includes(name)) name = 'studio';
   const currentWorkspace = document.querySelector('[data-workspace][aria-current="page"]')?.dataset.workspace;
   if (currentWorkspace === name) { history.replaceState(null, '', '#' + name); return; }
   if (workspacePreviewAnimation) workspacePreviewAnimation.cancel();
@@ -484,12 +595,13 @@ function showWorkspace(name, animate = false) {
   const previousRect = animate && currentWorkspace && !reduceMotion && typeof sceneStage.animate === 'function'
     ? sceneStage.getBoundingClientRect() : null;
   (name === 'materials' ? materialsStageHost : studioStageHome).appendChild(sceneStage);
-  for (const key of ['studio','materials']) {
+  for (const key of ['home','studio','materials']) {
     $(`${key}Workspace`).hidden = key !== name;
     const button = document.querySelector(`[data-workspace="${key}"]`);
     if (key === name) button.setAttribute('aria-current','page'); else button.removeAttribute('aria-current');
   }
   history.replaceState(null, '', '#' + name);
+  if (animate) window.scrollTo(0, 0);
   if (!previousRect || previousRect.width < 1 || previousRect.height < 1) return;
   const nextRect = sceneStage.getBoundingClientRect();
   if (nextRect.width < 1 || nextRect.height < 1) return;
@@ -509,7 +621,36 @@ function showWorkspace(name, animate = false) {
   animation.onfinish = clearAnimation;
   animation.oncancel = clearAnimation;
 }
-document.querySelectorAll('[data-workspace]').forEach(button => button.onclick = () => showWorkspace(button.dataset.workspace, true));
+// Orchid shell: phone menu, working indicator, Home page behavior.
+const appHeader = $('appHeader'), navBurger = $('navBurger');
+function setMenu(open) {
+  appHeader.classList.toggle('nav--open', open);
+  navBurger.setAttribute('aria-expanded', String(open));
+  document.documentElement.style.overflow = open ? 'hidden' : '';
+}
+navBurger.onclick = () => setMenu(!appHeader.classList.contains('nav--open'));
+document.addEventListener('keydown', e => { if (e.key === 'Escape') setMenu(false); });
+window.matchMedia?.('(max-width: 760px)').addEventListener?.('change', e => { if (!e.matches) setMenu(false); });
+$('settingsBtn').addEventListener('click', () => setMenu(false));
+document.querySelectorAll('[data-workspace]').forEach(button => button.onclick = () => { showWorkspace(button.dataset.workspace, true); setMenu(false); });
+document.querySelectorAll('[data-scroll]').forEach(button => button.onclick = () => document.getElementById(button.dataset.scroll)?.scrollIntoView({ behavior: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' }));
+document.querySelectorAll('[data-open-settings]').forEach(button => button.onclick = () => $('settingsBtn').click());
+function syncWorking() { appHeader.classList.toggle('is-working', Boolean($('busy').textContent.trim()) || !$('photoStop').disabled || !$('stopBtn').disabled); }
+const workingObserver = new MutationObserver(syncWorking);
+workingObserver.observe($('busy'), { childList: true, characterData: true, subtree: true });
+for (const id of ['photoStop', 'stopBtn']) workingObserver.observe($(id), { attributes: true, attributeFilter: ['disabled'] });
+syncWorking();
+const homeShot = $('homeShot');
+function syncHomeShot() {
+  const shot = $('shot'), live = Boolean(shot.getAttribute('src')) && shot.naturalWidth > 0 && shot.style.display !== 'none';
+  if (live && homeShot.getAttribute('src') !== shot.getAttribute('src')) homeShot.src = shot.getAttribute('src');
+  homeShot.hidden = !live; $('homeFrag').hidden = live;
+}
+$('shot').addEventListener('load', syncHomeShot); $('shot').addEventListener('error', syncHomeShot);
+if ('IntersectionObserver' in window) {
+  const reveal = new IntersectionObserver(entries => entries.forEach(entry => { if (entry.isIntersecting) { entry.target.classList.add('in'); reveal.unobserve(entry.target); } }), { rootMargin: '0px 0px -8% 0px' });
+  document.querySelectorAll('.reveal').forEach(el => reveal.observe(el));
+} else document.querySelectorAll('.reveal').forEach(el => el.classList.add('in'));
 showWorkspace(location.hash.slice(1));
 window.addEventListener('hashchange', () => showWorkspace(location.hash.slice(1), true));
 async function busy(btn, fn) { btn && btn.classList.add('busy'); try { return await fn(); } catch (e) { toast(e.message); } finally { btn && btn.classList.remove('busy'); } }

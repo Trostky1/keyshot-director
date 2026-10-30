@@ -1356,8 +1356,10 @@ const server = http.createServer(async (req, res) => {
     const file = path.resolve(PUBLIC, '.' + (url.pathname === '/' ? '/index.html' : decodeURIComponent(url.pathname)));
     if (!file.startsWith(PUBLIC + path.sep)) return json(res, 403, { error: 'Invalid file path.' });
     if (fs.existsSync(file) && fs.statSync(file).isFile()) {
-      const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css' };
-      res.writeHead(200, { 'Content-Type': types[path.extname(file)] || 'application/octet-stream' });
+      const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.woff2': 'font/woff2', '.svg': 'image/svg+xml' };
+      const headers = { 'Content-Type': types[path.extname(file)] || 'application/octet-stream' };
+      if (path.extname(file) === '.woff2') headers['Cache-Control'] = 'public, max-age=86400';
+      res.writeHead(200, headers);
       return res.end(fs.readFileSync(file));
     }
     res.writeHead(404); res.end('not found');
