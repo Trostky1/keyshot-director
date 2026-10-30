@@ -75,4 +75,14 @@ function productStats(img, r = { x0: 0.30, x1: 0.70, y0: 0.12, y1: 0.82 }, tol =
   return { n, bg, share: n / tot, p05: q(0.05), p25: q(0.25), p50: q(0.5), p75: q(0.75), p95: q(0.95), p99: q(0.99), clipFrac: clip / n, fallback: false };
 }
 
-module.exports = { decode, stats, productStats, crc32 };
+// Encode a display-space image { w, h, rgb: Float32Array in 0..1 } as an 8-bit RGB PNG (for saved before/after outputs).
+function encodeRgb(img) {
+  const chunk = (type, data) => { const b = Buffer.alloc(data.length + 12); b.writeUInt32BE(data.length); b.write(type, 4); data.copy(b, 8); b.writeUInt32BE(crc32(b.subarray(4, b.length - 4)), b.length - 4); return b; };
+  const header = Buffer.alloc(13); header.writeUInt32BE(img.w); header.writeUInt32BE(img.h, 4); header[8] = 8; header[9] = 2;
+  const raw = Buffer.alloc(img.h * (1 + img.w * 3));
+  for (let y = 0; y < img.h; y++) for (let x = 0; x < img.w; x++) for (let c = 0; c < 3; c++)
+    raw[y * (img.w * 3 + 1) + 1 + x * 3 + c] = Math.max(0, Math.min(255, Math.round(img.rgb[(y * img.w + x) * 3 + c] * 255)));
+  return Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk('IHDR', header), chunk('IDAT', zlib.deflateSync(raw)), chunk('IEND', Buffer.alloc(0))]);
+}
+
+module.exports = { decode, stats, productStats, crc32, encodeRgb };

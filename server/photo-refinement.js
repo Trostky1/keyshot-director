@@ -1,5 +1,8 @@
 // Explicit photographic objectives. These are display-image heuristics, not physical reconstruction.
 const { decode } = require('./png');
+const { normalizeMask, forEachMasked, maskedStatistics } = require('./image-mask');
+const { SPACES, lumaOf } = require('./colour-contract');
+const { powerMode } = require('./light-spec');
 const OBJECTIVES = ['highlight_position', 'contrast', 'tone'];
 function region(value) {
   if (!value || !['x0', 'y0', 'x1', 'y1'].every(k => Number.isFinite(value[k]) && value[k] >= 0 && value[k] <= 1)
@@ -10,7 +13,12 @@ function settings(input = {}) {
   const objective = input.objective || 'highlight_position';
   if (!OBJECTIVES.includes(objective)) throw new Error('Unknown lighting objective.');
   const integer = (v, d, lo, hi) => { if (v == null) return d; if (!Number.isInteger(v) || v < lo || v > hi) throw new Error(`Refinement budget must be an integer from ${lo} to ${hi}.`); return v; };
-  return { objective, reference_region: input.reference_region == null ? null : region(input.reference_region),
+  const reference_region = input.reference_region == null ? null : region(input.reference_region);
+  // One mask is applied to the reference AND the render. With a reference region and no explicit mask the shared mask is the
+  // whole rectangle, so the photograph is no longer scored on every pixel while the render is scored on a Clown product mask.
+  const mask = input.mask == null ? (reference_region ? normalizeMask({ kind: 'rect' }) : null) : normalizeMask(input.mask);
+  if (mask && !reference_region) throw new Error('A measurement mask needs a reference region to define its coordinates.');
+  return { objective, reference_region, mask, power_mode: powerMode(input.power_mode),
     max_attempts: integer(input.max_attempts, 2, 1, 3), max_captures: integer(input.max_captures, 12, 6, 16),
     max_seconds: integer(input.max_seconds, 480, 30, 900),
     locks: { position: input.locks?.position === true, power: input.locks?.power === true, color: input.locks?.color === true,
@@ -22,21 +30,35 @@ function dimensions(aspect, maxSide = 640) {
   const height = Math.max(32, Math.round(Math.min(maxSide, maxSide / aspect) / 2) * 2);
   return { width, height };
 }
-function referenceMetrics(buffer, rect) {
-  const r = region(rect), img = decode(buffer), samples = [];
+// Display-space statistics of the reference inside the shared mask. Coordinates are relative to the rectangle.
+function referenceMetrics(buffer, rect, maskInput = null) {
+  const r = region(rect), mask = maskInput == null ? null : normalizeMask(maskInput), img = decode(buffer), samples = [];
+  if (mask?.exclude_transparent && !img.hasAlpha) throw new Error('Excluding transparent areas needs a reference image with an alpha channel.');
   const step = Math.max(1, Math.floor(Math.max(img.w, img.h) / 640));
-  for (let y = Math.ceil(r.y0 * img.h); y < r.y1 * img.h; y += step)
-    for (let x = Math.ceil(r.x0 * img.w); x < r.x1 * img.w; x += step) {
-      const rgb = img.px(x, y); samples.push({ x: (x / img.w - r.x0) / (r.x1 - r.x0), y: (y / img.h - r.y0) / (r.y1 - r.y0),
-        l: (rgb[0] * 0.2126 + rgb[1] * 0.7152 + rgb[2] * 0.0722) / 255 });
-    }
-  const sorted = samples.map(p => p.l).sort((a, b) => a - b), q = f => sorted[Math.min(sorted.length - 1, Math.floor(f * sorted.length))];
+  forEachMasked(mask, r, img.w, img.h, step, (x, y, u, v) => {
+    if (mask?.exclude_transparent && img.alpha(x, y) < 128) return;
+    const rgb = img.px(x, y).map(c => c / 255);
+    samples.push({ u, v, l: lumaOf(rgb[0], rgb[1], rgb[2]), rgb });
+  });
   if (!samples.length) throw new Error('The reference region contains no pixels.');
-  const bright = samples.filter(p => p.l >= q(0.9));
-  return { p05_luma: q(0.05), p95_luma: q(0.95), highlight: q(0.95) - q(0.05) < 0.02 ? null : {
-    x: bright.reduce((n, p) => n + p.x, 0) / bright.length, y: bright.reduce((n, p) => n + p.y, 0) / bright.length } };
+  const stats = maskedStatistics(samples);
+  return { p05_luma: stats.p05_luma, p50_luma: stats.p50_luma, p95_luma: stats.p95_luma, mean_luma: stats.mean_luma, highlight: stats.highlight, mean_rgb: stats.mean_rgb,
+    sampled_pixels: stats.sampled_pixels, colour_space: SPACES.DISPLAY, ...(mask ? { mask_signature: mask.signature } : {}) };
+}
+function maskedObjectiveScore(evidence, target, objective) {
+  const m = evidence?.masked_beauty;
+  // Fail closed unless both sides were measured with the same mask in the same colour space.
+  if (!evidence?.available || !m || m.mask_signature !== target.mask_signature || m.colour_space !== target.colour_space
+      || evidence.measurement_scope?.kind !== 'projected_bounds_roi') return null;
+  if (objective === 'tone') return Number.isFinite(m.p95_luma) ? Math.abs(m.p95_luma - target.p95_luma) : null;
+  if (objective === 'contrast') return [m.p95_luma, m.p05_luma].every(Number.isFinite)
+    ? Math.abs((m.p95_luma - m.p05_luma) - (target.p95_luma - target.p05_luma)) : null;
+  if (!target.highlight || !m.highlight) return null;
+  const result = Math.hypot(m.highlight.x - target.highlight.x, m.highlight.y - target.highlight.y);
+  return Number.isFinite(result) ? result : null;
 }
 function objectiveScore(evidence, target, objective) {
+  if (target?.mask_signature) return maskedObjectiveScore(evidence, target, objective);
   const p = evidence?.beauty_product, b = evidence?.product_mask?.bounds_normalized;
   if (!evidence?.available || !p || !b || !target || evidence.measurement_scope?.kind !== 'projected_bounds_roi') return null;
   if (objective === 'tone') return Number.isFinite(p.p95_luma) ? Math.abs(p.p95_luma - target.p95_luma) : null;
@@ -62,8 +84,10 @@ function lockedPlan(candidate, baseline, locks) {
   // Retain source identity/count and camera intent throughout a lighting search.
   const copy = JSON.parse(JSON.stringify(candidate));
   copy.shot = JSON.parse(JSON.stringify(baseline.shot));
+  copy.power_mode = baseline.power_mode || 'artistic';   // the power model is part of the recipe and never changes mid-search
   if (locks.environment) copy.environment = JSON.parse(JSON.stringify(baseline.environment));
-  const groups = { position: ['az', 'el', 'd', 'roll'], power: ['gain', 'multiplier', 'E'], color: ['rgb', 'kelvin'], shape: ['w', 'h', 'radius', 'angle', 'falloff', 'constant_output'] };
+  const groups = { position: ['az', 'el', 'd', 'roll', 'target_offset'], power: ['gain', 'multiplier', 'E', 'ies_intensity_source'], color: ['rgb', 'kelvin'],
+    shape: ['w', 'h', 'radius', 'angle', 'falloff', 'constant_output', 'visibility', 'refl', 'eye', 'shadows'] };
   copy.lights = baseline.lights.map((source, i) => {
     const light = { ...(copy.lights[i] || source), id: source.id, type: source.type };
     if (source.type === 'ies') light.ies_asset_id = source.ies_asset_id;

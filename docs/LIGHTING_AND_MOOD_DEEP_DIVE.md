@@ -1,5 +1,7 @@
 # Lighting and mood recreation: deep dive and gameplan
 
+> This is a dated research history that mixes early plans with later live findings. For the current state of every control, with an evidence label, see the [Lighting capability and evidence record](LIGHTING_CAPABILITY_RECORD.md); for the acceptance loop see [Measured refinement](MEASURED_REFINEMENT.md).
+
 ## Objective
 
 Make KeyShot Director reliably turn a visual reference into an editable, product-scaled lighting setup, then improve that setup through evidence from the actual KeyShot renderer. Optimize for a strong visual match and a comprehensible workflow. Recovering the reference photographer's exact physical light rig is neither necessary nor generally possible from one image.
