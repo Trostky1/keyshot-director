@@ -9,7 +9,7 @@ A photo-first companion app for **KeyShot** that lights and frames *your own pro
 
 It does not replace KeyShot: final material assignment, the timeline, scene saving and final-resolution rendering stay in KeyShot. Reference matching is photographic inference, not exact scene reconstruction. Physical sets/backplates and material differences are reported as limitations. See the [lighting and mood deep dive](docs/LIGHTING_AND_MOOD_DEEP_DIVE.md), [photo workflow and verification guide](docs/PHOTO_WORKFLOW.md), and [Poliigon-to-KeyShot texture workflow](docs/POLIIGON_TEXTURE_WORKFLOW.md).
 
-> Early access. Verified on KeyShot Studio 2026.2 (EDU) on Windows 11. macOS support is included and needs first-run testing on a Mac; see [macOS setup](#macos-setup-and-first-run). Not affiliated with KeyShot / Luxion.
+> Early access. Verified on KeyShot Studio 2026.2 (EDU) on Windows 11. macOS support ships as a separate download and is tested in CI on macOS but still needs first-run testing on a real Mac; see [macOS setup](#macos-setup). Not affiliated with KeyShot / Luxion.
 
 ## What you need
 - Windows or macOS supported by your KeyShot Studio release, **KeyShot Studio 2026.x** with the Scripting feature available in your license. The scripting console is required; headless scripting is not.
@@ -26,24 +26,25 @@ If **KeyShot Director** is not in KeyShot's script list, run the installer once 
 
 Material recipe planning is handled by the bundled JavaScript engine. Neither the release ZIP nor a source checkout needs Rust, Cargo, or WebAssembly to run or package Director.
 
-See the [3.0 release notes](docs/RELEASE_NOTES_3.0.md) for this release's features and current limits. The [2.4 release notes](docs/RELEASE_NOTES_2.4.md) cover the previous release.
+See the [3.1 release notes](docs/RELEASE_NOTES_3.1.md) for this release's features and current limits. The [3.0 release notes](docs/RELEASE_NOTES_3.0.md) cover the previous release.
 
 The working checkout adds [measured lighting refinement](docs/MEASURED_REFINEMENT.md) and [material edit recovery](docs/MATERIAL_EDIT_RECEIPTS.md). Set an explicit reference rectangle and objective to enable measured candidates; missing or incompatible evidence retains the first look. A disposable KeyShot 2026.2 calibration measured material mapping and displacement behavior; its [results](docs/MATERIAL_CALIBRATION_RESULTS.md) refine the [calibration plan](docs/MATERIAL_CALIBRATION_PLAN.md). Broader end-to-end verification of these new lighting and material workflows is still needed in KeyShot.
 
 ## macOS setup
-1. Download and extract the release ZIP somewhere permanent. Install Node.js 20+ LTS if it is not already installed.
-2. Open Terminal in the extracted folder and run `bash install-mac.sh`. It installs a launcher in your user Library without administrator access.
-3. In KeyShot Studio, open **Preferences -> Folders -> Scripts** and add the exact folder printed by the installer. Reopen the Scripting window if it was already open.
-4. Double-click **Start KeyShot Director.command**, choose **Open** if macOS asks, then open and save your scene in KeyShot and run **KeyShot Director** from the Scripting window.
+1. Download **KeyShot-Director-v3.1.0-macOS.zip** from the [latest release](https://github.com/Trostky1/keyshot-director/releases/latest) and extract it somewhere permanent, such as Documents. Install Node.js 20+ LTS if it is not already installed.
+2. Double-click **Install KeyShot Director.command**. If macOS refuses to open it, open Terminal in the extracted folder and run `bash install-mac.sh` instead. The installer finds `~/Documents/KeyShot <version>/Scripts` and installs the launcher there, without administrator access. If it cannot find that folder it tells you which folder to add under **Preferences -> Folders -> Scripts** in KeyShot.
+3. Double-click **Start KeyShot Director.command** (or run `bash start-mac.sh`). Keep the Terminal window open; the page opens in your browser. Choose **Open** or right-click -> **Open** if macOS asks the first time.
+4. Open and save your scene in KeyShot, open the Scripting window, select **KeyShot Director** and click **Run**. The page changes to **KeyShot connected**.
+5. To stop, close the Terminal window or double-click **Stop KeyShot Director.command**.
 
-macOS setup is included but has not yet been verified on a physical Mac; see the [macOS troubleshooting notes](#macos-troubleshooting).
+The full guide, differences from Windows and the list of checks still needed on a physical Mac are in [docs/MACOS.md](docs/MACOS.md). **Verification status:** the macOS code paths run in CI on a macOS runner and in injected-platform tests, but this project has not yet been run end to end on a physical Mac with KeyShot Studio 2026.2; see the [macOS troubleshooting notes](#macos-troubleshooting).
 
 While the bridge runs (up to 4 hours), orbiting and zooming the viewport is fine. **Don't** run other scripts, open dialogs or close panels in KeyShot; that can crash it. Always save first.
 
 To disconnect KeyShot, open Settings and choose **Disconnect KeyShot**; Director now shows whether the bridge acknowledged the stop. **Studio off** removes Director lights but leaves the bridge running. Closing KeyShot also ends its bridge. Use **Quit app** to stop the local companion server.
 
 ## macOS troubleshooting
-If your KeyShot edition does not expose the Scripting window, this integration cannot control that installation. KeyShot's documentation describes scripting as a Pro feature and locates the Scripts tab folders in the Scripting window. If the Mac setup fails, note the KeyShot version, macOS version and any script-console error. A physical Mac has not yet been used to verify this project end to end.
+If your KeyShot edition does not expose the Scripting window, this integration cannot control that installation. KeyShot's documentation describes scripting as a Pro feature and locates the Scripts tab folders in the Scripting window. If the Mac setup fails, note the KeyShot version, macOS version and any script-console error. A physical Mac has not yet been used to verify this project end to end; see [docs/MACOS.md](docs/MACOS.md#troubleshooting) for common fixes.
 
 ## Studio and Material Lab
 
@@ -143,7 +144,7 @@ The app does not save your scene for you. Save in KeyShot before connecting and 
 - Live preview is about 4-6 fps (each camera move costs KeyShot 100-250 ms). Final renders aren't affected.
 - If your scene references textures that are missing on disk, KeyShot will refuse *Add to Queue* until they're relinked (not this app's doing).
 - If KeyShot crashes, its session recovery may bring the lights back; the page re-detects them on connect, or press **Studio off**.
-- Windows is the verified platform. macOS bridge event pumping uses KeyShot's Qt event loop when available; image resizing/style analysis uses the macOS `sips` utility. The macOS path has not yet been verified on a physical Mac, and `sips` only supports formats available to the installed macOS release. Unsupported style images are reported individually; use PNG or JPEG for the most portable results.
+- Windows is the verified platform. macOS is covered by CI and injected-platform tests only. macOS bridge event pumping uses KeyShot's Qt event loop when available (a no-op if PySide cannot be imported); image resizing/style analysis uses the macOS `sips` utility. The macOS path has not yet been verified on a physical Mac, and `sips` only supports formats available to the installed macOS release. Unsupported style images are reported individually; use PNG or JPEG for the most portable results.
 
 ## Troubleshooting
 | Symptom | Fix |
@@ -156,7 +157,7 @@ The app does not save your scene for you. Save in KeyShot before connecting and 
 | Lights look wrong after a KeyShot crash | **Studio off**, then rebuild a rig. |
 
 ## Folder map
-`server/` the local web server, AI tools and page · `bridge/` scripts that run inside KeyShot · `tools/` image helpers and tests · `references/` your style and photo-job folders · `renders/` rendered videos · `install.ps1` and `install-mac.sh` set up each platform's KeyShot launcher.
+`server/` the local web server, AI tools and page · `bridge/` scripts that run inside KeyShot · `tools/` image helpers, stop and install helpers and tests · `references/` your style and photo-job folders · `renders/` rendered videos · `install.ps1` and `install-mac.sh` set up each platform's KeyShot launcher.
 
 Experimental, not in the page yet: `server/anim.js`, `gltf.js`, `glbanim.js` and `bridge/cc_anim.py` can put **part animation** (turntable, exploded view, cap lift) on KeyShot's real timeline by exporting the product as GLB, adding animation, and importing it back with its materials re-applied.
 
