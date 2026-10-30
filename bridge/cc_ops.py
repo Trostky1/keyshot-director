@@ -248,4 +248,12 @@ CONTEXT_FILE = os.path.join(os.path.dirname(SHOTS), "cc_scene_context.py")
 with open(CONTEXT_FILE, "r", encoding="utf-8-sig") as _f:
     exec(compile(_f.read(), CONTEXT_FILE, "exec"), globals())
 OPS.update(SCENE_CONTEXT_OPS)
-# edit stamp for companion modules: 113 (legacy Generic profile compatibility)
+DELIVER_FILE = os.path.join(os.path.dirname(SHOTS), "cc_deliver.py")
+try:
+    with open(DELIVER_FILE, "r", encoding="utf-8-sig") as _f:
+        exec(compile(_f.read(), DELIVER_FILE, "exec"), globals())
+    OPS.update(DELIVER_OPS)
+except Exception:
+    import traceback as _tb3
+    OPS["deliver_error"] = (lambda c, _e=_tb3.format_exc(): {"error": _e})   # a delivery-module fault must not take the other ops down
+# edit stamp for companion modules: 114 (explicit native save op)
