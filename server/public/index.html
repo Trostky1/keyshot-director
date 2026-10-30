@@ -109,62 +109,80 @@
 <main id="homeWorkspace" class="home" hidden aria-label="Home">
   <section class="hero2">
     <div class="hero2__txt">
-      <div class="lab">Photo-first companion to KeyShot Studio</div>
       <h2 class="hero2__name">KeyShot<span>Director</span></h2>
-      <p class="hero2__lead">Match a reference photo, stage the shot, and build materials — all inside the scene you already have open.</p>
+      <p class="hero2__lead">A photo-first companion to KeyShot Studio. Match a reference photo, stage the shot, and build materials, all inside the scene you already have open.</p>
       <div class="hero2__cta"><button type="button" class="btn-dark" data-workspace="studio">Connect KeyShot</button><button type="button" class="btn-text" data-scroll="homeHow">How it works</button></div>
     </div>
-    <div class="hero2__img ph"><span class="ph-glow" aria-hidden="true"></span><span class="pill pill--white"><i></i>Live preview · KeyShot render</span><img id="homeShot" alt="Current KeyShot render preview" hidden><span id="homeHeroLabel">Live KeyShot preview</span></div>
+    <div class="hero2__img" data-ui>
+      <img id="homeShot" alt="Current KeyShot render preview" hidden>
+      <div class="frag" id="homeFrag">
+        <h3>Lighting setup</h3>
+        <div class="frag__chips" aria-hidden="true"><span class="on">Hero soft (3-point)</span><span>Dark &amp; moody</span><span>Glass edge-light</span><span>Blank studio</span><span>Warm luxe</span><span>Color drama</span></div>
+        <div class="frag__row"><span>Environment brightness</span><b>1.00×</b></div>
+        <input type="range" value="50" disabled aria-hidden="true" tabindex="-1">
+        <p class="frag__note">Presets build native KeyShot lights you can aim, dim and remove. Your live preview replaces this panel once KeyShot is connected.</p>
+      </div>
+    </div>
   </section>
 
   <section class="sec">
     <div class="feat">
       <div class="feat__txt reveal">
-        <div><span class="pill"><i></i>Featured · Lighting match</span><h2 class="h2">Match a reference</h2><p class="feat__sub">From photograph to native lights.</p></div>
-        <div><p class="feat__p">Add a reference photo and Director builds an editable lighting setup, checks it in real KeyShot previews, and lets you undo it.</p><button type="button" class="link-arrow link-arrow--night" data-workspace="studio"><span>Try it in Studio</span><i class="link-arrow__bar"></i></button></div>
+        <span class="pill pill--white"><i></i>Lighting match</span>
+        <h2 class="h2">Match a reference</h2>
+        <p class="feat__sub">From photograph to native lights.</p>
+        <p class="feat__p">Add a reference photo and Director builds an editable lighting setup, checks it in real KeyShot previews, and lets you undo it.</p>
+        <button type="button" class="link-arrow link-arrow--night" data-workspace="studio"><span>Try it in Studio</span><i class="link-arrow__bar"></i></button>
       </div>
-      <div class="feat__img reveal" aria-hidden="true"><div class="feat__before"><span class="pill pill--white"><i></i>Before</span></div><div class="feat__after"><span class="pill pill--white"><i></i>Matched</span></div></div>
+      <ul class="feat__facts reveal">
+        <li><b>Editable native lights</b><span>Area, point, spot and IES lights, placed around your own product and left in the scene for you to adjust.</span></li>
+        <li><b>Real KeyShot previews as evidence</b><span>Each attempt is rendered and measured. A result is kept only when it beats normal render variation.</span></li>
+        <li><b>One-step undo</b><span>Your original lights stay intact and your materials are never touched.</span></li>
+      </ul>
     </div>
   </section>
 
   <section class="sec works2">
-    <div class="sec-head2"><div><span class="pill reveal"><i></i>What Director does</span><h2 class="h2 reveal">Four ways to direct a scene</h2></div><button type="button" class="link-arrow reveal" data-workspace="studio"><span>Open Studio</span><i class="link-arrow__bar"></i></button></div>
-    <div class="wgrid">
-      <article class="wk reveal"><div class="wk__img ph ph--soft" aria-hidden="true"><svg viewBox="0 0 48 48"><circle cx="24" cy="24" r="8"/><path d="M24 6v6M24 36v6M6 24h6M36 24h6M11 11l4 4M33 33l4 4M37 11l-4 4M15 33l-4 4"/></svg></div><div class="wk__meta"><h3 class="h4">Lighting match</h3><span>Studio · Reference photo → native lights</span></div></article>
-      <article class="wk reveal"><div class="wk__img ph ph--soft" aria-hidden="true"><svg viewBox="0 0 48 48"><path d="M8 18V8h10M30 8h10v10M40 30v10H30M18 40H8V30"/></svg></div><div class="wk__meta"><h3 class="h4">Framing &amp; close-ups</h3><span>Studio · Full product or one selected part</span></div></article>
-      <article class="wk reveal"><div class="wk__img ph ph--soft" aria-hidden="true"><svg viewBox="0 0 48 48"><circle cx="24" cy="24" r="16"/><path d="M12 20c6 4 18 4 24 0"/></svg></div><div class="wk__meta"><h3 class="h4">Materials</h3><span>Materials · Texture sets → Plastic material</span></div></article>
-      <article class="wk reveal"><div class="wk__img ph ph--soft" aria-hidden="true"><svg viewBox="0 0 48 48"><rect x="6" y="12" width="36" height="24" rx="4"/><path d="M21 19l9 5-9 5z"/></svg></div><div class="wk__meta"><h3 class="h4">Reference video</h3><span>Studio · Camera move → rendered clip</span></div></article>
+    <div class="sec-head2"><div><h2 class="h2 reveal">Four ways to direct a scene</h2></div><button type="button" class="link-arrow reveal" data-workspace="studio"><span>Open Studio</span><i class="link-arrow__bar"></i></button></div>
+    <div class="caps">
+      <article class="reveal"><h3 class="h4">Lighting match</h3><p>Turn a reference photo into native lights, then compare before and after.</p></article>
+      <article class="reveal"><h3 class="h4">Framing and close-ups</h3><p>Frame the full product or one selected part without changing your materials.</p></article>
+      <article class="reveal"><h3 class="h4">Materials</h3><p>Import texture sets and build an unassigned Plastic material from the maps you choose.</p></article>
+      <article class="reveal"><h3 class="h4">Reference video</h3><p>Turn a reference clip into a camera move and render it frame by frame.</p></article>
     </div>
   </section>
 
   <section class="sec works2" id="homeHow">
-    <div class="sec-head2"><div><span class="pill reveal"><i></i>How it works</span><h2 class="h2 reveal">From a connected scene to a finished look</h2></div></div>
-    <div class="steps">
-      <div class="step reveal"><span class="step__no">01</span><h3 class="h4">Connect</h3><div class="step__body"><p>Save your scene, paste one command in KeyShot’s scripting window, and Director links up for up to four hours.</p><div class="chipbox"><span>Window → Scripting</span><span>One command</span></div></div></div>
-      <div class="step reveal"><span class="step__no">02</span><h3 class="h4">Direct</h3><div class="step__body"><p>Add a reference photo or describe a change. Director builds native lights, frames the product, or prepares a material.</p><div class="chipbox"><span>Reference photo</span><span>Lights</span><span>Framing</span></div></div></div>
-      <div class="step reveal"><span class="step__no">03</span><h3 class="h4">Review</h3><div class="step__body"><p>Check the result in real KeyShot previews. Compare before and after, refine within the limits, or undo.</p><div class="chipbox"><span>Before / after</span><span>Undo</span><span>Recipe JSON</span></div></div></div>
-      <div class="step reveal"><span class="step__no">04</span><h3 class="h4">Keep</h3><div class="step__body"><p>Director never saves for you. Review in KeyShot, save your scene, and render final output there.</p><div class="chipbox"><span>Your scene</span><span>Your renderer</span></div></div></div>
-    </div>
-  </section>
-
-  <section class="sec stats">
-    <div class="stat reveal"><i class="corner"></i><span class="stat__num">12</span><p>Preview renders per lighting match, at most</p></div>
-    <div class="stat reveal"><i class="corner"></i><span class="stat__num">8 min</span><p>Time limit for one lighting match</p></div>
-    <div class="stat reveal"><i class="corner"></i><span class="stat__num">4 h</span><p>How long one KeyShot connection lasts</p></div>
-    <div class="stat reveal"><i class="corner"></i><span class="stat__num">0</span><p>Scenes saved automatically. You save in KeyShot.</p></div>
+    <div class="sec-head2"><div><h2 class="h2 reveal">From scene to finished look</h2></div></div>
+    <ol class="steps">
+      <li class="step reveal"><h3 class="h4">Connect</h3><div class="step__body"><p>Save your scene, paste one command in KeyShot’s scripting window, and Director links up for up to four hours.</p><div class="chipbox"><span>Window → Scripting</span><span>One command</span></div></div></li>
+      <li class="step reveal"><h3 class="h4">Direct</h3><div class="step__body"><p>Add a reference photo or describe a change. Director builds native lights, frames the product, or prepares a material.</p><div class="chipbox"><span>Reference photo</span><span>Lights</span><span>Framing</span></div></div></li>
+      <li class="step reveal"><h3 class="h4">Review</h3><div class="step__body"><p>Check the result in real KeyShot previews. Compare before and after, refine within the limits, or undo.</p><div class="chipbox"><span>Before and after</span><span>Undo</span><span>Recipe JSON</span></div></div></li>
+      <li class="step reveal"><h3 class="h4">Keep</h3><div class="step__body"><p>Director never saves for you. Review in KeyShot, save your scene, and render final output there.</p><div class="chipbox"><span>Your scene</span><span>Your renderer</span></div></div></li>
+    </ol>
   </section>
 
   <section class="sec works2">
-    <div class="sec-head2"><div><span class="pill reveal"><i></i>Boundaries</span><h2 class="h2 reveal">What Director won’t do</h2></div></div>
-    <div class="cols3">
-      <article class="reveal"><small>YOUR SCENE</small><h3>Never saves for you</h3><p>Director leaves the scene unsaved, so you review and keep the result in KeyShot.</p></article>
-      <article class="is-me reveal"><small>YOUR PRODUCT</small><h3>Geometry and materials stay put</h3><p>Lighting matches add lights and environment only. Your materials remain untouched.</p></article>
-      <article class="reveal"><small>YOUR RENDER</small><h3>Previews are previews</h3><p>Final-resolution output stays KeyShot’s job. Downloads are clearly preview quality.</p></article>
+    <div class="sec-head2"><div><h2 class="h2 reveal">Limits we keep</h2></div></div>
+    <ul class="limits">
+      <li class="reveal"><b>12 previews or 8 minutes</b>One lighting match stops at whichever limit it reaches first.</li>
+      <li class="reveal"><b>4 hours</b>One KeyShot connection lasts up to four hours. Run the command again to reconnect.</li>
+      <li class="reveal"><b>Never saved for you</b>Director leaves your scene unsaved so you review and keep the result in KeyShot.</li>
+      <li class="reveal"><b>Previews, not final renders</b>Downloads are preview quality. Final-resolution output stays KeyShot’s job.</li>
+    </ul>
+  </section>
+
+  <section class="sec works2">
+    <div class="sec-head2"><div><h2 class="h2 reveal">What Director won’t do</h2></div></div>
+    <div class="stance">
+      <article class="reveal"><h3>Change your geometry or materials</h3><p>Lighting matches add lights and environment only. Your product and materials stay as they are.</p></article>
+      <article class="reveal"><h3>Promise an exact match</h3><p>Matching is an inference from a photograph. Director reports what it measured and what it could not.</p></article>
+      <article class="reveal"><h3>Replace your real render</h3><p>The picture you see is always your own KeyShot scene, never a generated stand-in.</p></article>
     </div>
   </section>
 
   <section class="sec faq" id="homeFaq">
-    <div class="reveal"><span class="pill"><i></i>FAQ</span><h2 class="h2">Questions we expect</h2></div>
+    <div class="reveal"><h2 class="h2">Questions we expect</h2></div>
     <div class="reveal">
       <details class="qa" open><summary>Does Director save my KeyShot scene?</summary><p>Never. Director leaves your scene unsaved, so you review the result and save it in KeyShot yourself.</p></details>
       <details class="qa"><summary>Which KeyShot version does it need?</summary><p>KeyShot Studio 2026.2 on Windows 11 is the verified setup. Director talks to the open scene through KeyShot’s scripting window.</p></details>
@@ -176,7 +194,6 @@
   </section>
 
   <section class="cta2">
-    <span class="pill reveal"><i></i>Get started</span>
     <h2 class="h2 reveal">Open KeyShot, then <span class="hl">direct the light.</span></h2>
     <p class="reveal">Save your scene, run one command in KeyShot’s scripting window, and you’re connected.</p>
     <button type="button" class="btn-acc reveal" data-copy aria-label="Copy KeyShot setup command">Copy setup command</button>
@@ -190,7 +207,7 @@
         <div><b>Learn</b><button type="button" data-scroll="homeHow">How it works</button><button type="button" data-scroll="homeFaq">FAQ</button><a href="https://github.com/Trostky1/keyshot-director/blob/main/docs/RELEASE_NOTES_2.3.md" target="_blank" rel="noopener">Release notes</a></div>
       </div>
     </div>
-    <div class="foot__bottom"><span>© 2026 KeyShot Director</span><span>Verified on Windows 11 · KeyShot Studio 2026.2</span></div>
+    <div class="foot__bottom"><span>© 2026 KeyShot Director</span><span>Verified on Windows 11 and KeyShot Studio 2026.2</span></div>
   </footer>
 </main>
 
@@ -627,7 +644,7 @@ const homeShot = $('homeShot');
 function syncHomeShot() {
   const shot = $('shot'), live = Boolean(shot.getAttribute('src')) && shot.naturalWidth > 0 && shot.style.display !== 'none';
   if (live && homeShot.getAttribute('src') !== shot.getAttribute('src')) homeShot.src = shot.getAttribute('src');
-  homeShot.hidden = !live; $('homeHeroLabel').hidden = live;
+  homeShot.hidden = !live; $('homeFrag').hidden = live;
 }
 $('shot').addEventListener('load', syncHomeShot); $('shot').addEventListener('error', syncHomeShot);
 if ('IntersectionObserver' in window) {

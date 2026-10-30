@@ -57,7 +57,6 @@ typography:
     fontFamily: 'Consolas, "SF Mono", Menlo, monospace'
     fontSize: "12px"
 rounded:
-  sm: "8px"
   md: "12px"
   lg: "16px"
   pill: "100px"
@@ -75,14 +74,14 @@ components:
   button-dark:
     backgroundColor: "{colors.hero-ink}"
     textColor: "{colors.paper}"
-    rounded: "0"
+    rounded: "{rounded.pill}"
     padding: "12px 24px"
   chip:
     borderColor: "{colors.line}"
     rounded: "{rounded.pill}"
   field:
     backgroundColor: "{colors.soft}"
-    rounded: "{rounded.sm}"
+    rounded: "{rounded.md}"
     padding: "11px 16px"
   scene-card:
     backgroundColor: "{colors.night}"
@@ -117,12 +116,16 @@ IBM Plex Sans (variable, bundled in `server/public/fonts`, SIL OFL 1.1). Heading
 ## Components
 
 - **Pill:** soft rounded label with an orange dot, above every section heading and for scene state.
-- **Buttons:** accent pill for primary in-app actions, outlined pill for secondary, square dark (`.btn-dark`) for import and apply, text button with a moving arrow for tertiary.
+- **Buttons:** accent pill for primary in-app actions, outlined pill for secondary, dark pill (`.btn-dark`) for connect and import, text button with a moving arrow for tertiary.
 - **Segmented tabs:** soft pill container, white active tab with accent text (Frame mode, Material tools).
-- **Fields:** soft fill, 8px radius, no border; focus is a 2px ink outline.
+- **Fields:** soft fill, 12px radius, no border; focus is a 2px ink outline.
 - **Scene card:** night surface, 16px radius, overlay controls in translucent night.
 - **Messages:** Director replies in soft bubbles with an accent eyebrow, user messages in ink.
 - **Disclosures:** plain rows with a plus or minus on the right.
+
+## Shape
+
+One radius system, settled in the last block of `orchid.css`: **16px** for containers (scene card, composer, inspector, result, dialog, tool panels), **12px** for everything nested inside one (fields, selects, code wells, light rows, thumbnails, the live bar and hint, the brand mark), a **pill** for every control (buttons, chips, tabs, status and scene pills) and a **circle** for dots and swatches. There are no square boxes and no 4 to 10px corners. Panels inside the inspector are separated by a 1px line, not by their own box, and a block never nests a second card inside a card. Lines are opaque tints (`--line`, `--line-night`) so they stay quiet on every surface.
 
 ## Layout
 
