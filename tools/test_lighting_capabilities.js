@@ -3,7 +3,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs'), path = require('path');
-const { EVIDENCE, RECORD } = require('../server/lighting-capabilities');
+const { EVIDENCE, RECORD, MATRIX, MATRIX_COLUMNS } = require('../server/lighting-capabilities');
 const { render, target } = require('./render_capability_record');
 const { cleanPlan } = require('../server/photo');
 
@@ -42,4 +42,24 @@ test('referenced source files exist and nothing claims a match percentage', () =
   const text = render();
   assert.doesNotMatch(text, /\d\s?%\s+(?:match|similar)/i);
   assert.match(text, /Nothing here is a similarity percentage/);
+});
+
+test('the native-light matrix covers every column for every source with a valid label, and open cells name a probe', () => {
+  const sources = new Set(RECORD.sources.map(s => s.id));
+  for (const row of MATRIX) {
+    if (row.id !== 'environment') assert.ok(sources.has(row.id), `${row.id} is a documented source family`);
+    for (const [key] of MATRIX_COLUMNS) {
+      const cell = row.cells[key];
+      assert.ok(cell && Object.hasOwn(EVIDENCE, cell[0]) && cell[1].length >= 8, `${row.id}.${key}`);
+      if (cell[0] === 'open') assert.match(cell[1], /Probe/, `${row.id}.${key} must say how to close it`);
+    }
+  }
+  assert.deepEqual(MATRIX.map(r => r.id), ['area', 'point', 'spotlight', 'ies', 'planar', 'environment']);
+});
+test('Planar claims nothing recorded or source-confirmed, and the matrix keeps the IES output cell honest', () => {
+  const planar = MATRIX.find(r => r.id === 'planar');
+  assert.ok(Object.values(planar.cells).every(([label]) => ['open', 'documented'].includes(label)));
+  const ies = MATRIX.find(r => r.id === 'ies');
+  assert.equal(ies.cells.output[0], 'source-confirmed'); assert.match(ies.cells.output[1], /live plan-to-render round trip is open/);
+  assert.match(MATRIX.find(r => r.id === 'environment').cells.aim[1], /HDRI pins/);
 });

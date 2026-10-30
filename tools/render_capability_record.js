@@ -2,7 +2,8 @@
 //   node tools/render_capability_record.js          write the file
 //   node tools/render_capability_record.js --check  exit 1 if the file is out of date
 const fs = require('fs'), path = require('path');
-const { EVIDENCE, RECORD } = require('../server/lighting-capabilities');
+const { EVIDENCE, RECORD, MATRIX, MATRIX_COLUMNS } = require('../server/lighting-capabilities');
+const CODE = { 'recorded-live-evidence': 'R', 'source-confirmed': 'S', documented: 'D', proposed: 'P', open: 'O' };
 
 const cell = s => String(s).replace(/\|/g, '\\|').replace(/\r?\n/g, ' ');
 function table(headers, rows) {
@@ -16,6 +17,11 @@ function render() {
     RECORD.scope, '',
     `**Authority.** ${RECORD.supersedes.join(' ')} [Measured refinement](MEASURED_REFINEMENT.md) and the code are the authority for the acceptance loop. Nothing here is a similarity percentage or a claim of arbitrary 1:1 photograph matching.`, '',
     '## Evidence labels', '', table(['Label', 'Meaning'], Object.entries(EVIDENCE).map(([k, v]) => [`\`${k}\``, v])), '');
+  out.push('## Native light capability matrix', '',
+    'One row per source family, one column per capability. **R** recorded live (earlier controlled KeyShot experiment, not rerun), **S** source-confirmed (code and offline tests only), **D** documented by KeyShot only, **O** open. Nothing in this matrix was newly verified in KeyShot for this record, and "R" means the specific scene, parameter and result in the cited notes, not general reliability.', '',
+    table(['Source', ...MATRIX_COLUMNS.map(c => c[1])], MATRIX.map(row => [row.name, ...MATRIX_COLUMNS.map(([key]) => CODE[row.cells[key][0]])])), '',
+    'Cell notes and the probe that would close each open cell:', '',
+    table(['Source', 'Capability', 'Label', 'Note'], MATRIX.flatMap(row => MATRIX_COLUMNS.map(([key, name]) => [row.name, name, CODE[row.cells[key][0]], row.cells[key][1]]))), '');
   out.push('## Light source families', '');
   for (const family of RECORD.sources) {
     out.push(`### ${family.name}`, '', `In the photo plan grammar: **${family.in_photo_grammar ? 'yes' : 'no'}**.`, '',

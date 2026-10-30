@@ -72,6 +72,7 @@ const RECORD = {
   recovery: [
     { id: 'recovery.session_undo', name: 'One-level session undo (camera checkpoint, hidden originals, environment restore)', evidence: 'source-confirmed', where: 'server/photo.js; server/server.js restore', basis: 'Existing behavior, fixture-tested. Live restoration checks exist only as the opt-in tools/test_photo_live.js.' },
     { id: 'recovery.receipts', name: 'Persistent job receipt (identity, initial state, owned items, last accepted recipe, operation receipts, restore status)', evidence: 'source-confirmed', where: 'server/job-receipt.js; server/photo.js recovery()', basis: 'Written before the first scene change; ownership comes only from recorded items; restore requires the recorded scene identity. Restart behavior against a real scene is untested. E14.' },
+    { id: 'delivery.native_save', name: 'Explicit native save: KSP package and/or BIP scene to new paths', evidence: 'source-confirmed', where: 'bridge/cc_deliver.py; server/reconstruction.js deliver', basis: 'Uses documented lux.savePackage and lux.saveFile; the bridge op is tested against a fake lux only. Whether saveFile retargets the open scene, whether the package bundles every resource, and the reopen round trip are unverified, so a BIP save requires an acknowledgement. R13.' },
     { id: 'recovery.node_ids', name: 'Native node ids in receipts', evidence: 'open', where: 'bridge op_light_set', basis: 'The bridge tracks created node ids but does not return them; receipts currently record light ids and materials.' },
     { id: 'recovery.direct_removal', name: 'Direct removal of imported light carriers', evidence: 'recorded-live-evidence', where: 'bridge op_light_remove', basis: 'KeyShot retained the carrier mesh after node deletion in the disposable scene; broad cleanup is refused. Saved-checkpoint reopening is a disposable-scene reset only. E01.' },
   ],
@@ -81,13 +82,14 @@ const RECORD = {
     { id: 'measure.shared_mask', name: 'One mask applied to the reference and the render', evidence: 'source-confirmed', where: 'server/image-mask.js; photo-refinement referenceMetrics; lighting-evidence masked_beauty', basis: 'Replaces the asymmetry between all-pixel reference statistics and Clown-product render statistics. Correspondence assumes the camera is aligned (E05); manual polygon/rect masks only, no automatic segmentation. E06.' },
     { id: 'measure.colour_contract', name: 'Linear EXR and display-space pixels kept separate', evidence: 'source-confirmed', where: 'server/colour-contract.js', basis: 'The KeyShot linear-to-PNG transform is an sRGB-like assumption, not measured. E04.' },
     { id: 'measure.repeat_noise', name: 'Repeat noise distributions per metric', evidence: 'open', where: 'server/photo-refinement.js decision', basis: 'Current gate uses a single repeat difference; distributions are not measured on a real scene. E04.' },
-    { id: 'measure.camera_alignment', name: 'Camera alignment helper (landmarks, silhouette overlay, reprojection check)', evidence: 'proposed', where: 'server/camera-alignment.js', basis: 'Validated on injected fixtures only; KeyShot projection conventions against a rendered calibration target are untested. Not wired into the app. E05.' },
+    { id: 'measure.camera_alignment', name: 'Camera alignment helper (landmarks, silhouette overlay, reprojection check)', evidence: 'proposed', where: 'server/camera-alignment.js', basis: 'Used by the reconstruction session camera stage (verify or propose; a correction is applied only after confirmation). Validated on injected fixtures only; KeyShot projection conventions against a rendered calibration target are untested. No UI. E05.' },
   ],
 
   search: [
     { id: 'search.vision_loop', name: 'Bounded vision refinement (default 2 attempts, 12 captures, 480 s)', evidence: 'source-confirmed', where: 'server/photo.js; server/photo-refinement.js', basis: 'Accepts a candidate only when the named objective improves by more than max(0.005, 2x repeat difference). A heuristic, not a similarity percentage.' },
-    { id: 'search.objectives', name: 'Multi-component objective (highlight shapes, shadow direction, regional tone/colour, sharpness)', evidence: 'proposed', where: 'server/lighting-objectives.js', basis: 'Adversarial-fixture tests on synthetic images only; not wired into the app. E07.' },
-    { id: 'search.optimizer', name: 'Coordinate and Powell-style derivative-free search with repeat-noise gating', evidence: 'proposed', where: 'server/derivative-free.js; tools/reconstruction_harness.js', basis: 'Compared with the existing director loop at equal render budget on a synthetic renderer with a stand-in vision policy (see docs/RELEASE_NOTES_REFERENCE_LIGHTING.md for the table). Coordinate search beat the stand-in; the Powell-style variant did worse than coordinate search. Not wired into the app. E07, E13.' },
+    { id: 'search.objectives', name: 'Multi-component objective (highlight shapes, shadow direction, regional tone/colour, sharpness)', evidence: 'proposed', where: 'server/lighting-objectives.js', basis: 'Used by the reconstruction session, separately for the product outline and its surroundings. Adversarial-fixture tests on synthetic images only. E07.' },
+    { id: 'search.optimizer', name: 'Coordinate and Powell-style derivative-free search with repeat-noise gating', evidence: 'proposed', where: 'server/derivative-free.js; tools/reconstruction_harness.js', basis: 'Compared with the existing director loop at equal render budget on a synthetic renderer with a stand-in vision policy (see docs/RELEASE_NOTES_REFERENCE_LIGHTING.md for the table). Coordinate search beat the stand-in; the Powell-style variant did worse than coordinate search. Drives the reconstruction session (40-evaluation ceiling, time limit, early stop on measured noise). E07, E13.' },
+    { id: 'search.reconstruction_session', name: 'Single-view reconstruction session (baseline, camera lock, bounded light fit, diagnosis, before/after)', evidence: 'source-confirmed', where: 'server/reconstruction.js; server/server.js /api/reconstruct', basis: 'Tested end to end against injected adapters and a synthetic renderer (docs/RECONSTRUCTION_MILESTONE_1.md). The KeyShot adapter loads but has never been run against a live scene; render time and noise there are unmeasured. No UI yet.' },
     { id: 'search.light_basis', name: 'Light-response basis (NNLS over per-source linear renders)', evidence: 'proposed', where: 'server/light-basis.js', basis: 'Synthetic renderer only; tone mapping and clipping break it by construction. E09.' },
   ],
 
@@ -111,4 +113,53 @@ const RECORD = {
   ],
 };
 
-module.exports = { EVIDENCE, RECORD };
+// Source-by-capability matrix. Each cell: [evidence label, short note]. "recorded-live-evidence" means a controlled KeyShot
+// experiment recorded in the project docs (not rerun for this matrix); nothing in this matrix was newly verified in KeyShot.
+// An 'open' cell names the probe that would close it; probes run on a disposable saved copy (backlog item R12).
+const MATRIX_COLUMNS = [
+  ['create', 'Create'], ['position', 'Independent position'], ['aim', 'Independent aim'], ['output', 'Output / power'], ['color', 'Color'],
+  ['shape', 'Size, radius or spread'], ['readback', 'Readback'], ['edit', 'Edit in place'], ['ownership', 'Ownership'], ['cleanup', 'Cleanup'],
+];
+const R = 'recorded-live-evidence', S = 'source-confirmed', D = 'documented', O = 'open';
+const MATRIX = [
+  { id: 'area', name: 'Area', cells: {
+    create: [R, 'Imported carrier panel with an Area material; placement self-check against computed corners.'],
+    position: [R, 'Position and size set per light; self-check error recorded.'],
+    aim: [R, 'Panel normal faces a per-light target; the photo plan now exposes a per-light offset (offline-tested only).'],
+    output: [R, 'Lumen sweep 12k/60k/120k with readback. Physical (fixed-flux) and artistic modes differ offline only.'],
+    color: [S, 'Kelvin or RGB written and read back in code; no dedicated colour calibration recorded.'],
+    shape: [R, 'Rectangular carrier width/height; disk, strip and custom carriers unprobed.'],
+    readback: [R, 'Power and visibility flags read back from the graph.'],
+    edit: [R, 'Same-ID replay at 60k worked.'],
+    ownership: [S, 'Registry holds created node and geometry ids; adoption after a bridge restart still matches a name prefix.'],
+    cleanup: [R, 'Node deletion leaves the carrier mesh and material; broad cleanup is refused; reopening a saved checkpoint resets a disposable scene only.'] } },
+  { id: 'point', name: 'Point', cells: {
+    create: [R, 'Typed create with readback on a disposable scene.'], position: [R, 'Position is the carrier centre; contribution measured.'],
+    aim: [S, 'Not directional; no aim control exists or is needed.'], output: [R, 'Power read back; flux-versus-distance behaviour not measured (physical mode proposed).'],
+    color: [S, 'As Area.'], shape: [R, 'Radius read back; response across product scale not measured.'], readback: [R, 'Graph parameters read back.'],
+    edit: [R, 'Typed update with readback.'], ownership: [S, 'As Area.'], cleanup: [R, 'Checkpoint reopening on a disposable scene only.'] } },
+  { id: 'spotlight', name: 'Spotlight', cells: {
+    create: [R, 'Typed create with beam-parameter readback.'], position: [S, 'Per-light position in code.'],
+    aim: [R, 'Local -Y emission axis produced a measurable beam; +Z did not.'], output: [R, 'Power read back; constant-output behaviour across angle unmeasured.'],
+    color: [S, 'As Area.'], shape: [R, 'Angle, falloff and constant-output flag read back; footprint not measured.'], readback: [R, 'Read back.'],
+    edit: [R, 'Typed update.'], ownership: [S, 'As Area.'], cleanup: [R, 'Checkpoint reopening only.'] } },
+  { id: 'ies', name: 'IES', cells: {
+    create: [R, 'K72 profile loaded and rendered; 31 profile pairs catalogued.'], position: [S, 'Carrier position per light.'],
+    aim: [R, 'Aimed with the Spotlight convention; the six axis enum values were exercised without a universal mapping.'],
+    output: [S, 'Planner gain now reaches the native multiplier (offline trace); the live plan-to-render round trip is open.'],
+    color: [R, 'Native profile colour read back and preserved unless overridden.'], shape: [O, 'Rectangular width/length and shape modes unprobed. Probe: sweep each with a known asymmetric profile.'],
+    readback: [R, 'Profile colour and multiplier read back.'], edit: [S, 'Multiplier and axis writable in code.'], ownership: [S, 'Profile material ownership tracked.'], cleanup: [R, 'Checkpoint reopening only.'] } },
+  { id: 'planar', name: 'Planar', cells: {
+    create: [O, 'No lux shader constant or library asset found; the Area panel is not a Planar light. Probe: graph discovery on a disposable scene.'],
+    position: [O, 'Probe after construction is established.'], aim: [O, 'Probe after construction is established.'], output: [D, 'Documented in the manual; not verified on 2026.2.'],
+    color: [D, 'Documented, including textured colour and alpha.'], shape: [D, 'Documented width, height and separate spread angles.'],
+    readback: [O, 'Probe after construction.'], edit: [O, 'Probe after construction.'], ownership: [O, 'Probe after construction.'], cleanup: [O, 'Probe after construction.'] } },
+  { id: 'environment', name: 'Environment (HDRI file, brightness, rotation, background)', cells: {
+    create: [S, 'An isolated CC_Photo environment is created and the original restored by snapshot.'], position: [S, 'Rotation set in code.'],
+    aim: [O, 'No directional control; HDRI pins are the spatial control and no scripting path is known. Probe: inventory the Env surface for pin methods.'],
+    output: [S, 'Brightness set in code; KeyShot rejects exactly zero (0.000001 used).'], color: [R, 'Background colour is treated as linear and gamma-encoded.'],
+    shape: [O, 'Size, height and contrast controls exist on the Env object but are not set by Director. Probe: set each on a disposable copy and read it back.'], readback: [S, 'env_info snapshot.'], edit: [S, 'env_set in place.'],
+    ownership: [S, 'CC_Photo_ environment named per job.'], cleanup: [S, 'env_restore from snapshot; restoration of pins cannot be offered because pins are not scriptable.'] } },
+];
+
+module.exports = { EVIDENCE, RECORD, MATRIX, MATRIX_COLUMNS };

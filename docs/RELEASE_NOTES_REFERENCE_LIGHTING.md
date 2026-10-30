@@ -18,9 +18,9 @@ Director still does not report a match percentage and does not claim arbitrary 1
 
 **Colour contract.** Reference photographs and KeyShot PNG previews are `display_srgb`; EXR passes are `linear_exr`. Photograph-to-render scoring happens only in display space, and the helper refuses to compare across spaces. KeyShot's actual linear-to-PNG transform is an unverified sRGB-like assumption (E04).
 
-## Experimental modules (not shipped, not wired into the app)
+## Experimental modules
 
-These live in `server/` but are left out of the release package until their live experiments pass.
+Update: `camera-alignment.js`, `lighting-objectives.js` and `derivative-free.js` are now used by the reconstruction session and ship (see [Reconstruction milestone 1](RECONSTRUCTION_MILESTONE_1.md)); only `light-basis.js` remains unshipped and unwired. As originally written, these were left out of the release package until their live experiments pass.
 
 | Module | Purpose | Offline evidence |
 |---|---|---|
@@ -37,15 +37,15 @@ The adversarial cases covered: same centroid with a different highlight shape, c
 
 | Method | Renders | Objective, same view | Objective, turned view | Key azimuth error (deg) | Key elevation error (deg) |
 |---|---|---|---|---|---|
-| First vision estimate | 1 | 0.317 | 0.268 | 10.4 | 13.2 |
-| Vision loop, fresh estimates | 12 | 0.279 | 0.254 | 15.2 | 11.0 |
-| Vision loop, local steps | 12 | 0.296 | 0.265 | 10.8 | 13.2 |
-| Coordinate search | 12 | 0.166 | 0.159 | 11.6 | 7.2 |
+| First vision estimate | 1 | 0.313 | 0.253 | 10.4 | 13.2 |
+| Vision loop, fresh estimates | 12 | 0.273 | 0.238 | 15.2 | 11.0 |
+| Vision loop, local steps | 12 | 0.291 | 0.249 | 10.8 | 13.2 |
+| Coordinate search | 12 | 0.174 | 0.162 | 15.5 | 7.2 |
 | Powell-style search | 12 | 0.243 | 0.273 | 24.9 | 13.2 |
-| Coordinate search | 24 | 0.073 | 0.086 | 9.2 | 5.9 |
-| Powell-style search | 24 | 0.199 | 0.213 | 24.2 | 10.5 |
-| Coordinate search | 48 | 0.025 | 0.023 | 5.3 | 4.4 |
-| Powell-style search | 48 | 0.112 | 0.145 | 24.2 | 10.3 |
+| Coordinate search | 24 | 0.072 | 0.085 | 9.2 | 5.9 |
+| Powell-style search | 24 | 0.193 | 0.213 | 22.5 | 10.1 |
+| Coordinate search | 48 | 0.024 | 0.022 | 5.3 | 4.4 |
+| Powell-style search | 48 | 0.109 | 0.134 | 22.5 | 11.4 |
 
 What this does and does not show. The harness works, counts every render against one budget, and is deterministic. On this synthetic problem, with a four-parameter reduced search, coordinate search improves on the stand-in at the same 12 renders and keeps improving with more. The Powell-style variant did worse than coordinate search here because the bounded line searches settle in local minima where the saturating highlight losses are flat. The stand-in vision is invented: real vision behavior, KeyShot noise, materials, denoising and real photographs are all untested, so this is not evidence that numerical fitting beats the present refinement in KeyShot.
 
