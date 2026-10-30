@@ -6,6 +6,7 @@ const crypto = require('crypto');
 const { decode } = require('./png');
 const { analyzeCapture, compareCaptures, normalizeTarget } = require('./lighting-evidence');
 const { normalizeMask } = require('./image-mask');
+const platformPaths = require('./platform');
 
 const CATEGORIES = ['area', 'point', 'ies', 'spotlight'];
 const OPERATION_VERSION = '1.15.0';
@@ -271,7 +272,7 @@ function createLightingLab({ send, heartbeat, SHOTS }) {
       const unknown = Object.keys(value).filter(key => key !== 'expected_path');
       if (unknown.length) throw Object.assign(new Error(`Unsupported input: ${unknown[0]}`), { status: 400 });
       const expectedPath = value.expected_path;
-      if (typeof expectedPath !== 'string' || expectedPath.length > 1024 || !path.win32.isAbsolute(expectedPath) || path.win32.basename(expectedPath).toLowerCase() !== 'plugintest.bip')
+      if (typeof expectedPath !== 'string' || expectedPath.length > 1024 || !platformPaths.isAbsoluteScenePath(expectedPath) || platformPaths.sceneBaseName(expectedPath).toLowerCase() !== 'plugintest.bip')
         throw Object.assign(new Error('expected_path must be the absolute path to the current PluginTest.bip research scene.'), { status: 400 });
       return { expected_path: expectedPath };
     }

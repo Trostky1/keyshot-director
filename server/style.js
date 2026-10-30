@@ -7,7 +7,7 @@ const { decode } = require('./png');
 const { normalizeFolder: normalizeImageFolder } = require('./image-tools');
 
 const ROOT = path.join(__dirname, '..', 'references');
-const IMG = /\.(jpe?g|png|bmp|tiff?|gif|webp|avif|heic|heif|jxl)$/i;
+const IMG = /^(?!\.).+\.(jpe?g|png|bmp|tiff?|gif|webp|avif|heic|heif|jxl)$/i;
 
 const lum = (r, g, b) => (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
 const med = a => { if (!a.length) return 0; const s = [...a].sort((x, y) => x - y); return s[Math.floor(s.length / 2)]; };

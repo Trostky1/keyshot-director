@@ -1,2 +1,2 @@
 #!/bin/bash
-exec "$(cd "$(dirname "$0")" && pwd)/start-mac.sh"
+exec "$(cd "$(dirname "$0")" && pwd -P)/start-mac.sh"
