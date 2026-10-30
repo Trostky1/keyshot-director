@@ -3,6 +3,10 @@ const assert = require('node:assert/strict');
 const fs = require('fs'), os = require('os'), path = require('path'), zlib = require('zlib');
 const { createDirector, captureDimensions, measurementTarget } = require('../server/photo');
 const { settings, lockedPlan, decision } = require('../server/photo-refinement');
+const { normalizeMask } = require('../server/image-mask');
+// Default measurement: one shared whole-rectangle mask on both the reference and the render.
+const SIGNATURE = normalizeMask({ kind: 'rect' }).signature;
+const maskedBeauty = (p95, p05 = 0) => ({ mask_signature: SIGNATURE, colour_space: 'display_srgb', p05_luma: p05, p50_luma: p95 / 2, p95_luma: p95, highlight: null });
 function png(gray = 180) {
   const chunk = (kind, data) => { const b = Buffer.alloc(data.length + 12); b.writeUInt32BE(data.length); b.write(kind, 4); data.copy(b, 8); return b; };
   const h = Buffer.alloc(13); h.writeUInt32BE(64); h.writeUInt32BE(64, 4); h[8] = 8; h[9] = 2;
@@ -24,7 +28,7 @@ function rig(t, gains, evidenceOverride) {
       evidenceInputs.push(contract); reads++;
       if (evidenceOverride) return evidenceOverride({ active, reads, id });
       return { id: String(reads), output: { analysis: { available: true,
-        product_mask: { bounds_normalized: region }, product: { p05_luma: 0, p95_luma: active },
+        product_mask: { bounds_normalized: region }, product: { p05_luma: 0, p95_luma: active }, masked_beauty: maskedBeauty(active),
         measurement_scope: { kind: 'projected_bounds_roi' }, comparison_to: id ? { result: comparison } : null } } };
     }
   });
@@ -42,14 +46,14 @@ test('keeps an improved candidate and restores a later regression to best, not i
 });
 test('unavailable repeat measurements never apply a speculative candidate', async t => {
   const r = rig(t, [0.2, 0.65], ({ active, reads }) => ({ id: String(reads), output: { analysis: { available: true,
-    product_mask: { bounds_normalized: region }, product: { p95_luma: active }, measurement_scope: { kind: 'projected_bounds_roi' } } } }));
+    product_mask: { bounds_normalized: region }, product: { p95_luma: active }, masked_beauty: maskedBeauty(active), measurement_scope: { kind: 'projected_bounds_roi' } } } }));
   await r.d.start(input); const s = await r.d.wait(); assert.equal(s.phase, 'complete'); assert.deepEqual(r.applied, [0.2]);
 });
 test('failed candidate capture restores the last complete look', async t => {
   const r = rig(t, [0.2, 0.65], ({ active, reads, id }) => {
     if (reads === 3) throw new Error('pass unavailable');
     return { id: String(reads), output: { analysis: { available: true, product_mask: { bounds_normalized: region },
-      product: { p95_luma: active }, measurement_scope: { kind: 'projected_bounds_roi' }, comparison_to: id ? { result: comparison } : null } } };
+      product: { p95_luma: active }, masked_beauty: maskedBeauty(active), measurement_scope: { kind: 'projected_bounds_roi' }, comparison_to: id ? { result: comparison } : null } } };
   });
   await r.d.start(input); const s = await r.d.wait(); assert.equal(s.phase, 'complete'); assert.deepEqual(r.applied, [0.2, 0.65, 0.2]);
   assert.equal(s.result.refinement.accepted_attempts, 0);

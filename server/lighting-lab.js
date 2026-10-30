@@ -5,6 +5,7 @@ const path = require('path');
 const crypto = require('crypto');
 const { decode } = require('./png');
 const { analyzeCapture, compareCaptures, normalizeTarget } = require('./lighting-evidence');
+const { normalizeMask } = require('./image-mask');
 
 const CATEGORIES = ['area', 'point', 'ies', 'spotlight'];
 const OPERATION_VERSION = '1.15.0';
@@ -157,7 +158,8 @@ const OPERATIONS = [
       height: { type: 'integer', default: 400, minimum: 32, maximum: 960 },
       secs: { type: 'number', default: 2, minimum: 0.5, maximum: 8 },
       render_engine: { type: 'enum', items: ['current', 'product_cpu', 'interior_cpu', 'product_gpu', 'interior_gpu'], default: 'current', description: 'Temporarily select a render engine for this capture; KeyShot restores the active engine before returning.' },
-      measurement_target: { type: 'object', optional: true, description: 'Stable target id and identity plus normalized projected-bounds region {x0,y0,x1,y1}. This ROI is approximate and may include occluders; it does not establish pixel identity.' }
+      measurement_target: { type: 'object', optional: true, description: 'Stable target id and identity plus normalized projected-bounds region {x0,y0,x1,y1}. This ROI is approximate and may include occluders; it does not establish pixel identity.' },
+      mask: { type: 'object', optional: true, description: 'Shared measurement mask in coordinates relative to the measurement_target region: {kind: rect|polygon, points, exclude, exclude_transparent}. Analysis-only; the same mask is applied to the reference photograph.' }
     },
     preconditions: ['KeyShot Director bridge is connected.', 'Exact pass setter mapping is present in this KeyShot version.'],
     validation: ['Every requested output is present and PNG output decodes at the requested dimensions.', 'Clown yields aligned product-region metrics for Beauty and supported linear EXR passes.', 'The original render engine and active RenderOptions are restored; the scene signature is unchanged.'],
@@ -452,7 +454,7 @@ function createLightingLab({ send, heartbeat, SHOTS }) {
     }
     if (id === 'lighting.capture_diagnostic_passes') {
       const allowed = ['direct', 'indirect', 'reflection', 'shadow', 'raw', 'clown', 'depth', 'normals'];
-      const unknown = Object.keys(value).filter(key => !['passes', 'width', 'height', 'secs', 'render_engine', 'measurement_target'].includes(key));
+      const unknown = Object.keys(value).filter(key => !['passes', 'width', 'height', 'secs', 'render_engine', 'measurement_target', 'mask'].includes(key));
       if (unknown.length) throw Object.assign(new Error(`Unsupported input: ${unknown[0]}`), { status: 400 });
       const passes = value.passes == null ? ['clown', 'reflection', 'shadow'] : value.passes;
       if (!Array.isArray(passes) || !passes.length || passes.length > allowed.length || passes.some(pass => !allowed.includes(pass)) || new Set(passes).size !== passes.length)
@@ -470,7 +472,11 @@ function createLightingLab({ send, heartbeat, SHOTS }) {
       let measurement_target;
       try { measurement_target = normalizeTarget(value.measurement_target); }
       catch (error) { throw Object.assign(error, { status: 400 }); }
-      return { passes: passes.slice(), width, height, secs, render_engine, ...(measurement_target ? { measurement_target } : {}) };
+      let mask;
+      try { mask = normalizeMask(value.mask); }
+      catch (error) { throw Object.assign(error, { status: 400 }); }
+      if (mask && !measurement_target) throw Object.assign(new Error('A measurement mask needs a measurement_target region to define its coordinates.'), { status: 400 });
+      return { passes: passes.slice(), width, height, secs, render_engine, ...(measurement_target ? { measurement_target } : {}), ...(mask ? { mask } : {}) };
     }
     throw Object.assign(new Error('No input schema is available for this operation.'), { status: 400 });
   }
@@ -695,7 +701,8 @@ function createLightingLab({ send, heartbeat, SHOTS }) {
         'lighting.capture_diagnostic_passes': 'lighting_render_passes'
       };
       const bridgeOperation = bridgeOperations[operation_id];
-      const payload = operation_id === 'lighting.capture_diagnostic_passes' ? { ...normalized, run_id: record.id } : normalized;
+      const { mask: _analysisOnlyMask, ...bridgeInputs } = normalized;   // masks are applied by Node analysis, never sent to KeyShot
+      const payload = operation_id === 'lighting.capture_diagnostic_passes' ? { ...bridgeInputs, run_id: record.id } : normalized;
       const output = await send(bridgeOperation, payload, operation_id === 'lighting.capture_diagnostic_passes' ? 60000 : 45000);
       if (operation_id === 'lighting.capture_diagnostic_passes') {
         try { output.analysis = analyzeCapture(output.files, normalized); }

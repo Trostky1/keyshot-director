@@ -3,6 +3,8 @@
 const fs = require('fs');
 const { decode } = require('./png');
 const { decode: decodeExr } = require('./exr');
+const { normalizeMask, forEachMasked, maskedStatistics } = require('./image-mask');
+const { SPACES, lumaOf } = require('./colour-contract');
 
 const labelCode = rgb => (rgb[0] << 16) | (rgb[1] << 8) | rgb[2];
 const labelRgb = code => [(code >> 16) & 255, (code >> 8) & 255, code & 255];
@@ -81,6 +83,7 @@ function summarizeLinearPass(file, clown, target = null) {
     return {
       available: true,
       format: 'linear EXR luminance; ZIP tiled single-level pass',
+      colour_space: SPACES.LINEAR,
       measurement_scope: measurementScope(target),
       dimensions: { width: image.width, height: image.height },
       product: summary(product, productRgb),
@@ -246,8 +249,24 @@ function compareCaptures(referenceFiles, candidateFiles, threshold = 1e-4, conte
   }
 }
 
+// Display-space beauty statistics inside the SAME mask that scores the reference photograph. The mask's coordinates are relative
+// to the measurement target region, which stands in for the reference rectangle (assumes the camera is aligned; research E05).
+// With exclude_transparent the render-side counterpart of the reference's alpha test is the Clown object mask.
+function maskedBeautyStatistics(beauty, clown, target, mask) {
+  if (!mask || !target) return null;
+  const samples = [], step = Math.max(1, Math.floor(Math.max(beauty.w, beauty.h) / 640));
+  forEachMasked(mask, target.region, beauty.w, beauty.h, step, (x, y, u, v) => {
+    if (mask.exclude_transparent) { const label = clown.px(x, y); if (Math.max(label[0], label[1], label[2]) <= 8) return; }
+    const rgb = beauty.px(x, y).map(c => c / 255);
+    samples.push({ u, v, l: lumaOf(rgb[0], rgb[1], rgb[2]), rgb });
+  });
+  const stats = maskedStatistics(samples);
+  return stats ? { ...stats, colour_space: SPACES.DISPLAY, mask_signature: mask.signature } : null;
+}
+
 function analyzeCapture(files, expected = {}) {
   const target = normalizeTarget(expected.measurement_target);
+  const mask = normalizeMask(expected.mask);
   const byPass = new Map((files || []).map(file => [file.pass, file]));
   const beautyFile = byPass.get('beauty'), clownFile = byPass.get('clown');
   if (!beautyFile || !clownFile) return { available: false, reason: 'Beauty and Clown PNG outputs are both required for product-region analysis.' };
@@ -316,6 +335,7 @@ function analyzeCapture(files, expected = {}) {
     available: true,
     measurement_scope: measurementScope(target),
     method: 'Clown non-black mask aligned to beauty render',
+    ...(mask ? { masked_beauty: maskedBeautyStatistics(beauty, clown, target, mask) } : {}),
     dimensions: { width: beauty.w, height: beauty.h, sample_step: step },
     product_mask: {
       sampled_pixels: productCount,
