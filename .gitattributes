@@ -1,0 +1,5 @@
+# Shell scripts must keep LF line endings or macOS reports "bad interpreter: /bin/bash^M".
+*.sh text eol=lf
+*.command text eol=lf
+# Windows launchers must keep CRLF.
+*.bat text eol=crlf
