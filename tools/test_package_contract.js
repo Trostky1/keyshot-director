@@ -16,7 +16,7 @@ test('release copy manifest includes every literal local JavaScript dependency',
       assert.ok(packaged.has(dependency), `${file} requires omitted package dependency ${dependency}`);
     }
   }
-  for (const file of ['server/photo-refinement.js', 'server/style-search.js', 'docs/MATERIAL_EDIT_RECEIPTS.md', 'docs/MATERIAL_CALIBRATION_PLAN.md', 'docs/MATERIAL_CALIBRATION_RESULTS.md', 'docs/RELEASE_NOTES_2.3.md'])
+  for (const file of ['server/photo-refinement.js', 'server/style-search.js', 'docs/MATERIAL_EDIT_RECEIPTS.md', 'docs/MATERIAL_CALIBRATION_PLAN.md', 'docs/MATERIAL_CALIBRATION_RESULTS.md', 'docs/RELEASE_NOTES_2.3.md', 'server/light-spec.js', 'server/job-receipt.js', 'server/image-mask.js', 'server/colour-contract.js', 'docs/LIGHTING_CAPABILITY_RECORD.md', 'docs/RELEASE_NOTES_REFERENCE_LIGHTING.md'])
     assert.ok(packaged.has(file), `New workflow missing from package: ${file}`);
   assert.ok(packaged.has('server/material-core.js'), 'JavaScript recipe planner must ship in the release');
   assert.ok(packaged.has('server/listen-with-fallback.js'), 'port fallback helper must ship in the release');
