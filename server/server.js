@@ -29,7 +29,9 @@ const { createReconstructor } = require('./reconstruction');
 const crypto = require('crypto');
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const lightingLab = createLightingLab({ send, heartbeat, SHOTS });
-const MATERIAL_PACKAGE_DIR = path.resolve(__dirname, '..', 'materials');
+const platformCommands = require('./platform');
+const APP_ROOT = path.resolve(__dirname, '..');
+const MATERIAL_PACKAGE_DIR = path.resolve(APP_ROOT, 'materials');
 const packageEntryCache = new Map();
 
 function normalizeMaterialGraphPreset(value) {
@@ -1104,9 +1106,7 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/preview' && req.method === 'POST') { const b = await body(req); if (typeof b.live === 'boolean') { preview.live = b.live; if (b.live) preview.used = 0; } if (b.now) preview.wanted = true; return json(res, 200, { live: preview.live, used: preview.used, budget: preview.budget }); }
     if (url.pathname === '/api/connect' && req.method === 'GET') {
       // one statement for KeyShot's scripting console; forward slashes so there is nothing to escape
-      const root = path.resolve(__dirname, '..').split(path.sep).join('/');
-      const line = `exec("KD_HOME = '${root.replace(/'/g, "\\'")}'; exec(open(KD_HOME + '/bridge/cc_bridge.py', encoding='utf-8-sig').read())")`;
-      return json(res, 200, { line });
+      return json(res, 200, { line: platformCommands.connectLine(APP_ROOT) });
     }
     // ---- lifecycle: restart / quit this app, or tell the bridge inside KeyShot to stop ----
     if (url.pathname === '/api/quit' && req.method === 'POST') {
@@ -1310,10 +1310,8 @@ const server = http.createServer(async (req, res) => {
       const b = await body(req);
       const target = b.textureSet ? textureSets.listTextureSets().find(set => set.id === b.textureSet)?.path : MATERIAL_PACKAGE_DIR;
       if (!target || !fs.existsSync(target)) return json(res, 404, { error: 'That material folder could not be found. Refresh the list and try again.' });
-      const opener = process.platform === 'win32' ? ['explorer.exe', target]
-        : process.platform === 'darwin' ? ['open', target]
-          : ['xdg-open', target];
-      execFile(opener[0], [opener[1]], { windowsHide: true }, error => {
+      const opener = platformCommands.openFolderCommand(target);
+      execFile(opener.file, opener.args, { windowsHide: true }, error => {
         if (error) console.warn('Could not open the materials folder:', error.message);
       });
       return json(res, 200, { opened: true, directory: target });
@@ -1372,14 +1370,11 @@ listenWithFallback(server, {
   maxAttempts: 10,
   onPort: port => { PORT = port; },
   onListening: () => {
-    if (process.platform === 'win32') {
-      const marker = path.join(__dirname, '..', 'bridge', 'director-server.json');
-      try { fs.writeFileSync(marker, JSON.stringify({ pid: process.pid, port: PORT, started: Date.now(), entry: path.resolve(__filename) }), 'utf8'); }
-      catch (error) { console.warn(`[startup] Could not write the safe-stop marker: ${error.message}`); }
-    }
+    try { platformCommands.writeServerMarker(APP_ROOT, platformCommands.serverMarkerRecord({ pid: process.pid, port: PORT, entry: __filename }), fs); }
+    catch (error) { console.warn(`[startup] Could not write the safe-stop marker: ${error.message}`); }
     console.log(`KeyShot control server: http://localhost:${PORT}`);
-    if (process.env.KD_OPEN && process.platform === 'win32') execFile('cmd', ['/c', 'start', '""', `http://localhost:${PORT}`], { windowsHide: true }, () => {});
-    if (process.env.KD_OPEN && process.platform === 'darwin') execFile('open', [`http://localhost:${PORT}`], () => {});
+    const browser = process.env.KD_OPEN && platformCommands.openUrlCommand(`http://localhost:${PORT}`);
+    if (browser) execFile(browser.file, browser.args, { windowsHide: true }, () => {});
     for (const ip of lanIPs()) console.log(`  phone / other PC: http://${ip}:${PORT}`);
   },
   onError: (error, range) => {
@@ -1390,12 +1385,7 @@ listenWithFallback(server, {
   },
 });
 function removeServerMarker() {
-  if (process.platform !== 'win32') return;
-  const marker = path.join(__dirname, '..', 'bridge', 'director-server.json');
-  try {
-    const record = JSON.parse(fs.readFileSync(marker, 'utf8'));
-    if (record.pid === process.pid && path.resolve(record.entry || '') === path.resolve(__filename)) fs.unlinkSync(marker);
-  } catch { /* already stopped or a different app instance owns the marker */ }
+  platformCommands.removeServerMarker(APP_ROOT, { pid: process.pid, entry: __filename }, fs);
 }
 process.once('exit', removeServerMarker);
 const tidyOpts = { send, cameras: false, alive: () => heartbeat().alive, busy: () => !!(photoDirector.status().running || playing || matchJob.running || videoJob.running || renderJob.running || (promptJob && !promptJob.done) || (materialPromptJob && !materialPromptJob.done) || shotBusy) };

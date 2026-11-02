@@ -16,39 +16,42 @@ function run(file, args) {
   }));
 }
 
-async function resizeJpeg(input, output, maxDim = 900) {
-  if (process.platform === 'win32') {
-    await run('powershell', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', RESIZE_PS,
+// `deps` lets tests choose the platform and replace the program runner and file system.
+async function resizeJpeg(input, output, maxDim = 900, deps = {}) {
+  const platform = deps.platform || process.platform, exec = deps.run || run;
+  if (platform === 'win32') {
+    await exec('powershell', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', RESIZE_PS,
       '-In', input, '-Out', output, '-MaxDim', String(maxDim)]);
     return output;
   }
-  if (process.platform === 'darwin') {
-    await run('sips', ['-s', 'format', 'jpeg', '-s', 'formatOptions', '85', '-Z', String(maxDim), input, '--out', output]);
+  if (platform === 'darwin') {
+    await exec('sips', ['-s', 'format', 'jpeg', '-s', 'formatOptions', '85', '-Z', String(maxDim), input, '--out', output]);
     return output;
   }
   throw new Error('Image conversion is supported on Windows and macOS.');
 }
 
-async function normalizeFolder(folder, outDir, maxDim = 900) {
-  if (process.platform === 'win32') {
-    const stdout = await run('powershell', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', NORMALIZE_PS,
+async function normalizeFolder(folder, outDir, maxDim = 900, deps = {}) {
+  const platform = deps.platform || process.platform, exec = deps.run || run, fsx = deps.fs || fs;
+  if (platform === 'win32') {
+    const stdout = await exec('powershell', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', NORMALIZE_PS,
       '-Folder', folder, '-OutDir', outDir, '-MaxDim', String(maxDim)]);
     const data = JSON.parse(stdout || '[]');
     return Array.isArray(data) ? data : [data];
   }
-  if (process.platform !== 'darwin') throw new Error('Style image conversion is supported on Windows and macOS.');
+  if (platform !== 'darwin') throw new Error('Style image conversion is supported on Windows and macOS.');
 
-  fs.mkdirSync(outDir, { recursive: true });
-  const names = fs.readdirSync(folder).filter(name => IMAGE_EXT.test(name)).sort((a, b) => a.localeCompare(b));
+  fsx.mkdirSync(outDir, { recursive: true });
+  const names = fsx.readdirSync(folder).filter(name => IMAGE_EXT.test(name) && !name.startsWith('.')).sort((a, b) => a.localeCompare(b));
   const results = [];
   for (const name of names) {
     const source = path.join(folder, name), png = path.join(outDir, path.parse(name).name + '.png');
     try {
-      if (fs.existsSync(png) && fs.statSync(png).mtimeMs >= fs.statSync(source).mtimeMs) {
+      if (fsx.existsSync(png) && fsx.statSync(png).mtimeMs >= fsx.statSync(source).mtimeMs) {
         results.push({ name, png, status: 'cached' });
         continue;
       }
-      await run('sips', ['-s', 'format', 'png', '-Z', String(maxDim), source, '--out', png]);
+      await exec('sips', ['-s', 'format', 'png', '-Z', String(maxDim), source, '--out', png]);
       results.push({ name, png, status: 'ok' });
     } catch (error) {
       results.push({ name, png: null, status: 'error: ' + String(error.message).split('\n')[0] });

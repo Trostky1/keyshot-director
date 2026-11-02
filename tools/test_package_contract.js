@@ -38,10 +38,11 @@ test('Studio and Materials scripts parse and measurement controls have unique id
     assert.ok(ids.includes(id), `Missing measurement control ${id}`);
 });
 test('the launcher stop script only targets its own recorded Director server', () => {
-  const server = fs.readFileSync(path.join(root, 'server/server.js'), 'utf8');
+  const server = fs.readFileSync(path.join(root, 'server/platform.js'), 'utf8');
   const stop = fs.readFileSync(path.join(root, 'tools/stop.ps1'), 'utf8');
   assert.match(server, /bridge', 'director-server\.json'/);
-  assert.match(server, /started: Date\.now\(\)/);
+  assert.match(server, /started: now/);
+  assert.match(server, /now = Date\.now\(\)/);
   assert.match(stop, /bridge\\director-server\.json/);
   assert.match(stop, /server\\server\.js/);
   assert.match(stop, /FromUnixTimeMilliseconds/);
