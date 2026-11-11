@@ -17,6 +17,19 @@ test('recognizes common texture channel names consistently across platforms', ()
   for (const [filename, expected] of cases) assert.equal(textures.roleFor(filename), expected, filename);
 });
 
+test('an inverted gloss map is a roughness map, so the invert workflow can feed the Roughness input', () => {
+  const cases = [
+    ['TilesZelligeSquaresWeathered001_GLOSS_2K__invert.png', 'roughness'],
+    ['Asset_Roughness__invert.png', 'glossiness'],
+    ['Asset_Glossiness__contrast-1.5.png', 'glossiness'],
+    ['Asset_Normal__tile-offset.png', 'normal'],
+    ['derived/Asset_GLOSS__invert.png', 'roughness'],
+    ['TilesZelligeSquaresWeathered001_Sphere.png', 'preview (not a shader map)'],
+    ['TilesZelligeSquaresWeathered001_GLOSS_2K.jpg', 'glossiness'],
+  ];
+  for (const [filename, expected] of cases) assert.equal(textures.roleFor(filename), expected, filename);
+});
+
 test('reads MaterialX only as a non-executable conversion hint', () => {
   const recipe = `<materialx version="1.38">
     <tiledimage name="base" type="ND_image_color3"><input name="file" type="filename" value="albedo.png" colorspace="srgb_texture"/></tiledimage>

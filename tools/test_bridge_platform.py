@@ -140,6 +140,33 @@ class BridgeLoopTests(unittest.TestCase):
                 self.run_bridge("posix", {**modules, "PySide2": None})
                 self.assert_loop_worked()
 
+    def test_unreadable_command_gets_an_error_reply_and_leaves_no_files_behind(self):
+        (self.root / "bridge" / "cmd" / "00_broken.json").write_text("{not json", encoding="utf-8")
+        self.queue({"op": "ping", "n": 7}, {"op": "boom"}, {"op": "stop"})       # 00_ping sorts after 00_broken
+        self.run_bridge("posix", {"PySide6": None, "PySide2": None})
+        broken = json.loads((self.root / "bridge" / "resp" / "00_broken.json").read_text(encoding="utf-8"))
+        self.assertFalse(broken["ok"])
+        self.assertIn("JSONDecodeError", broken["error"])
+        self.assert_loop_worked()                     # also asserts cmd\ is empty: no orphaned *.run<pid> claim file
+        leftovers = [p.name for p in (self.root / "bridge").rglob("*.tmp*")]
+        self.assertEqual(leftovers, [], "heartbeat and replies are swapped into place, never left as temp files")
+
+    def test_a_briefly_locked_command_file_still_runs(self):
+        """Windows antivirus can lock a freshly renamed command for a moment; that used to fail a whole preset."""
+        real_open, locks = open, {"left": 2}
+
+        def flaky_open(file, *args, **kwargs):
+            if ".json.run" in str(file) and locks["left"] > 0:
+                locks["left"] -= 1
+                raise PermissionError(13, "Permission denied", str(file))
+            return real_open(file, *args, **kwargs)
+
+        self.queue({"op": "ping", "n": 7}, {"op": "boom"}, {"op": "stop"})
+        with mock.patch("builtins.open", flaky_open):
+            self.run_bridge("posix", {"PySide6": None, "PySide2": None})
+        self.assertEqual(locks["left"], 0, "the lock was hit")
+        self.assert_loop_worked()
+
     def test_windows_still_drains_the_win32_message_queue(self):
         counters = {"peek": 0, "translate": 0, "dispatch": 0}
         self.queue({"op": "ping", "n": 7}, {"op": "boom"}, {"op": "stop"})

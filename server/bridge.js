@@ -42,9 +42,23 @@ function send(op, payload = {}, timeoutMs = 8000) {
   });
 }
 
-function heartbeat() {
+// The bridge rewrites heartbeat.json every second. Older bridges write it in place, so a read can land on a half-written
+// file; reuse the last good read for a moment instead of reporting "not connected" for that one request.
+let lastGoodHeartbeat = null;
+function readHeartbeatFile() {
   try {
     const h = JSON.parse(fs.readFileSync(path.join(BASE, 'heartbeat.json'), 'utf8'));
+    lastGoodHeartbeat = { h, at: Date.now() };
+    return h;
+  } catch (error) {
+    if (error.code !== 'ENOENT' && lastGoodHeartbeat && Date.now() - lastGoodHeartbeat.at < 2000) return lastGoodHeartbeat.h;
+    throw error;
+  }
+}
+
+function heartbeat() {
+  try {
+    const h = readHeartbeatFile();
     const age = Date.now() / 1000 - h.t;
     const fresh = age >= 0 && age < 5;
     let processAlive = null;

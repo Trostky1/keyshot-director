@@ -98,7 +98,7 @@ const TOOLS = [
   { name: 'set_exposure', description: 'Adjust the Studio Exposure slider as a linear multiplier. 1 = rig default, 2 = one stop brighter, 0.5 = one stop darker. This is separate from the Environment brightness slider on dark rigs. Set value directly, or use relative_stops for a change from current exposure.', input_schema: { type: 'object', properties: { value: { type: 'number', minimum: 0.05, maximum: 12 }, relative_stops: { type: 'number', minimum: -8, maximum: 8 } }, anyOf: [{ required: ['value'] }, { required: ['relative_stops'] }] } },
   { name: 'auto_expose', description: 'Measure the viewport and adjust exposure to the rig\'s target brightness.', input_schema: { type: 'object', properties: {} } },
   { name: 'studio_off', description: 'Remove every light this app made and restore the original environment.', input_schema: { type: 'object', properties: {} } },
-  { name: 'set_camera', description: 'Set the camera around the product. Angles in degrees; with relative=true values are added to the current camera.', input_schema: { type: 'object', properties: { azimuth: { type: 'number' }, elevation: { type: 'number' }, distance: { type: 'number', description: 'mm from product centre' }, fov: { type: 'number', description: 'field of view degrees' }, relative: { type: 'boolean' } } } },
+  { name: 'set_camera', description: 'Set the camera around the product. Read the current values from the scene context camera.set_camera_values (azimuth, elevation, distance_mm, fov); those are the units used here. Without relative, values are absolute. With relative=true each given value is ADDED to the current one: "a bit higher and closer" is e.g. elevation +10 and distance -10% of distance_mm (a negative number). Omit fields you do not want to change. Elevation must stay within -85..85, distance 5..3000 mm, fov 8..90; out-of-range requests are refused with the current values.', input_schema: { type: 'object', properties: { azimuth: { type: 'number', description: 'degrees (absolute, or change when relative)' }, elevation: { type: 'number', description: 'degrees (absolute, or change when relative)' }, distance: { type: 'number', description: 'eye to product centre in mm (absolute, or change in mm when relative; negative = closer)' }, fov: { type: 'number', description: 'field of view degrees' }, relative: { type: 'boolean' } } } },
   { name: 'play_motion', description: 'Play a camera move in the live viewport.', input_schema: { type: 'object', properties: { preset: { type: 'string', enum: ['orbit_360', 'push_in', 'hero_reveal', 'crane_up', 'whip_settle'] }, duration: { type: 'number', description: 'seconds' } }, required: ['preset'] } },
   { name: 'analyze_style', description: 'Measure every image in a style folder (references/<name>) and build its look profile.', input_schema: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] } },
   { name: 'use_attached_images_as_style', description: 'Save attached images into a new style folder and analyze them, preserving previous references. Use the returned name when calling match_style.', input_schema: { type: 'object', properties: {} } },
@@ -128,31 +128,49 @@ HOW TO ANSWER (important): you cannot call tools directly here. Reply with ONE J
 {"say": "text for the user, or empty", "calls": [{"name": "<tool name>", "input": { ... }}]}
 - "calls" run in order. Leave it empty ([]) when you are finished and only want to talk to the user.
 - A successful current KeyShot scene-context snapshot means the live tools are available. For a clear requested scene change, return the corresponding tool call; never replace it with advice saying you cannot access controls or that you would act later. If you cannot resolve one supported action, leave calls empty and ask a specific clarification.
-- After your calls run you will see their results and can answer again; keep going until the job is done.
+- After your calls run you will see their results (TOOL RESULTS) and can answer again; keep going until the job is done.
+- Work only on the message marked "USER (newest request)"; older requests are finished. Calls after it are what you already did for it: do not repeat a call that succeeded. When its results complete the request, reply with "calls": [] and one short sentence about what changed.
 - Images are saved as files and shown as [image: <path>]: look at them (read the file, or they are already attached).
 Tools you may call:
 ` + TOOLS.map(t => '- ' + t.name + ' ' + JSON.stringify(t.input_schema.properties || {}) + ' : ' + t.description).join('\n');
 
+// The CLI engines see the conversation as one text transcript. Tool results must never look like the user talking (a
+// viewport capture labelled as the user's message made the model ask "what should I do with this image?"), and the
+// request being answered is restated at the end, so after several tool rounds the model does not answer an older message.
 function renderForCli(messages, dir) {
-  let n = 0; const lines = [];
-  const img = b64 => { const f = path.join(dir, 'img_' + (++n) + '.' + (b64.mt.includes('png') ? 'png' : 'jpg')); fs.writeFileSync(f, Buffer.from(b64.data, 'base64')); return '[image: ' + f + ']'; };
-  for (const m of messages) {
-    if (typeof m.content === 'string') { lines.push((m.role === 'user' ? 'USER: ' : 'YOU: ') + m.content); continue; }
+  let n = 0, current = '';
+  const lines = [];
+  const img = (b64, label) => { const f = path.join(dir, 'img_' + (++n) + '.' + (b64.mt.includes('png') ? 'png' : 'jpg')); fs.writeFileSync(f, Buffer.from(b64.data, 'base64')); return `[${label}: ${f}]`; };
+  const isNote = m => typeof m.content === 'string' && m.content.startsWith('[Director recovery]');
+  const isRequest = m => m.role === 'user' && !isNote(m) && !(Array.isArray(m.content) && m.content.some(b => b.type === 'tool_result'));
+  const newest = messages.reduce((last, m, i) => (isRequest(m) ? i : last), -1);
+  // The newest request is marked where it stands, so what follows it reads as work already done for it. (Restating it at
+  // the end made the model carry it out again after every successful call: a "higher and closer" ran 14 times.)
+  const userLabel = i => (i === newest ? 'USER (newest request): ' : 'USER: ');
+  for (const [i, m] of messages.entries()) {
+    if (typeof m.content === 'string') {
+      lines.push((m.role !== 'user' ? 'YOU: ' : isNote(m) ? 'DIRECTOR NOTE: ' : userLabel(i)) + m.content);
+      if (i === newest) current = m.content;
+      continue;
+    }
+    const toolResults = m.role === 'user' && m.content.some(b => b.type === 'tool_result');
     const parts = [];
     for (const b of m.content) {
       if (b.type === 'text') parts.push(b.text);
-      else if (b.type === 'image') parts.push(img({ mt: b.source.media_type, data: b.source.data }));
+      else if (b.type === 'image') parts.push(img({ mt: b.source.media_type, data: b.source.data }, m.role === 'user' ? 'image attached by the user' : 'image'));
       else if (b.type === 'tool_use') parts.push('(called ' + b.name + ' ' + JSON.stringify(b.input) + ')');
-      else if (b.type === 'tool_result') parts.push('RESULT of call ' + b.tool_use_id + (b.is_error ? ' (ERROR)' : '') + ': ' + (Array.isArray(b.content) ? b.content.map(c => c.type === 'image' ? img({ mt: c.source.media_type, data: c.source.data }) : c.text).join(' ') : String(b.content)));
+      else if (b.type === 'tool_result') parts.push('RESULT of call ' + b.tool_use_id + (b.is_error ? ' (ERROR)' : '') + ': ' + (Array.isArray(b.content) ? b.content.map(c => c.type === 'image' ? img({ mt: c.source.media_type, data: c.source.data }, 'viewport capture returned by the tool, not sent by the user') : c.text).join(' ') : String(b.content)));
     }
-    lines.push((m.role === 'user' ? 'USER/TOOLS: ' : 'YOU: ') + parts.join('\n'));
+    if (i === newest) current = m.content.filter(b => b.type === 'text').map(b => b.text).join('\n');
+    lines.push((m.role !== 'user' ? 'YOU: ' : toolResults ? 'TOOL RESULTS (from Director, not the user): ' : userLabel(i)) + parts.join('\n'));
   }
-  return lines.join('\n\n');
+  return { transcript: lines.join('\n\n'), current };
 }
 async function callCli(cfg, eng, messages, signal, system = SYSTEM, tools = TOOLS) {
   const dir = cli.tmpDir('chat');
   try {
-    const prompt = renderForCli(messages, dir) + '\n\nYOUR TURN. Reply with the JSON object only.';
+    const { transcript } = renderForCli(messages, dir);
+    const prompt = transcript + '\n\nYOUR TURN. Reply with the JSON object only.';
     const images = fs.readdirSync(dir).filter(f => /^img_[0-9]+[.](png|jpg)$/.test(f)).map(f => path.join(dir, f));
     const protocol = CLI_PROTOCOL.slice(0, CLI_PROTOCOL.indexOf('Tools you may call:')) + 'Tools you may call:\n' + tools.map(t => '- ' + t.name + ' ' + JSON.stringify(t.input_schema.properties || {}) + ' : ' + t.description).join('\n');
     const text = await cli.ask({ provider: eng.provider, bin: eng.bin, system: system + protocol, prompt, dir, images, model: eng.provider === 'codex' ? cfg.codexModel : cfg.cliModel, signal });
@@ -212,12 +230,23 @@ const OBSERVATION_TOOLS = new Set([
   'get_state', 'inspect_material', 'list_light_profiles', 'list_material_library',
   'list_materials', 'list_texture_sets', 'look', 'scene_context', 'scene_objects', 'analyze_style',
 ]);
+const FALSE_REFUSAL = /\b(?:can['’]?t|cannot|couldn['’]?t|could not|unable to|wasn['’]?t able|not able to|(?:is|was)n['’]?t (?:available|callable|accessible)|not (?:available|callable|accessible)|no access)\b/i;
+// A question about the scene ("Before building anything: which maps would the build use?") is not an order to change it,
+// even though it contains action words like "build" or "use". Polite requests ("Can you make it warmer?") and commands that
+// open with a verb ("Use the gloss map as roughness?") still count as orders.
+const ACTION_VERBS = 'make|create|build|apply|use|try|change|switch|add|remove|set|give|move|rotate|duplicate|frame|zoom|match|recreate|render|execute|run|light|illuminate|brighten|darken|adjust';
+function questionOnly(value) {
+  if (!String(value).includes('?')) return false;
+  if (/\b(?:please|can you|could you|would you|will you|i want|i'd like|let's|lets)\b/i.test(value)) return false;
+  return !new RegExp(`^(?:${ACTION_VERBS})\\b`, 'i').test(String(value).trim());
+}
 function lightingActionIntent(text) {
   const value = String(text || '').trim();
   if (!value || /^(?:how|what|why|when|where|who|should|would|whether)\b/i.test(value)) return false;
   if (/\b(?:what if|what would|should i|should we|would you recommend|explain|describe|compare|tell me about)\b/i.test(value)) return false;
   if (/^no\b/i.test(value) && !/^no\s*[,!;]\s*/i.test(value)) return false;
   if (/\b(?:don't|do not|never|without|avoid|not)\b/i.test(value)) return false;
+  if (questionOnly(value)) return false;
   const explicitAction = /\b(?:make|create|build|apply|use|try|change|switch|add|light|illuminate|set|give|please|can you|could you|i want|i'd like|lets|let's)\b/i.test(value);
   if (value.includes('?') && !explicitAction) return false;
   return explicitAction || value.length <= 100;
@@ -243,6 +272,7 @@ function sceneChangeIntent(text) {
   if (/\b(?:what if|what would|should i|should we|would you recommend|explain|describe|compare|tell me about)\b/i.test(value)) return false;
   if (/^no\b/i.test(value) && !/^no\s*[,!;]\s*/i.test(value)) return false;
   if (/\b(?:don't|do not|never|avoid|without|not)\b/i.test(value) && !/\b(?:but|instead|rather|however)\b[\s\S]*\b(?:make|create|build|apply|use|try|change|switch|add|remove|set|give|move|rotate|duplicate|frame|zoom|match|recreate|render|execute|run|light|illuminate|brighten|darken|adjust)\b/i.test(value)) return false;
+  if (questionOnly(value)) return false;
   return /\b(?:make|create|build|apply|use|try|change|switch|add|remove|set|give|move|rotate|duplicate|frame|zoom|match|recreate|render|execute|run|light|illuminate|brighten|darken|adjust|i want|i'd like|please|can you|could you)\b/i.test(value);
 }
 function asksForClarification(response) {
@@ -411,7 +441,7 @@ async function run(job, { text, images = [], context = null, lightingFocus = 'au
     // that Material Lab tools are unavailable or merely describe the operation.
     const retryIntent = scope === 'material' && /^\s*(?:please\s+)?(?:try again|retry|do it|go ahead|build it|make it)\b/i.test(text || '');
     const howToQuestion = /\bhow\b.{0,80}\b(?:create|build|make|generate|convert|rebuild|construct)\b/i.test(text || '');
-    const explicitBuildIntent = !howToQuestion && /\b(?:create|build|make|generate|convert|rebuild|construct)\b.{0,100}\b(?:material|finish|texture set|it|this|that|one)\b|\b(?:material|finish|texture set)\b.{0,100}\b(?:create|build|make|generate|convert|rebuild|construct)\b/i.test(text || '');
+    const explicitBuildIntent = !howToQuestion && !questionOnly(text || '') && /\b(?:create|build|make|generate|convert|rebuild|construct)\b.{0,100}\b(?:material|finish|texture set|it|this|that|one)\b|\b(?:material|finish|texture set)\b.{0,100}\b(?:create|build|make|generate|convert|rebuild|construct)\b/i.test(text || '');
     const buildIntent = (scope === 'material' || scope === 'studio') && (explicitBuildIntent || retryIntent);
     let sourceSetId = context?.kind === 'texture-set' ? context.id
       : context?.kind === 'material-package' ? context.source_texture_set?.id : null;
@@ -452,6 +482,8 @@ async function run(job, { text, images = [], context = null, lightingFocus = 'au
     memory.push({ role: 'user', content: useClaude ? content : text });
     const ctl = new AbortController(); job.abort = () => ctl.abort();
     let turnSceneContext = null, turnSceneContextError = null, turnSystem = system;
+    // Found live: asked "Which preset would suit a glossy phone?", the model applied one. A question gets an answer.
+    if (questionOnly(text || '')) turnSystem += '\n\nThis message is a question, not a request to change the scene. Answer it in one or two sentences and return no scene-changing tool calls (read-only tools such as scene_context or list_texture_sets are fine). The user will ask if they want the change made.';
     if (typeof actions.scene_context === 'function') {
       try {
         const snapshot = await actions.scene_context();
@@ -462,6 +494,8 @@ async function run(job, { text, images = [], context = null, lightingFocus = 'au
       } catch (error) { turnSceneContextError = error; }
     }
     let actionRepairAttempted = false, sceneActionExecuted = false;
+    const completedActions = [];          // summaries of scene changes Director really made for this request
+    const doneCalls = new Set();          // exact calls that already succeeded for this request
     for (let turn = 0; turn < 14; turn++) {
       ctl.signal.throwIfAborted();
       let resp;
@@ -475,7 +509,9 @@ async function run(job, { text, images = [], context = null, lightingFocus = 'au
       let uses = resp.content.filter(b => b.type === 'tool_use');
       let responseText = resp.content.filter(b => b.type === 'text').map(b => b.text).join('\n');
       let usedLightingFallback = false;
-      if (scope === 'studio' && !uses.length && images.length === 0 && turnSceneContext?.read_only && !asksForClarification(responseText)) {
+      // Only when nothing was done yet: after the model already applied the look, a closing sentence without a call must not
+      // re-apply the same preset (found live: Warm luxe built twice for one request).
+      if (scope === 'studio' && !uses.length && !sceneActionExecuted && images.length === 0 && turnSceneContext?.read_only && !asksForClarification(responseText)) {
         const fallback = fallbackLightingRig(text, lightingFocus, turnSceneContext);
         if (fallback && fallback.every(call => tools.some(tool => tool.name === call.name) && typeof actions[call.name] === 'function')) {
           const calls = [...fallback];
@@ -542,6 +578,11 @@ async function run(job, { text, images = [], context = null, lightingFocus = 'au
         ev('error', { message: reason });
         break;
       }
+      // Found live with the Codex CLI: right after Director carried out the action, the model sometimes closes with "I
+      // couldn't ... the control isn't available in this turn". That is false, and once in history later requests copy it.
+      // When this request already made scene changes and the model refuses without a new call, report what really happened.
+      if (!uses.length && completedActions.length && FALSE_REFUSAL.test(responseText))
+        resp = { ...resp, content: [{ type: 'text', text: 'Done: ' + completedActions.join('; ') + '.' }] };
       memory.push({ role: 'assistant', content: resp.content });
       for (const b of resp.content) if (b.type === 'text' && b.text.trim()) ev('text', { text: b.text.trim() });
       if (resp.stop_reason !== 'tool_use' || !uses.length) break;
@@ -552,9 +593,16 @@ async function run(job, { text, images = [], context = null, lightingFocus = 'au
         const input = scope === 'material' && u.name === 'build_material_from_texture_set'
           ? { ...(u.input || {}), graph_preset: 'simple_plastic' }
           : u.input || {};
+        const callKey = u.name + ' ' + JSON.stringify(input);
+        if (doneCalls.has(callKey) && !OBSERVATION_TOOLS.has(u.name)) {
+          // The same change was already made for this request; repeating it would move the camera / rebuild the rig again.
+          results.push({ type: 'tool_result', tool_use_id: u.id, is_error: true, content: [{ type: 'text', text: JSON.stringify({ error: `Not repeated: ${u.name} with these exact values already succeeded for this request. If the request is complete, reply with "calls": [] and a short summary.` }) }] });
+          continue;
+        }
         ev('tool', { name: u.name, input });
         let out;
         try { if (!tools.some(t => t.name === u.name)) throw new Error('This tool is unavailable in this workspace'); out = await actions[u.name](input); } catch (e) { out = { error: e.message }; }
+        if (!(out && out.error)) doneCalls.add(callKey);
         const isErr = out && out.error; if (isErr) anyFail = true;
         if (usedLightingFallback) {
           if (u.name === 'apply_rig' && !isErr) { fallbackRigApplied = true; fallbackRigSummary = out.summary || 'Lighting preset applied'; }
@@ -562,7 +610,7 @@ async function run(job, { text, images = [], context = null, lightingFocus = 'au
           else if (isErr && u.name === 'look') fallbackLookFailed = out.error;
         }
         ev('result', { name: u.name, ok: !isErr, summary: isErr ? out.error : (out && out.summary) || 'done', ...(out && out.imageDataUrl ? { image: out.imageDataUrl } : {}) });
-        if (!isErr && !OBSERVATION_TOOLS.has(u.name)) sceneActionExecuted = true;
+        if (!isErr && !OBSERVATION_TOOLS.has(u.name)) { sceneActionExecuted = true; completedActions.push(String((out && out.summary) || u.name).slice(0, 200)); }
         const block = [];
         if (out && out.imageBase64) block.push({ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: out.imageBase64 } });
         const { imageBase64, imageDataUrl, ...rest } = out || {};
@@ -582,4 +630,4 @@ async function run(job, { text, images = [], context = null, lightingFocus = 'au
   finally { trimHistory(memory); job.done = true; ev('done', {}); }
 }
 
-module.exports = { run, getConfig, setConfig, publicConfig, engineStatus, pickEngine, TOOLS, SYSTEM, history, materialHistory };
+module.exports = { run, getConfig, setConfig, publicConfig, engineStatus, pickEngine, TOOLS, SYSTEM, history, materialHistory, renderForCli, questionOnly };

@@ -68,10 +68,31 @@ for d in (CMD, RESP, SHOTS):
     os.makedirs(d, exist_ok=True)
 
 
+def write_json_atomic(path, data, **kw):
+    """Write JSON to a temporary file, then swap it into place, so the server never reads a half-written file.
+    If the swap keeps failing (another program holding the file), fall back to the old in-place write rather than
+    stopping the bridge."""
+    tmp = "%s.tmp%d" % (path, os.getpid())
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(data, f, **kw)
+    for _ in range(20):
+        try:
+            os.replace(tmp, path)
+            return
+        except OSError:
+            time.sleep(0.01)
+    try:
+        os.remove(tmp)
+    except OSError:
+        pass
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(data, f, **kw)
+
+
 def heartbeat(state, extra=None):
-    with open(os.path.join(BASE, "heartbeat.json"), "w") as f:
-        json.dump({"t": time.time(), "state": state, "ops_loaded": _STATE["ops_mtime"],
-                   "err": _STATE["err"], "pid": os.getpid(), "session": SESSION_ID}, f)
+    write_json_atomic(os.path.join(BASE, "heartbeat.json"),
+                      {"t": time.time(), "state": state, "ops_loaded": _STATE["ops_mtime"],
+                       "err": _STATE["err"], "pid": os.getpid(), "session": SESSION_ID})
 
 
 def another_bridge_alive():
@@ -109,6 +130,20 @@ def load_ops():
         _STATE["ops_mtime"] = os.path.getmtime(OPS_FILE) if os.path.exists(OPS_FILE) else 0
 
 
+def read_claimed_command(claim, attempts=40, pause=0.025):
+    """Read a command file we just renamed. On Windows an antivirus or indexing scan can lock a freshly renamed file for
+    a moment (PermissionError); one such lock used to fail a whole lighting preset. Retry for up to about a second.
+    A file that opens but is not valid JSON is a real error and is not retried."""
+    for attempt in range(attempts):
+        try:
+            with open(claim, "r", encoding="utf-8-sig") as f:
+                return json.load(f)
+        except PermissionError:
+            if attempt == attempts - 1:
+                raise
+            time.sleep(pause)
+
+
 def handle(path):
     cid = os.path.splitext(os.path.basename(path))[0]
     stop = False
@@ -120,8 +155,7 @@ def handle(path):
     except OSError:
         return False
     try:
-        with open(claim, "r", encoding="utf-8-sig") as f:
-            c = json.load(f)
+        c = read_claimed_command(claim)
         for _ in range(10):                       # antivirus / sync tools can briefly hold the file
             try:
                 os.remove(claim)
@@ -135,12 +169,12 @@ def handle(path):
         stop = c["op"] == "stop"
     except Exception:
         resp = {"ok": False, "error": traceback.format_exc()}
-        try:
-            os.remove(path)
-        except Exception:
-            pass
-    with open(os.path.join(RESP, cid + ".json"), "w", encoding="utf-8") as f:
-        json.dump(resp, f, default=str)
+        for leftover in (path, claim):            # an unreadable command must not stay behind in cmd\ as *.run<pid>
+            try:
+                os.remove(leftover)
+            except Exception:
+                pass
+    write_json_atomic(os.path.join(RESP, cid + ".json"), resp, default=str)
     return stop
 
 

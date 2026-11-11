@@ -105,8 +105,10 @@ function findCli(cfgPath, deps) {
   scanWin(path.win32.join(local, 'AnthropicClaude', 'claude-code'));
   found.sort(cmpVersionDesc);
   if (found.length) return done(found[0].p);
-  // 3) the standalone installer's usual homes
-  for (const p of [path.win32.join(home, '.local', 'bin', exe), path.win32.join(local, 'Programs', 'claude', exe), path.win32.join(appData, 'npm', exe)]) { log.push('checked: ' + p); if (ok(p)) return done(p); }
+  // 3) the standalone installer's usual homes, then a global npm install. npm puts only claude.cmd / claude.ps1 shims in
+  //    %APPDATA%\npm (they cannot be run directly); the real program is inside the package folder.
+  for (const p of [path.win32.join(home, '.local', 'bin', exe), path.win32.join(local, 'Programs', 'claude', exe), path.win32.join(appData, 'npm', exe),
+    path.win32.join(appData, 'npm', 'node_modules', '@anthropic-ai', 'claude-code', 'bin', exe)]) { log.push('checked: ' + p); if (ok(p)) return done(p); }
   searched = log; return null;
 }
 

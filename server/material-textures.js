@@ -23,9 +23,20 @@ const ROLES = [
   ['bump', /(?:^|[_ .-])(?:bump(?:16)?)(?:[_ .-]|$)/i],
 ];
 
+// Derived maps from texture-edit.js are named <source>__<operation>[-<amount>].png.
+const EDIT_SUFFIX = /__(invert|contrast|tile-offset|horizontal-grain|vertical-grain)(?:-[0-9.-]*)?$/i;
+const PREVIEW = /preview|thumbnail|swatch|(?:^|[_ .-])sphere(?:[_ .-]|$)/i;   // ambientCG ships a rendered _Sphere.png preview
+
 function roleFor(name) {
-  if (/preview|thumbnail|swatch/i.test(name)) return 'preview (not a shader map)';
-  for (const [role, pattern] of ROLES) if (pattern.test(path.basename(name, path.extname(name)))) return role;
+  if (PREVIEW.test(path.basename(name))) return 'preview (not a shader map)';
+  const stem = path.basename(name, path.extname(name)), edit = stem.match(EDIT_SUFFIX);
+  const source = edit ? stem.slice(0, edit.index) : stem;
+  for (const [role, pattern] of ROLES) if (pattern.test(source)) {
+    // An inverted gloss map IS a roughness map (and the reverse); that conversion is the reason to invert one. Keeping
+    // the source role made the documented "invert gloss, then use it as roughness" workflow impossible.
+    if (edit && edit[1].toLowerCase() === 'invert') return role === 'glossiness' ? 'roughness' : role === 'roughness' ? 'glossiness' : role;
+    return role;
+  }
   if (path.extname(name).toLowerCase() === '.mtlx') return 'MaterialX metadata (reference only)';
   return 'unassigned — review before use';
 }
@@ -198,7 +209,7 @@ function listTextureSets({ includeMetadata = false } = {}) {
       const derivedDir = path.join(dir, 'derived');
       if (fs.existsSync(derivedDir)) for (const name of fs.readdirSync(derivedDir)) {
         if (path.extname(name).toLowerCase() === '.png' && fs.statSync(path.join(derivedDir, name)).isFile())
-          files.push({ name: `derived/${name}`, role: roleFor(name.replace(/__(invert|contrast|tile-offset|horizontal-grain|vertical-grain).*$/i, '.png')), bytes: fs.statSync(path.join(derivedDir, name)).size, derived: true,
+          files.push({ name: `derived/${name}`, role: roleFor(name), bytes: fs.statSync(path.join(derivedDir, name)).size, derived: true,
             metadata: includeMetadata ? textureMetadataForPath(path.join(derivedDir, name), '.png') : null });
       }
       const present = new Set(files.map(file => path.basename(file.name).toLowerCase()));

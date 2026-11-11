@@ -32,7 +32,7 @@
     for (let index = 0; index < input.length; index++) {
       const file = input[index], name = file.name;
       const ext = name.slice(name.lastIndexOf('.') + 1).toLowerCase();
-      if (!extensions.has(ext) || /preview|thumbnail|swatch/i.test(name)) { ignored++; continue; }
+      if (!extensions.has(ext) || /preview|thumbnail|swatch|(?:^|[_ .-])sphere(?:[_ .-]|$)/i.test(name)) { ignored++; continue; }
       const parts = paths[index].slice(sharedRoot ? 1 : 0, -1);
       const label = groupName(parts, rootName);
       if (!groups.has(label)) groups.set(label, []);

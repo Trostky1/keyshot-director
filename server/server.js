@@ -5,7 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { send, heartbeat, markStopped, BASE, SHOTS } = require('./bridge');
-const { poseToEye, eyeToPose, sample, presets } = require('./shots');
+const { poseToEye, eyeToPose, sample, presets, motionDefaults, cameraTarget, withDirectorCamera } = require('./shots');
 const agent = require('./agent');
 const { execFile } = require('child_process');
 const { listenWithFallback } = require('./listen-with-fallback');
@@ -26,6 +26,7 @@ const photo = require('./photo');
 const { describeLight } = require('./light-spec');
 const { createReceiptStore } = require('./job-receipt');
 const { createReconstructor } = require('./reconstruction');
+const requests = require('./request-validation');
 const crypto = require('crypto');
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const lightingLab = createLightingLab({ send, heartbeat, SHOTS });
@@ -198,6 +199,7 @@ async function matchStyle(name, { look, rounds = 3, settle = 2200 } = {}) {
   finally { matchJob.running = false; tidyLater(); }
 }
 async function setExposure(x) {
+  if (!Number.isFinite(x)) throw requests.badRequest('Exposure must be a finite number.');   // never store NaN: every light reads it
   studio.exposure = Math.max(0.05, Math.min(12, x));
   if (studio.envScales && Number.isFinite(studio.envBaseBrightness)) await applyEnvironmentMultiplier();
   for (const id of Object.keys(studio.lights)) await editLight(id, {});
@@ -248,11 +250,11 @@ async function autoExpose({ target, metric, iterations = 4 } = {}) {
 async function ensureSubject(force = false) {
   if (!studio.subject || force) {
     const s = await send('subject', {}, 20000);
-    // sanity: a product does not suddenly grow 3x or exceed 5 m; if it does, something other than the product was measured
-    if (!(s.span > 0) || s.span > 5000 || (studio.subjectOK && s.span > studio.subjectOK.span * 3)) {
-      if (studio.subjectOK) { studio.subject = studio.subjectOK; return studio.subject; }
-      throw new Error('subject measurement looks wrong (span ' + s.span + ' mm)');
-    }
+    // sanity: a product does not suddenly grow 3x or exceed 5 m inside one scene; if it does, something other than the
+    // product was measured. A different scene (none of the last product's models present) is accepted as the new product.
+    const decision = requests.subjectDecision(studio.subjectOK, s);
+    if (decision === 'keep-previous') { studio.subject = studio.subjectOK; return studio.subject; }
+    if (decision === 'reject') throw new Error('subject measurement looks wrong (span ' + s.span + ' mm)');
     studio.subject = studio.subjectOK = s;
   }
   return studio.subject;
@@ -356,7 +358,25 @@ async function syncFromKeyShot() {
     studio.rig = studio.rig || 'restored';
   } catch { synced = false; }          // bridge not ready yet - try again on the next status check
 }
-async function clearLights() { await send('lights_clear', {}, 60000); studio.lights = {}; }
+// The bridge removes what it can and reports lights it could not remove under "failed" (they stay registered for retry).
+// Keep exactly those in the panel so the server's picture matches the scene.
+function forgetClearedLights(result) {
+  const failed = result && result.failed && typeof result.failed === 'object' ? result.failed : {};
+  const kept = {};
+  for (const id of Object.keys(failed)) if (studio.lights[id]) kept[id] = studio.lights[id];
+  studio.lights = kept;
+  return Object.keys(failed);
+}
+async function clearLights() {
+  const failed = forgetClearedLights(await send('lights_clear', {}, 60000));
+  if (failed.length) throw new Error(`KeyShot could not remove ${failed.length === 1 ? 'light' : 'lights'} ${failed.join(', ')}; the other Director lights were removed. Try again, or delete ${failed.length === 1 ? 'it' : 'them'} in KeyShot's scene tree.`);
+}
+async function studioOff() {
+  const r = await send('studio_off', {}, 60000);
+  const failed = forgetClearedLights(r);
+  Object.assign(studio, { rig: failed.length ? studio.rig : null, rigSubject: null, env: null, envBaseBrightness: null, envMultiplier: 1, envScales: false });
+  return { ...r, summary: failed.length ? `Original environment restored; ${failed.join(', ')} could not be removed (still in the scene)` : 'lights removed, original environment restored' };
+}
 async function applyRig(name, opts = {}) {
   if (!RIGS[name] && !ENV_RIGS[name]) throw new Error('Unknown lighting rig.');
   const product = await ensureSubject(true);
@@ -399,6 +419,23 @@ let lastClient = 0;
 let playing = null;           // { cancel: bool }
 let latestShot = null;        // Buffer of the newest preview
 let shotBusy = false;
+
+// Everything above (product bounds, the lights we believe exist, the connect pose, the last applied pose) describes one
+// KeyShot session. A new bridge session means KeyShot or the bridge was restarted, usually with another scene open, so
+// that picture is dropped and rebuilt from KeyShot on the next request instead of placing lights around the old product.
+let bridgeSession = null;
+function noteBridgeSession() {
+  const h = heartbeat();
+  if (!h.alive || !h.instance || h.instance === bridgeSession) return;
+  const first = bridgeSession === null;
+  bridgeSession = h.instance;
+  if (first) return;                                  // first sight after start-up: nothing from another session is cached
+  synced = false;
+  Object.assign(studio, { subject: null, subjectOK: null, rigSubject: null, lights: {}, rig: null, env: null,
+    envBaseBrightness: null, envMultiplier: 1, envScales: false, lastAuto: null });
+  base = null; cur = null; lastLightingApply = null; latestShot = null; preview.firstTried = false;
+  console.log('[bridge] new KeyShot bridge session - cached scene state cleared');
+}
 
 const loadViews = () => { try { return JSON.parse(fs.readFileSync(VIEWS_FILE, 'utf8')); } catch { return {}; } };
 const saveViews = v => fs.writeFileSync(VIEWS_FILE, JSON.stringify(v, null, 2));
@@ -580,7 +617,7 @@ async function captureLoop() {
 async function playRecipe(recipe) {
   if (playing) playing.cancel = true;
   const job = (playing = { cancel: false });
-  const b = { ...(base || (base = await readPose())), ...(cur ? { pivot: cur.pivot } : {}) };   // presets stay relative to the current pan
+  const b = motionDefaults(base || (base = await readPose()), cur);   // values a recipe does not key come from the current camera
   const dur = recipe.duration || 4;
   // KeyShot takes ~100-250ms per camera move, so sample by wall-clock time and drop frames
   // rather than falling behind: a 5s shot plays in 5s, at whatever frame rate the viewport sustains.
@@ -673,7 +710,7 @@ async function renderRecipe({ recipe, fps = 24, width = 1280, height = 720, secs
   const say = m => renderJob.log.push(m);
   const dir = path.join(RENDERS, new Date().toISOString().replace(/[:T]/g, '-').slice(0, 19)); fs.mkdirSync(dir, { recursive: true });
   if (playing) playing.cancel = true;
-  const b = { ...(base || (base = await readPose())), ...(cur ? { pivot: cur.pivot } : {}) }, back = cur || base;
+  const b = motionDefaults(base || (base = await readPose()), cur), back = cur || base;
   try {
     say(`${total} frames at ${width}x${height}, ${samples ? samples + ' samples' : secs + 's'} each -> ${dir}`);
     for (let i = 0; i < total && !renderJob.cancel; i++) {
@@ -685,7 +722,7 @@ async function renderRecipe({ recipe, fps = 24, width = 1280, height = 720, secs
     const v = await send('encode_video', { folder: dir, frames: 'frame.%d.png', video: 'move.mp4', fps, last: total }, 10 * 60 * 1000);
     if (!v.exists) throw new Error('KeyShot rendered the frames but could not encode the video (frames are in ' + dir + ')');
     let freed = 0;
-    if (keepFrames !== true) for (const f of fs.readdirSync(dir)) if (/^frame.d+.png$/.test(f)) { try { freed += fs.statSync(path.join(dir, f)).size; fs.unlinkSync(path.join(dir, f)); } catch { /* ignore */ } }
+    if (keepFrames !== true) for (const f of fs.readdirSync(dir)) if (requests.isRenderFrameFile(f)) { try { freed += fs.statSync(path.join(dir, f)).size; fs.unlinkSync(path.join(dir, f)); } catch { /* ignore */ } }
     renderJob.result = { dir, video: v.video, frames: total, secs: +((Date.now() - renderJob.startedAt) / 1000).toFixed(0), framesDeleted: keepFrames !== true, freedMB: +(freed / 1048576).toFixed(0) };
     say(`done: ${v.video}` + (keepFrames === true ? '' : ` (frame pictures deleted, ${renderJob.result.freedMB} MB freed)`));
   } catch (e) { renderJob.result = { error: e.message, dir }; say('error: ' + e.message); }
@@ -709,7 +746,7 @@ const needsBridge = fn => async (...a) => { if (!heartbeat().alive) throw new Er
 
 const actions = {
   setAttachments(a) { attachments = a || []; },
-  async scene_context() { return send('scene_context', {}, 15000); },
+  async scene_context() { return withDirectorCamera(await send('scene_context', {}, 15000)); },
   async scene_objects(input = {}) { return send('scene_objects', input, 30000); },
   async move_object(input) {
     const result = await stagingOperation('stage_transform', input);
@@ -896,6 +933,7 @@ const actions = {
       reason: file.role === 'metallic' ? 'Metallic layering is paused' :
         file.role === 'ambient-occlusion' && !use_ao ? 'AO blend not enabled' :
         file.role === 'displacement' ? 'Geometry displacement is paused' :
+        file.role === 'glossiness' ? 'Gloss is the inverse of roughness and is not wired directly. Ask the Material chat to invert it into a roughness map (8-bit grayscale PNG only), then rebuild' :
         plan.skipped.find(item => item.name === file.name)?.reason ||
         (supportedRoles.has(file.role) || file.role === 'ambient-occlusion' ? 'Not selected for this build' : 'No supported connection') })),
       ...(set.missing || []).map(name => ({ name, role: null, reason: 'Source file is missing; the material was built from available maps.' }))];
@@ -954,13 +992,16 @@ const actions = {
     return { summary: `environment fill ${Number(result.multiplier).toFixed(2)}×`, ...result };
   },
   async auto_expose() { await ensureSubject(); const a = await autoExpose({}); return { summary: `exposure ${a.exposure}`, ...a }; },
-  async studio_off() { const r = await send('studio_off', {}, 60000); studio.lights = {}; studio.rig = null; studio.rigSubject = null; studio.env = null; studio.envBaseBrightness = null; studio.envMultiplier = 1; studio.envScales = false; return { summary: 'lights removed, original environment restored', ...r }; },
+  async studio_off() { return studioOff(); },
   async set_camera({ azimuth, elevation, distance, fov, relative }) {
     if (!base) base = await readPose();
-    const c = { ...(cur || base) };
-    const add = (k, v, lo, hi) => { if (v != null) c[k] = Math.max(lo, Math.min(hi, relative ? c[k] + v : v)); };
-    add('az', azimuth, -1e4, 1e4); add('el', elevation, -85, 85); add('dist', distance, 5, 3000); add('fov', fov, 8, 90);
-    await applyPose(c); return { summary: 'camera set', camera: camState() };
+    const target = cameraTarget(cur || base, { azimuth, elevation, distance, fov, relative: relative === true });
+    const before = camState();
+    await applyPose(target);
+    const after = camState();
+    const changes = [['azimuth', '°'], ['elevation', '°'], ['distance_mm', ' mm'], ['fov', '°']]
+      .filter(([k]) => before && Math.abs(after[k] - before[k]) > 0.01).map(([k, unit]) => `${k.replace('_mm', '')} ${before[k]}→${after[k]}${unit}`);
+    return { summary: changes.length ? 'camera set: ' + changes.join(', ') : 'camera unchanged', camera: after };
   },
   async play_motion({ preset, duration }) {
     if (!base) base = await readPose();
@@ -1009,6 +1050,7 @@ const json = (res, code, obj) => { res.writeHead(code, { 'Content-Type': 'applic
 
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');
+  if (url.pathname.startsWith('/api/')) noteBridgeSession();
   if (req.method === 'POST' && url.pathname !== '/api/preview') janitor.touch();
   // anything that can change the picture schedules ONE refresh shortly after the last change (debounced), so the page's
   // preview follows your edits without constant rendering
@@ -1020,7 +1062,7 @@ const server = http.createServer(async (req, res) => {
       let origin; try { origin = new URL(req.headers.origin); } catch { throw Object.assign(new Error('Invalid request origin.'), { status: 403 }); }
       if (origin.host !== req.headers.host) throw Object.assign(new Error('Cross-site scene commands are blocked.'), { status: 403 });
     }
-    if (req.method === 'POST' && /^\/api\/(pose|rebase|play|rig|light|exposure|autoexpose|env|studio\/off|style\/match|video$|render$|prompt$|views\/goto)/.test(url.pathname)) assertSceneAvailable();
+    if (req.method === 'POST' && /^\/api\/(pose|rebase|play|rig|light|exposure|autoexpose|env|studio\/off|style\/match|video$|render$|prompt$|goto$)/.test(url.pathname)) assertSceneAvailable();
     if (url.pathname === '/api/lighting-lab' && req.method === 'GET') return json(res, 200, { ...lightingLab.catalog(), bridge: heartbeat() });
     if (url.pathname === '/api/lighting-lab/runs' && req.method === 'GET') return json(res, 200, { runs: lightingLab.listRuns() });
     if (url.pathname === '/api/lighting-lab/run' && req.method === 'POST') {
@@ -1248,7 +1290,7 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/video' && req.method === 'POST') { const b = await body(req); if (videoJob.running) return json(res, 409, { error: 'a video match is already running' }); matchVideo(b).catch(() => {}); return json(res, 200, { started: true }); }
     if (url.pathname === '/api/video' && req.method === 'GET') return json(res, 200, videoJob);
     if (url.pathname === '/api/video/stop' && req.method === 'POST') { videoJob.cancel = true; return json(res, 200, { ok: true }); }
-    if (url.pathname === '/api/render' && req.method === 'POST') { const b = await body(req); if (renderJob.running) return json(res, 409, { error: 'a render is already running' }); if (!heartbeat().alive) return json(res, 400, { error: NOT_CONNECTED }); renderRecipe(b).catch(() => {}); return json(res, 200, { started: true }); }
+    if (url.pathname === '/api/render' && req.method === 'POST') { const b = requests.renderOptions(await body(req)); if (renderJob.running) return json(res, 409, { error: 'a render is already running' }); if (!heartbeat().alive) return json(res, 400, { error: NOT_CONNECTED }); renderRecipe(b).catch(() => {}); return json(res, 200, { started: true }); }
     if (url.pathname === '/api/render' && req.method === 'GET') return json(res, 200, renderJob);
     if (url.pathname === '/api/render/stop' && req.method === 'POST') { renderJob.cancel = true; return json(res, 200, { ok: true }); }
     if (url.pathname === '/api/render/video' && req.method === 'GET') {
@@ -1264,7 +1306,7 @@ const server = http.createServer(async (req, res) => {
         envRigs: Object.entries(ENV_RIGS).map(([id, r]) => ({ id, label: r.label })),
       });
     }
-    if (url.pathname === '/api/rig' && req.method === 'POST') { const b = await body(req); return json(res, 200, await applyRig(b.name, b)); }
+    if (url.pathname === '/api/rig' && req.method === 'POST') { const b = await body(req); return json(res, 200, await applyRig(b.name, requests.rigOptions(b))); }
     if (url.pathname === '/api/light' && req.method === 'POST') {
       const b = await body(req); await ensureSubject();
       const { id, ...patch } = b; if (!id) return json(res, 400, { error: 'id required' });
@@ -1327,7 +1369,7 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/material/save' && req.method === 'POST') return json(res, 200, await send('material_save', await body(req), 30000));
     if (url.pathname === '/api/material/discard' && req.method === 'POST') return json(res, 200, await send('material_discard', await body(req), 15000));
     if (url.pathname === '/api/exposure' && req.method === 'POST') {
-      const { value } = await body(req); await ensureSubject(); await setExposure(+value);
+      const { value } = await body(req); const exposure = requests.exposureValue(value); await ensureSubject(); await setExposure(exposure);
       return json(res, 200, { exposure: studio.exposure });
     }
     if (url.pathname === '/api/environment-fill' && req.method === 'POST') {
@@ -1335,23 +1377,27 @@ const server = http.createServer(async (req, res) => {
       assertSceneAvailable();
       return json(res, 200, await setEnvironmentMultiplier(+multiplier));
     }
-    if (url.pathname === '/api/autoexpose' && req.method === 'POST') { const b = await body(req); await ensureSubject(); return json(res, 200, await autoExpose(b)); }
+    if (url.pathname === '/api/autoexpose' && req.method === 'POST') { const b = requests.autoExposeOptions(await body(req)); await ensureSubject(); return json(res, 200, await autoExpose(b)); }
     if (url.pathname === '/api/measure' && req.method === 'GET') { const m = await measure(+(url.searchParams.get('settle') ?? 1500)); return json(res, 200, m); }
     if (url.pathname === '/api/env' && req.method === 'POST') { const b = await body(req); studio.env = await send('env_set', b, 30000); if (Number.isFinite(b.brightness)) { studio.envMultiplier = 1; const exposure = studio.envScales ? studio.exposure : 1; studio.envBaseBrightness = Math.max(0.000001, b.brightness / Math.max(0.000001, exposure)); } return json(res, 200, studio.env); }
     if (url.pathname === '/api/studio/off' && req.method === 'POST') {
-      const r = await send('studio_off', {}, 60000); studio.lights = {}; studio.rig = null; studio.rigSubject = null; studio.env = null; studio.envBaseBrightness = null; studio.envMultiplier = 1; studio.envScales = false; return json(res, 200, r);
+      return json(res, 200, await studioOff());
     }
     if (url.pathname === '/api/views' && req.method === 'GET') return json(res, 200, loadViews());
     if (url.pathname === '/api/views' && req.method === 'POST') {
-      const { name } = await body(req); const v = loadViews(); v[name] = await readPose(); saveViews(v); return json(res, 200, v);
+      const name = requests.viewName((await body(req)).name); const v = loadViews(); v[name] = await readPose(); saveViews(v); return json(res, 200, v);
     }
     if (url.pathname === '/api/goto' && req.method === 'POST') {
-      const { name } = await body(req); const p = loadViews()[name];
+      const { name } = await body(req), views = loadViews();
+      const p = typeof name === 'string' && Object.hasOwn(views, name) ? views[name] : null;
       if (!p) return json(res, 404, { error: 'no such view' });
       return json(res, 200, await applyPose(p));
     }
     // static files
-    const file = path.resolve(PUBLIC, '.' + (url.pathname === '/' ? '/index.html' : decodeURIComponent(url.pathname)));
+    let requestedPath;
+    try { requestedPath = url.pathname === '/' ? '/index.html' : decodeURIComponent(url.pathname); }
+    catch { return json(res, 400, { error: 'Invalid file path.' }); }
+    const file = path.resolve(PUBLIC, '.' + requestedPath);
     if (!file.startsWith(PUBLIC + path.sep)) return json(res, 403, { error: 'Invalid file path.' });
     if (fs.existsSync(file) && fs.statSync(file).isFile()) {
       const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.woff2': 'font/woff2', '.svg': 'image/svg+xml' };
