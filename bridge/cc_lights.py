@@ -144,6 +144,17 @@ def _scene_nodes():
     return out
 
 
+def _tree_node_ids():
+    """IDs of every live node in the scene tree: the walk above plus KeyShot's flat search, so nothing nested below an
+    object node is missed."""
+    ids = {node.getID() for node in _scene_nodes()}
+    try:
+        ids.update(node.getID() for node in lux.getSceneTree().find("") if not node.isDeleted())
+    except Exception:
+        pass
+    return ids
+
+
 def _scene_unit_snapshot():
     info = lux.getSceneInfo()
     return {"unit": str(info.get("unit", "unknown")).lower(),
@@ -194,15 +205,19 @@ def _delete_created_nodes(node_ids, geometry_ids):
         errors.append("empty import-group cleanup failed: %s" % str(exc)[:120])
 
     try:
-        live_nodes = {node.getID() for node in _scene_nodes()}
+        live_nodes = _tree_node_ids()
         live_geometry = set(lux.getObjects())
     except Exception as exc:
         return {"remaining_nodes": sorted(wanted), "remaining_geometry": sorted(geometry_ids),
                 "errors": errors + ["post-cleanup inventory failed: %s" % str(exc)[:120]]}
     remaining_nodes = sorted(wanted & live_nodes)
-    remaining_geometry = sorted(geometry_ids & live_geometry)
+    # KeyShot 2026.2 keeps a mesh ID in lux.getObjects() after its scene node is deleted. Such an ID is not in the scene
+    # tree, does not render and cannot be deleted by any per-object call, so it is reported, not treated as left over.
+    # (Mesh IDs are node IDs, so "still in the tree" is the test.)
+    remaining_geometry = sorted(gid for gid in geometry_ids & live_geometry if gid in live_nodes)
+    stale_geometry = sorted(gid for gid in geometry_ids & live_geometry if gid not in live_nodes)
     return {"remaining_nodes": remaining_nodes, "remaining_geometry": remaining_geometry,
-            "errors": errors}
+            "stale_geometry": stale_geometry, "errors": errors}
 
 
 def _restore_scene_unit(snapshot):
@@ -851,7 +866,10 @@ def op_light_remove(c):
     # as a fallback for one light. Stop before touching anything outside the
     # retained owner record and require a clean disposable-scene reload instead.
     if node is None and geometry_ids.intersection(set(lux.getObjects())):
-        raise RuntimeError("Director light %s has retained geometry without a live SceneNode; refusing broad scene cleanup. Reopen the disposable scene without saving to remove this failed probe." % lid)
+        # Only KeyShot's stale mesh IDs left (nothing of this light is in the scene tree): the light is already gone and
+        # the registry entry is released below. If part of it IS still in the tree, refuse rather than guess.
+        if (node_ids | geometry_ids) & _tree_node_ids():
+            raise RuntimeError("Director light %s is partly still in the scene but its panel could not be identified safely; refusing broad scene cleanup. Delete %s%s in KeyShot's scene tree, then try again." % (lid, PREFIX, lid))
     cleanup = _delete_created_nodes(node_ids, geometry_ids)
     if cleanup["remaining_nodes"] or cleanup["remaining_geometry"] or cleanup["errors"]:
         raise RuntimeError("Director light %s cleanup is incomplete; retained ownership for retry: %s" %
@@ -873,11 +891,17 @@ def op_light_remove(c):
 
 
 def op_lights_clear(c):
+    """Remove every Director light. One light that cannot be removed no longer stops the others (or Studio off's
+    environment restore): it stays registered for a retry and is reported under "failed"."""
     adopt_orphans()
-    ids = list(REG.keys())
-    for lid in ids:
-        op_light_remove({"id": lid})
-    return {"cleared": ids}
+    cleared, failed = [], {}
+    for lid in list(REG.keys()):
+        try:
+            op_light_remove({"id": lid})
+            cleared.append(lid)
+        except Exception as exc:
+            failed[lid] = str(exc)[:300]
+    return {"cleared": cleared, "failed": failed}
 
 
 def op_lights_list(c):
@@ -951,16 +975,17 @@ def op_env_set(c):
 
 def op_studio_off(c):
     """Remove every light we made and put the user's original environment back."""
-    cleared = op_lights_clear({})["cleared"]
+    result = op_lights_clear({})
     prev = ENV_STATE["prev"]
     if prev and prev in lux.getEnvironments():
         lux.setActiveEnvironment(prev)
-    if ENV_NAME in lux.getEnvironments():
+    # Never remove our environment while it is still the active one (no original to switch back to).
+    if ENV_NAME in lux.getEnvironments() and lux.getActiveEnvironment().getName() != ENV_NAME:
         try: lux.removeEnvironment(ENV_NAME)
         except Exception: pass
     ENV_STATE["prev"] = None
     lux.sync()
-    return {"cleared": cleared, "env": lux.getActiveEnvironment().getName()}
+    return {"cleared": result["cleared"], "failed": result["failed"], "env": lux.getActiveEnvironment().getName()}
 
 
 def op_image_style(c):

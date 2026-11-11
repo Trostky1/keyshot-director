@@ -69,7 +69,12 @@ function transform(img, operation, amount) {
     out.copy(p);
   } else throw new Error('Unknown map operation.');
 }
-function safeStem(value) { return String(value || 'texture').replace(/[^a-z0-9_-]+/gi, '-').replace(/^-+|-+$/g, '').slice(0, 50) || 'texture'; }
+// Long names keep their start AND end: the channel word (…_Roughness, …_GLOSS_2K) sits at the end and decides the derived
+// map's role; cutting to the first 50 characters dropped it and left the derived map unassigned.
+function safeStem(value) {
+  const clean = String(value || 'texture').replace(/[^a-z0-9_-]+/gi, '-').replace(/^-+|-+$/g, '') || 'texture';
+  return clean.length <= 50 ? clean : clean.slice(0, 20) + '-' + clean.slice(-29);
+}
 function editTexture({ sourcePath, outputDir, operation, amount }) {
   const src = path.resolve(sourcePath), dest = path.resolve(outputDir);
   if (!fs.existsSync(src) || path.extname(src).toLowerCase() !== '.png') throw new Error('Select an imported PNG texture map. Original files are never changed.');

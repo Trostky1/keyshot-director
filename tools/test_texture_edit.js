@@ -21,6 +21,17 @@ test('inverts a grayscale PNG into a derived file and preserves the source', t =
   assert.equal(result.width, 3);
 });
 
+test('a long map name keeps its channel word, so the inverted gloss map is recognised as roughness', t => {
+  const { roleFor } = require('../server/material-textures');
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'kd-texture-edit-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const source = path.join(root, 'Poliigon_SomeVeryLongMaterialName_1234567_Glossiness.png');
+  fs.writeFileSync(source, grayscalePng(2, 1, [10, 200]));
+  const result = editTexture({ sourcePath: source, outputDir: path.join(root, 'derived'), operation: 'invert' });
+  assert.match(path.basename(result.path), /_Glossiness__invert\.png$/);
+  assert.equal(roleFor(path.basename(result.path)), 'roughness');
+});
+
 test('tile offset wraps each pixel to the opposite half', () => {
   const img = readPng(grayscalePng(4, 2, [0,1,2,3,4,5,6,7]));
   const { transform } = require('../server/texture-edit'); transform(img, 'tile-offset');

@@ -787,7 +787,7 @@ $('envFill').addEventListener('input', () => {
   clearTimeout($('envFill').t);
   $('envFill').t = setTimeout(() => api('/api/environment-fill', { multiplier }).catch(e => toast(e.message)), 150);
 });
-$('studiooff').onclick = e => busy(e.target, async () => { await api('/api/studio/off', {}); await loadStudio(); lstatus('Lights removed. Original environment restored.'); });
+$('studiooff').onclick = e => busy(e.target, async () => { const r = await api('/api/studio/off', {}); await loadStudio(); lstatus(r && r.failed && Object.keys(r.failed).length ? r.summary : 'Lights removed. Original environment restored.'); });
 $('addlight').onclick = e => busy(e.target, async () => { const n = 'light' + (Object.keys(ST.studio.lights).length + 1); await api('/api/light', { id: n, az: -40, el: 30, d: 3, w: 1.5, h: 1.5, E: 0.003 }); await loadStudio(); });
 /* ---------- material lab ---------- */
 let inspectedMaterial = null;
@@ -1842,7 +1842,8 @@ async function tick() {
      else if (!sceneContextRefreshing && $('sceneContextStatus').textContent.startsWith('Disconnected')) $('sceneContextStatus').textContent = 'Connection restored; refresh the snapshot';
     $('connectQuick').hidden = s.bridge.alive;
     if (!s.bridge.alive && !tick.opened) { tick.opened = true; $('connectFold').open = true; } if (s.bridge.alive) tick.opened = false;
-    if (s.bridge.alive && !booted) { booted = true; await syncPose(); loadMotions().catch(() => {}); $('recipe').value = $('recipe').value || ''; }
+    if (!s.bridge.alive) booted = false;          // after a reconnect (new KeyShot session) re-read camera and lights
+    if (s.bridge.alive && !booted) { booted = true; await syncPose(); loadMotions().catch(() => {}); loadStudio().catch(() => {}); $('recipe').value = $('recipe').value || ''; }
     if (!qrDone && s.ips.length) { qrDone = true; const u = `http://${s.ips[0]}:${s.port}`; try { new QRCode($('qr'), { text: u, width: 120, height: 120 }); } catch { /* offline: no QR library */ } $('qrurl').textContent = u; }
   } catch { $('dot').className = 'dot'; $('status').textContent = 'Director app not reachable'; sceneContextRefresh.disabled = true; updateSceneTags(false, true); }
 }

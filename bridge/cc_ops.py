@@ -256,4 +256,4 @@ try:
 except Exception:
     import traceback as _tb3
     OPS["deliver_error"] = (lambda c, _e=_tb3.format_exc(): {"error": _e})   # a delivery-module fault must not take the other ops down
-# edit stamp for companion modules: 114 (explicit native save op)
+# edit stamp for companion modules: 116 (stale KeyShot mesh IDs no longer block removing a deleted light)

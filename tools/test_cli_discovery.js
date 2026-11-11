@@ -77,6 +77,15 @@ test('Windows discovery is unchanged: the Microsoft Store package copy is found 
   assert.equal(slash(cli.findCli(null, deps)), `${root}/2.1.12/hash2/claude.exe`);
 });
 
+test('Windows: a global npm install is found inside its package folder, not via the unrunnable claude.cmd shim', () => {
+  const npm = 'C:/Users/test/AppData/Roaming/npm';
+  const wfs = fakeFs([`${npm}/claude.cmd`, `${npm}/claude.ps1`, `${npm}/node_modules/@anthropic-ai/claude-code/bin/claude.exe`]);
+  const slash = p => p.replace(/\\/g, '/');
+  const deps = { platform: 'win32', home: 'C:/Users/test', env: { PATH: npm, LOCALAPPDATA: 'C:/Users/test/AppData/Local', APPDATA: 'C:/Users/test/AppData/Roaming' },
+    fs: { statSync: p => wfs.statSync(slash(p)), accessSync: () => {}, readdirSync: p => wfs.readdirSync(slash(p)) } };
+  assert.equal(slash(cli.findCli(null, deps)), `${npm}/node_modules/@anthropic-ai/claude-code/bin/claude.exe`);
+});
+
 test('macOS: codex on PATH, in the desktop app bundle, or in Homebrew/npm homes', () => {
   assert.equal(cli.findCodex(null, mac(['/usr/bin/codex'])).path, '/usr/bin/codex');
   for (const where of ['/Applications/Codex.app/Contents/Resources/codex', '/opt/homebrew/bin/codex', '/Users/test/.npm-global/bin/codex', '/Users/test/Applications/Codex.app/Contents/MacOS/codex'])
